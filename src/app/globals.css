@@ -1,0 +1,152 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+@import "leaflet-draw/dist/leaflet.draw.css";
+
+:root {
+  --background: #f4f7f6;
+  --foreground: #0f172a;
+}
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-plus-jakarta-sans);
+
+  /* Primary Accent: Premium Earth Forest/Eucalyptus Green (replaces Teal scale) */
+  --color-teal-50: #f0f7f4;
+  --color-teal-100: #dcefe7;
+  --color-teal-200: #bce0d2;
+  --color-teal-300: #90c7b4;
+  --color-teal-400: #60a793;
+  --color-teal-500: #2d8a70;
+  --color-teal-600: #1f6b56;
+  --color-teal-700: #185444;
+  --color-teal-800: #144437;
+  --color-teal-900: #10372d;
+  --color-teal-950: #081d18;
+
+  /* Neutrals: Cool Eucalyptus Sage Slate (replaces Slate scale) */
+  --color-slate-50: #f4f7f6;
+  --color-slate-100: #e5ebe9;
+  --color-slate-200: #d0dad7;
+  --color-slate-300: #b0beb9;
+  --color-slate-400: #889a94;
+  --color-slate-500: #657973;
+  --color-slate-600: #4f5f5a;
+  --color-slate-700: #3f4c48;
+  --color-slate-800: #2c3432;
+  --color-slate-900: #1a201e;
+  --color-slate-950: #0a0d0c;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  background-image: radial-gradient(rgba(101, 121, 115, 0.08) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(136, 154, 148, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(136, 154, 148, 0.5);
+}
+
+/* Custom Leaflet Map styling overrides to match theme */
+.leaflet-container {
+  font-family: inherit;
+}
+
+.map-owner-label {
+  background: rgba(10, 13, 12, 0.95) !important;
+  border: 1px solid rgba(45, 138, 112, 0.4) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  font-size: 11px !important;
+  padding: 4px 10px !important;
+  border-radius: 10px !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -4px rgba(0, 0, 0, 0.2) !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+  backdrop-filter: blur(4px);
+}
+
+.leaflet-tooltip-center:before {
+  display: none !important;
+}
+
+.modal-area-box {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1.5px solid #0a0d0c !important;
+  padding: 6px 12px !important;
+  font-weight: 800 !important;
+  font-size: 13px !important;
+  color: #0a0d0c !important;
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(10, 13, 12, 0.08);
+  line-height: 1.2;
+}
+
+.editable-field {
+  background: white !important;
+  color: #0a0d0c !important;
+  font-weight: 800;
+  white-space: nowrap;
+  text-align: center;
+  cursor: text;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  border-radius: 8px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sketch-area-label .editable-field {
+  border: 1.5px solid #0a0d0c !important;
+  padding: 6px 14px !important;
+  font-size: 13px !important;
+}
+
+.sketch-dist-label .editable-field {
+  border: 1px solid #3b82f6 !important;
+  padding: 3px 8px !important;
+  font-size: 10px !important;
+}
+
+.editable-field:hover {
+  border-color: #0a0d0c !important;
+  background: #f4f7f6 !important;
+  transform: translateY(-1px);
+}
+
+.editable-field:focus {
+  outline: none !important;
+  border-color: #2d8a70 !important;
+  background: #f0f7f4 !important;
+  box-shadow: 0 0 0 4px rgba(45, 138, 112, 0.15) !important;
+}
+
+/* Premium card and container custom stylings */
+.form-card {
+  max-width: 1024px;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .form-card {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}

@@ -1,0 +1,4348 @@
+<!DOCTYPE html>
+<html lang="so">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GeoSurvey Pro | Mobile Responsive</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+<style>
+:root { --primary: #0d9488; --sidebar-dark: #0f172a; --bg-soft: #f4f7fa; }
+body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg-soft); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+
+/* Sidebar Responsive Logic */
+/* Sidebar Container */
+.sidebar { 
+    width: 280px; /* Slightly wider for better breathing room */
+    background: #0f172a; /* Deep elegant navy */
+    color: white; 
+    display: flex; 
+    flex-direction: column; 
+    flex-shrink: 0; 
+    z-index: 1000; 
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Brand Section */
+.sidebar-brand { 
+    padding: 40px 25px; 
+    font-size: 1.5rem; 
+    font-weight: 800; 
+    color: #ffffff; 
+    letter-spacing: -0.5px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-brand span { 
+    color: var(--primary); 
+}
+
+/* Navigation List */
+.nav-sidebar {
+    padding: 15px; /* Adds space around the links */
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* Space between items */
+}
+
+/* Base Link Style */
+.nav-sidebar .nav-link { 
+    color: #94a3b8; 
+    padding: 12px 20px; 
+    text-align: left; 
+    transition: all 0.2s ease;
+    font-weight: 600; 
+    border: none; 
+    background: transparent; 
+    width: 100%; 
+    border-radius: 12px; /* Makes the hover/active state look like a floating pill */
+    display: flex;
+    align-items: center;
+}
+
+/* Hover Effect */
+.nav-sidebar .nav-link:hover { 
+    background: rgba(255, 255, 255, 0.05); 
+    color: #f8fafc; 
+    transform: translateX(5px); /* Subtle "push" effect on hover */
+}
+
+/* Active State (The "Glow" Look) */
+.nav-sidebar .nav-link.active { 
+    background: linear-gradient(135deg, rgba(13, 148, 136, 0.2) 0%, rgba(13, 148, 136, 0.05) 100%); 
+    color: var(--primary); 
+    border-left: none; /* Removed the old thick line */
+    box-shadow: inset 0 0 0 1px rgba(13, 148, 136, 0.4); /* Thin inner border glow */
+}
+
+.nav-sidebar .nav-link i {
+    font-size: 1.2rem;
+    margin-right: 15px;
+}
+
+/* Sidebar Layout Adjustments */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; /* Pushes footer to bottom */
+    height: 100vh;
+}
+
+.nav-sidebar {
+    flex-grow: 1; /* Takes up available space */
+    padding: 10px 15px;
+}
+
+/* Icon Updates */
+.nav-sidebar .nav-link i {
+    font-size: 1.2rem;
+    margin-right: 12px;
+    width: 24px;
+    text-align: center;
+}
+
+/* Sidebar Footer Styling */
+.sidebar-footer {
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.2);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.user-avatar i {
+    font-size: 2rem;
+    color: var(--primary);
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.user-name {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #f8fafc;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.user-role {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Logout Button Styling */
+.btn-logout {
+    width: 100%;
+    padding: 10px;
+    background: rgba(239, 68, 68, 0.1); /* Subtle red */
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: 0.3s;
+}
+
+.btn-logout:hover {
+    background: #ef4444;
+    color: white;
+}
+
+
+/* Main Area */
+.main-content { flex-grow: 1; position: relative; height: 100vh; overflow: hidden; }
+.app-view { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; background: var(--bg-soft); flex-direction: column; }
+.app-view.active { display: flex; }
+
+/* ============================================================
+   MOBILE VIEW ADJUSTMENTS (Full & Final Version)
+   ============================================================ */
+@media (max-width: 768px) {
+    /* 1. SIDEBAR TO BOTTOM NAVIGATION */
+    .sidebar { 
+        width: 100%; 
+        height: 75px; /* Optimized height for icons + labels */
+        flex-direction: row; 
+        position: fixed; 
+        bottom: 0; 
+        top: auto; 
+        left: 0;
+        z-index: 2000;
+        border-top: 1px solid #1e293b;
+        background: #0f172a;
+        padding-bottom: env(safe-area-inset-bottom); /* Fix for mobile notches */
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+    }
+
+    /* Hide desktop-specific elements */
+    .sidebar-brand, .sidebar-footer { 
+        display: none !important; 
+    }
+
+    /* 2. NAVIGATION LINKS SPACING */
+    .nav-sidebar { 
+        flex-direction: row !important; 
+        width: 100%; 
+        height: 100%;
+        justify-content: space-around; 
+        padding: 0 !important; 
+        display: flex !important;
+        gap: 0 !important;
+    }
+
+    .nav-sidebar .nav-link { 
+        padding: 8px 2px !important; 
+        border-left: none !important; 
+        border-top: 3px solid transparent; 
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        justify-content: center;
+        font-size: 0.65rem !important; 
+        flex: 1;
+        color: #94a3b8;
+        white-space: nowrap;
+        background: transparent !important;
+        transition: 0.2s;
+    }
+
+    .nav-sidebar .nav-link i {
+        font-size: 1.3rem !important; /* Larger touch targets */
+        margin-right: 0 !important;
+        margin-bottom: 4px;
+        display: block;
+    }
+
+    /* Active State Indicator */
+    .nav-sidebar .nav-link.active { 
+        border-top-color: var(--primary) !important; 
+        background: rgba(13, 148, 136, 0.1) !important; 
+        color: var(--primary) !important; 
+    }
+
+    /* 3. MAIN CONTENT SCALING */
+    .main-content { 
+        margin-left: 0 !important; 
+        width: 100% !important;
+        height: calc(100vh - 75px); 
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* 4. APP VIEW & HEADER LOGIC */
+    .app-view .p-4 {
+        padding: 20px 15px !important;
+    }
+
+    .d-flex.justify-content-between {
+        flex-direction: column; 
+        align-items: flex-start !important;
+        gap: 12px;
+    }
+
+    /* 5. FORM & GRID OPTIMIZATION */
+    .form-container {
+        padding: 0 !important;
+        background: #fff;
+    }
+
+    .form-card {
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 20px 15px !important;
+    }
+
+    .boundary-grid {
+        padding: 15px !important;
+        grid-template-columns: 1fr !important; /* Vertical stacking */
+        gap: 12px !important;
+        border-radius: 12px !important;
+    }
+
+    .map-box {
+        height: 280px !important;
+        border-radius: 12px !important;
+        margin: 15px 0 !important;
+    }
+
+    /* 6. MODAL FULL SCREEN & SCROLL FIX */
+    .modal-dialog {
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+    }
+
+    .modal-content {
+        min-height: 100vh !important;
+        height: 100vh !important;
+        border-radius: 0 !important;
+        border: none !important;
+        overflow-y: auto !important;
+        display: flex !important;
+        flex-direction: column;
+    }
+
+    .modal-header {
+        position: sticky;
+        top: 0;
+        z-index: 1060;
+        background: white;
+        padding: 15px !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+    }
+
+    .modal-body {
+        padding: 15px !important;
+        padding-bottom: 90px !important; /* Prevents overlap with nav bar */
+        flex: 1;
+    }
+
+    /* 7. MAPS & TABLES INSIDE MODAL */
+    #modalMainMap, #modalSketchCanvas {
+        height: 260px !important;
+        border-radius: 12px !important;
+        margin-bottom: 15px;
+    }
+
+    .clean-table td, .clean-table th {
+        padding: 10px 5px !important;
+        font-size: 0.8rem !important;
+    }
+
+    /* 8. FLOATING ACTION BUTTON (FAB) FIX */
+    .fab-btn {
+        bottom: 90px !important; /* Sits above the nav bar */
+        right: 20px !important;
+        width: 56px !important;
+        height: 56px !important;
+        z-index: 1050 !important;
+    }
+
+    body.modal-open .fab-btn {
+        display: none !important;
+    }
+    .mobile-cards-container {
+        display: flex !important;
+        flex-direction: column;
+        gap: 12px;
+        padding: 10px;
+        padding-bottom: 120px; /* Space for FAB and Nav bar */
+    }
+
+    /* Hide the redundant 'Add' buttons in the top headers */
+    #ref-view .btn-primary, 
+    #tab-expenses .btn-danger, 
+    #user-management .btn-primary {
+        display: none !important;
+    }
+
+    /* Optional: Center the header text since the button is gone */
+    .mb-3.bg-white.p-3.rounded-4.border.shadow-sm .d-flex {
+        justify-content: center !important;
+        text-align: center;
+    }
+
+    /* Full screen dark background */
+    #loginOverlay {
+        background: #0f172a !important;
+        align-items: flex-end !important; /* Move card to bottom like a mobile sheet */
+    }
+
+    .login-card {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto;
+        min-height: 70vh; /* Takes up most of the screen */
+        border-radius: 40px 40px 0 0 !important; /* Rounded top corners only */
+        padding: 40px 25px !important;
+        margin: 0 !important;
+        animation: slideUp 0.4s ease-out;
+    }
+
+    /* Mobile-friendly large inputs */
+    #loginForm .form-control {
+        height: 60px !important;
+        font-size: 1.1rem !important;
+        border-radius: 16px !important;
+        background-color: #f8fafc !important;
+        border: 2px solid #f1f5f9 !important;
+    }
+
+    #loginForm .input-group-text {
+        background-color: #f8fafc !important;
+        border: 2px solid #f1f5f9 !important;
+        border-right: none !important;
+        border-radius: 16px 0 0 16px !important;
+        padding-left: 20px !important;
+    }
+
+    #loginForm .form-control:focus, #loginForm .input-group:focus-within .input-group-text {
+        border-color: #0d9488 !important;
+        background-color: #fff !important;
+    }
+
+    /* Big, easy-to-tap button */
+    .btn-login {
+        height: 65px !important;
+        font-size: 1.2rem !important;
+        border-radius: 18px !important;
+        margin-top: 20px;
+        box-shadow: 0 10px 15px -3px rgba(13, 148, 136, 0.4) !important;
+    }
+
+    /* Fix spacing for the "Remember me" area */
+    .form-check {
+        padding: 10px 0 10px 30px !important;
+        margin-bottom: 10px;
+    }
+
+    .form-check-input {
+        width: 22px !important;
+        height: 22px !important;
+        margin-top: 0 !important;
+        cursor: pointer;
+    }
+
+    .form-check-label {
+        font-size: 1rem !important;
+        margin-left: 10px;
+        color: #64748b !important;
+    }
+
+    /* Entrance animation */
+    @keyframes slideUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+    }
+
+
+
+}
+.dist-label {
+        background: transparent;
+        border: none;
+    }
+    /* Design-ka cabirka si uusan xariiqda u qarin */
+    .custom-dist-label {
+        background: transparent !important;
+        border: none !important;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .dist-span {
+        background: rgba(255, 255, 255, 0.8); /* In yar oo cadaan hufan ah */
+        padding: 1px 4px;
+        border-radius: 4px;
+        color: #000;
+        font-weight: 700;
+        font-size: 11px;
+        border: 1px solid #3388ff;
+        white-space: nowrap;
+        pointer-events: none;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .area-label {
+        text-align: center;
+        text-shadow: 1px 1px white;
+    }
+
+    /* Weelka guud ee label-ka */
+        .measurement-label-container {
+            pointer-events: none !important;
+        }
+
+        /* Habka ay xogtu u dul saaran tahay xariiqda */
+        .label-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            top: -15px; /* Kor u qaad si uusan xariiqda u qarin */
+        }
+
+        /* Xariiq yar oo isku xira Meters-ka iyo Polygon-ka (Optional) */
+        .line-connector {
+            width: 1px;
+            height: 5px;
+            background: #3388ff;
+        }
+
+        /* Naqshadda Meters-ka */
+        .dist-text {
+            background: white;
+            color: #000;
+            font-weight: 800;
+            font-size: 11px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            border: 1px solid #3388ff;
+            white-space: nowrap;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        /* Area Label (Bartamaha) */
+        .area-label-final {
+            text-align: center;
+            pointer-events: none;
+        }
+
+        /* Design-ka Tooltip-ka si uu u ekaado sawirka labaad */
+.modern-dist-tooltip {
+background: white !important;
+border: 1px solid #3388ff !important;
+color: #000 !important;
+font-weight: 800 !important;
+font-size: 11px !important;
+padding: 1px 4px !important;
+border-radius: 4px !important;
+box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+white-space: nowrap !important;
+}
+
+/* Ka saar falaarta yar ee Tooltip-ka */
+.leaflet-tooltip-top:before {
+display: none !important;
+}
+
+.area-label-style {
+background: rgba(255,255,255,0.6);
+border-radius: 5px;
+padding: 5px;
+}
+
+.leader-label-box {
+background: white;
+border: 1px solid #000;
+color: #000;
+font-weight: 700;
+font-size: 10px;
+padding: 1px 3px;
+border-radius: 2px;
+white-space: nowrap;
+text-align: center;
+box-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+}
+
+.area-label-style {
+background: rgba(255, 255, 255, 0.9);
+border: 2px solid #000;
+border-radius: 4px;
+padding: 4px 8px;
+font-weight: 800;
+color: #000;
+font-size: 13px;
+text-align: center;
+}
+
+
+#sketchContainer {
+    display: none;
+    background: white;
+    border-radius: 20px;
+    padding: 20px;
+    margin-top: 25px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+}
+
+/* 2. Header Style */
+.sketch-header {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #64748b;
+    text-transform: uppercase;
+    margin-bottom: 15px;
+    border-bottom: 2px solid #f1f5f9;
+    padding-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 3. Sketch Canvas (Blueprint Map) */
+#sketchCanvas {
+    width: 100%;
+    height: 480px !important; /* Dherer ku filan oo weyn */
+    background: #ffffff !important;
+    border: 2px solid #000;
+    border-radius: 12px;
+    position: relative;
+}
+
+/* 4. Labels General Style (Transitions) */
+.sketch-dist-label, .sketch-area-label {
+    transition: opacity 0.3s ease-in-out, visibility 0.3s;
+    background: transparent !important;
+    border: none !important;
+}
+
+/* 5. Editable Fields (Meters & Area) */
+.editable-field {
+    background: white !important;
+    color: #000 !important;
+    font-weight: 800;
+    white-space: nowrap;
+    text-align: center;
+    cursor: text;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: 0.2s;
+}
+
+/* Specific to Meters Labels */
+.sketch-dist-label .editable-field {
+    border: 1px solid #3388ff !important;
+    padding: 1px 5px !important;
+    font-size: 10px !important;
+    border-radius: 3px;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    margin-left: -22px; /* Dhex-fariisin sax ah */
+    margin-top: -11px;
+}
+
+/* Specific to Area Label (Center) */
+.sketch-area-label .editable-field {
+    border: 2px solid #000 !important;
+    padding: 5px 12px !important;
+    font-size: 13px !important;
+    border-radius: 4px;
+    z-index: 1000;
+}
+
+/* 6. Interaction States (Hover & Focus) */
+.editable-field:hover {
+    border-color: #000 !important;
+    background: #f8fafc !important;
+}
+
+.editable-field:focus {
+    outline: none !important;
+    border: 2px solid #0d9488 !important; /* Midabka Teal-ka ee Sync button-ka */
+    background: #f0fdfa !important;
+    box-shadow: 0 0 8px rgba(13, 148, 136, 0.4) !important;
+}
+
+/* 7. Leaflet Zoom Controls Customization */
+#sketchCanvas .leaflet-control-zoom {
+    border: 2px solid #000 !important;
+    margin: 15px !important;
+    box-shadow: none !important;
+}
+
+#sketchCanvas .leaflet-control-zoom-in,
+#sketchCanvas .leaflet-control-zoom-out {
+    background-color: #ffffff !important;
+    color: #000 !important;
+    font-weight: 900 !important;
+    border-bottom: 1px solid #ddd !important;
+}
+
+#sketchCanvas .leaflet-control-zoom-in:hover,
+#sketchCanvas .leaflet-control-zoom-out:hover {
+    background-color: #f1f5f9 !important;
+}
+
+
+/* Sanduuqa Area-ga ee Modal-ka dhexdiisa */
+
+.modal-area-box {
+    background: white !important;
+    border: 2px solid black !important;
+    padding: 4px 10px !important;
+    font-weight: 800 !important;
+    font-size: 13px !important; /* Cabirka font-ka oo la mideeyey */
+    color: black !important;
+    border-radius: 6px;
+    text-align: center;
+    box-shadow: 2px 2px 0px rgba(0,0,0,0.1);
+    line-height: 1.2; /* Si Area iyo Lambarka isku u dhawaadaan */
+}
+
+/* Ka dhig Sketch-ka mid buuxiya booska (Fit) */
+#modalSketchCanvas {
+    background-color: #ffffff !important;
+    border-radius: 0 0 16px 16px;
+}
+
+/* Dimensions font-ka */
+.sketch-dist-label .editable-field, 
+.sketch-dist-label div {
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+}
+
+/* Ka dhig qaybta midig ee modal-ka mid nadiif ah */
+.card-header.bg-secondary {
+    background-color: #f8fafc !important;
+    color: #475569 !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    letter-spacing: 1px;
+}
+
+/* Design-ka Macluumaadka Dhulka (Modern Look) */
+.info-label {
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+    display: block;
+}
+
+
+.data-section {
+    background: #ffffff;
+    padding: 15px;
+    border-radius: 16px;
+    border: 1px solid #f1f5f9;
+    margin-bottom: 12px;
+    transition: 0.3s;
+}
+
+.data-section:hover {
+    border-color: #e2e8f0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+
+.badge-nooca {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.sketch-info-box {
+    background: #f0f9ff !important;
+    border: 1.5px dashed #0ea5e9 !important;
+    color: #0369a1 !important;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+/* Naqshadda Cusub ee Modal-ka */
+/* Naqshadda Minimalist & Clean */
+.modal-content { border-radius: 20px; border: none; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15); }
+.modal-header { border-bottom: 1px solid #f1f5f9; padding: 20px 30px; }
+
+/* Qaybta Xogta Bidix */
+.info-group { margin-bottom: 1.5rem; }
+.info-label { 
+    font-size: 0.7rem; 
+    font-weight: 700; 
+    color: #64748b; 
+    text-transform: uppercase; 
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+    display: block;
+}
+.info-value { 
+    font-size: 1rem; 
+    font-weight: 600; 
+    color: #1e293b; 
+}
+
+/* Card-yada yaryar ee dusha (S/N & Date) */
+.stat-pill {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 8px 15px;
+    border-radius: 12px;
+}
+
+/* Shaxda Soohdimaha (Nadiif ah) */
+.clean-table { width: 100%; margin-top: 10px; }
+.clean-table th { 
+    font-size: 0.65rem; 
+    color: #94a3b8; 
+    padding: 10px 5px; 
+    border-bottom: 2px solid #f1f5f9;
+}
+.clean-table td { 
+    padding: 12px 5px; 
+    border-bottom: 1px solid #f8fafc;
+    font-size: 0.85rem;
+}
+.text-teal { color: #0d9488 !important; font-weight: 700; }
+
+/* Maabyada */
+.map-container {
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #fff;
+    margin-bottom: 20px;
+}
+.map-title {
+    background: #f8fafc;
+    padding: 8px 15px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #475569;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+/* Container-ka guud ee xogta bidix */
+.survey-details-sidebar {
+    padding: 10px;
+    background: #ffffff;
+}
+
+/* Card-yada yaryar (S/N & Date) */
+.stat-pill {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 12px;
+    border-radius: 14px;
+    transition: 0.3s;
+}
+
+.stat-pill:hover { border-color: #cbd5e1; background: #f1f5f9; }
+
+
+
+.detail-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+}
+
+/* Shaxda Soohdimaha */
+.boundary-container {
+    background: #ffffff;
+    border: 1px solid #f1f5f9;
+    border-radius: 16px;
+    padding: 5px;
+    margin-top: 15px;
+}
+
+/* Dashed border for secondary links */
+.border-dashed {
+    border-style: dashed !important;
+    border-width: 1.5px !important;
+}
+
+/* Detail Labels - Modern & Small */
+/* Sidebar Detail Labels */
+.detail-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    display: block;
+}
+
+/* Custom Status Buttons */
+.btn-status {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.btn-status:hover {
+    transform: translateX(5px);
+    border-color: #0d6efd;
+    background: #f8fafc;
+}
+
+.status-circle {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* Active Status Highlight (Optional: can be triggered via JS) */
+.btn-status.active {
+    border-color: #0d6efd;
+    background: #f0f7ff;
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.1);
+}
+
+/* Button Group Overrides */
+.btn-check:checked + .btn-outline-warning { background-color: #ffc107; color: #000; }
+.btn-check:checked + .btn-outline-primary { background-color: #0d6efd; color: #fff; }
+.btn-check:checked + .btn-outline-success { background-color: #198754; color: #fff; }
+
+.clean-table { width: 100%; border-collapse: separate; border-spacing: 0 5px; }
+.clean-table th { font-size: 0.65rem; color: #94a3b8; padding: 10px; font-weight: 800; }
+.clean-table td { padding: 10px; font-size: 0.85rem; background: #fcfcfc; border-top: 1px solid #f8fafc; border-bottom: 1px solid #f8fafc; }
+.clean-table td:first-child { border-radius: 10px 0 0 10px; border-left: 1px solid #f8fafc; font-weight: 700; color: #0d9488; }
+.clean-table td:last-child { border-radius: 0 10px 10px 0; border-right: 1px solid #f8fafc; color: #64748b; }
+
+/* Badges */
+.type-badge {
+    background: #f1f5f9;
+    color: #475569;
+    padding: 6px 16px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+/* Mideynta Font-ka iyo Cabirka */
+:root {
+    --main-font: 'Plus Jakarta Sans', sans-serif;
+    --base-size: 14px; /* Cabirka guud ee qoraalka */
+}
+
+.survey-details-sidebar {
+    font-family: var(--main-font);
+}
+
+/* Qoraalka macluumaadka (Value) */
+.detail-value, .fw-bold, .h5, td {
+    font-family: var(--main-font) !important;
+    font-size: var(--base-size) !important;
+    font-weight: 700 !important;
+    color: #1e293b !important;
+}
+
+/* Ciwaannada yaryar (Labels) */
+.detail-label, th {
+    font-family: var(--main-font) !important;
+    font-size: 11px !important; /* In yar oo ka yar base-size si loo kala saaro */
+    font-weight: 800;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Shaxda Soohdimaha */
+.clean-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+/* GPS iyo Location */
+code#view_location {
+    font-family: var(--main-font) !important;
+    font-size: var(--base-size) !important;
+}
+
+/* Badhanka Add New ee Land Survey */
+.btn-primary {
+    background-color: var(--primary) !important;
+    border: none;
+    transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary:hover {
+    background-color: #0b7a6f !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3) !important;
+}
+
+/* Hubi in Header-ka Desktop-ku uusan cidhiidhi noqon */
+@media (min-width: 768px) {
+    .app-view .p-4 {
+        padding: 40px !important;
+    }
+}
+
+/* Floating Action Button (FAB) - Mobile */
+.fab-btn {
+    position: fixed !important; /* Waa inuu had iyo jeer shaashadda ku dhegan yahay */
+    bottom: 90px; /* Ka sarree bar-ka hoose */
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background-color: #0d9488 !important; /* Midabkaaga Teal-ka ah */
+    color: white !important;
+    border-radius: 50%;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    z-index: 9999 !important; /* Tani waxay hubinaysaa inuu dusha sare yimaado */
+    cursor: pointer;
+    text-decoration: none;
+}
+
+/* Kaliya muuji marka shaashadu yar tahay (Mobile) */
+@media (min-width: 769px) {
+    .fab-btn {
+        display: none !important;
+    }
+}
+
+.fab-btn:active {
+    transform: scale(0.9); /* Marka la riixo xoogaa ha yaraado */
+    background-color: #1976D2;
+}
+
+
+
+.survey-card {
+    background: white;
+    border-radius: 16px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border: 1px solid #edf2f7;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    transition: 0.2s;
+}
+
+.survey-card:active {
+    transform: scale(0.98);
+    background: #f8fafc;
+}
+
+.card-sn {
+    background: #f1f5f9;
+    color: #475569;
+    font-weight: 800;
+    font-size: 0.75rem;
+    padding: 6px 10px;
+    border-radius: 10px;
+    min-width: 45px;
+    text-align: center;
+}
+
+.card-info {
+    flex-grow: 1;
+}
+
+.card-name {
+    font-weight: 700;
+    color: #1e293b;
+    font-size: 0.95rem;
+    margin-bottom: 2px;
+}
+
+.card-date {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+/* Qari table-ka asalka ah marka la joogo mobile */
+@media (max-width: 767px) {
+    .bg-white.rounded-4.shadow-sm.border.overflow-hidden {
+        display: none; 
+    }
+}
+
+/* Mideynta height-ka filters-ka */
+.custom-height {
+    height: 38px !important;
+}
+
+/* In search-ka iyo badhanka ay u ekaadaan hal xabbad */
+.input-group.custom-height .btn {
+    border-color: #dee2e6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.input-group.custom-height input:focus {
+    box-shadow: none;
+    border-color: #dee2e6;
+}
+
+/* In dropdown-ka iyo date-ka ay height-ka raacaan */
+.form-select.custom-height, 
+.form-control.custom-height {
+    line-height: 1.5;
+}
+
+
+/* Mideynta Height-ka iyo Alignment-ka */
+.custom-height, 
+.custom-height-group {
+    height: 43px !important;
+}
+
+.custom-height-group .input-group-text,
+.custom-height-group input,
+.custom-height-group .btn {
+    height: 100%;
+}
+
+/* In Search-ka iyo Badhanka Filter-ka ay u ekaadaan hal sanduuq */
+.custom-height-group .btn {
+    background-color: #f8fafc;
+    border-color: #dee2e6;
+    transition: all 0.2s;
+}
+
+.custom-height-group .btn:hover {
+    background-color: #f1f5f9;
+    color: #0d9488 !important; /* Midabka Teal */
+}
+
+/* Stylinka Border-ka marka la gujiyo Search-ka */
+#filterSearch:focus {
+    background-color: #fff !important;
+    border-top: 1px solid #dee2e6 !important;
+    border-bottom: 1px solid #dee2e6 !important;
+}
+
+/* Styling gaar ah oo loogu talagalay qaybta qarsoon ee soohdimaha */
+.border-dashed {
+    border-style: dashed !important;
+}
+
+.offcanvas {
+    width: 300px !important;
+    border-left: none;
+}
+
+
+
+@media (max-width: 768px) {
+    /* Search-ka moobaylka xoogaa ha weynaado si farta loogu taabto */
+    .custom-height-group {
+        height: 46px !important;
+    }
+}
+
+/* Hubi in collapse-ku uu qarsamo xitaa haddii uu desktop yahay */
+#soohdimahaSearch.collapse:not(.show) {
+    display: none !important;
+}
+
+/* Kaliya marka badhanka la riixo (class .show lagu daro) ha muuqdo */
+#soohdimahaSearch.collapse.show {
+    display: block !important;
+}
+
+/* Marka maabka la weyneeyo */
+.expanded-map {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 3000 !important; /* Inuu dusha ka maro wax walba */
+    margin: 0 !important;
+    border-radius: 0 !important;
+}
+
+/* In Desktop-ka uu margin u daayo sidebar-ka (Haddii aad rabto) */
+@media (min-width: 769px) {
+    .expanded-map {
+        left: 260px !important; /* Inuu ka fogaado Sidebar-ka desktop-ka */
+        width: calc(100vw - 260px) !important;
+    }
+}
+
+/* Mobile-ka gabi ahaanba ha buuxiyo */
+@media (max-width: 768px) {
+    .expanded-map {
+        left: 0 !important;
+        width: 100vw !important;
+        height: calc(100vh - 70px) !important; /* Inuu ka sarreeyo navigation-ka hoose */
+    }
+}
+
+.login-card {
+    background: #ffffff;
+    width: 380px;
+    padding: 40px;
+    border-radius: 24px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.login-icon-box {
+    width: 60px;
+    height: 60px;
+    background: rgba(13, 148, 136, 0.1);
+    color: #0d9488;
+    font-size: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+    margin: 0 auto;
+}
+
+.form-label-custom {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    display: block;
+}
+
+.btn-login {
+    background: #0d9488;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    transition: 0.3s;
+    letter-spacing: 1px;
+}
+
+.btn-login:hover {
+    background: #0b7a6f;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
+}
+
+#loginForm .form-control:focus {
+    box-shadow: none;
+    border-color: #0d9488;
+}
+
+/* Custom Map Labels */
+.map-owner-label {
+    background: rgba(0, 0, 0, 0.75) !important;
+    border: 1px solid #FFD700 !important;
+    color: #ffffff !important;
+    font-weight: 800 !important;
+    font-size: 11px !important;
+    padding: 3px 8px !important;
+    border-radius: 4px !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4) !important;
+    white-space: nowrap !important;
+    pointer-events: none !important;
+}
+
+/* Remove default Leaflet tooltip arrow */
+.leaflet-tooltip-center:before {
+    display: none !important;
+}
+
+/* Ensure the toggle sits correctly on mobile */
+@media (max-width: 768px) {
+    .map-overlay-controls {
+        top: auto !important;
+        bottom: 85px !important; /* Above bottom nav */
+        right: 10px !important;
+    }
+}
+
+/* Fix the header icon visibility */
+.modal-header .bg-white.bg-opacity-20 {
+    width: 45px;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Ensure the Reference ID stands out */
+#v_ref_sumad_badge {
+    background: #f0f7ff;
+    padding: 4px 12px;
+    border-radius: 8px;
+    display: inline-block;
+}
+
+/* Fix the Download PDF button contrast */
+.btn-dark {
+    background-color: #0f172a !important;
+    border: none !important;
+}
+
+/* Workflow Stepper Design */
+.workflow-stepper {
+    position: relative;
+    padding-left: 10px;
+}
+
+.step-item {
+    display: flex;
+    position: relative;
+    padding-bottom: 30px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.step-item:last-child { padding-bottom: 0; }
+
+.step-line {
+    position: absolute;
+    left: 17px;
+    top: 35px;
+    height: calc(100% - 35px);
+    width: 2px;
+    background: #e2e8f0;
+    z-index: 1;
+}
+
+.step-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    margin-right: 15px;
+    font-size: 1.1rem;
+    transition: 0.3s;
+}
+
+.step-content { padding-top: 5px; }
+
+.step-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #475569;
+}
+
+/* Hover & Active States */
+.step-item:hover .step-title { color: #0d6efd; }
+
+.step-item.active .step-title { color: #000; }
+.step-item.active .step-icon {
+    transform: scale(1.1);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1) !important;
+}
+
+/* Status specific colors for icons when active */
+.step-item.active#step_In_Progress .step-icon { background: #ffc107 !important; color: #000; border: none; }
+.step-item.active#step_Completed .step-icon { background: #0d6efd !important; color: #fff; border: none; }
+.step-item.active#step_Picked_Up .step-icon { background: #198754 !important; color: #fff; border: none; }
+
+/* Shaxda Soohdimaha */
+.boundary-table { width: 100%; border-collapse: separate; border-spacing: 0 4px; }
+.boundary-table th { font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; padding: 8px; font-weight: 800; }
+.boundary-table td { background: #f8fafc; padding: 8px 12px; font-size: 0.85rem; border: 1px solid #f1f5f9; }
+.boundary-table td:first-child { border-radius: 8px 0 0 8px; font-weight: 700; color: #0d9488; }
+.boundary-table td:last-child { border-radius: 0 8px 8px 0; }
+
+/* Maabyada */
+.map-card { border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; background: white; }
+.map-header { background: #1e293b; color: white; padding: 6px 15px; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; }
+
+.form-container { flex-grow: 1; overflow-y: auto; padding: 30px; padding-bottom: 100px; }
+.form-card { background: white; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); max-width: 1000px; margin: 0 auto; padding: 40px; border: 1px solid #e2e8f0; }
+.section-title { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px; margin-bottom: 12px; display: block; }
+.form-control, .form-select { border-radius: 12px; border: 1.5px solid #e2e8f0; padding: 12px; font-size: 0.95rem; }
+
+.boundary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; background: #f8fafc; padding: 25px; border-radius: 20px; border: 1px solid #e2e8f0; }
+.boundary-item { background: white; padding: 15px; border-radius: 14px; border: 1px solid #edf2f7; }
+
+.map-box { height: 400px; border-radius: 20px; overflow: hidden; position: relative; border: 1.5px solid #e2e8f0; margin: 20px 0; }
+#miniMap { height: 100%; width: 100%; cursor: crosshair; }
+.map-overlay { position: absolute; bottom: 15px; left: 15px; right: 15px; z-index: 1000; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+
+.btn-save { background: var(--primary); color: white; border: none; border-radius: 14px; padding: 18px 50px; font-weight: 700; width: 100%; transition: 0.3s; }
+#dhulDhisanDetails { display: none; }
+    </style>
+</head>
+<body>
+<div id="loginOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+    <div class="login-card">
+        <div class="text-center mb-4">
+            <div class="login-icon-box">
+                <i class="bi bi-shield-lock-fill"></i>
+            </div>
+            <h3 class="fw-bold text-dark mt-3 mb-1">GeoSurvey Pro</h3>
+            <p class="text-muted small">Fadlan geli aqoonsigaaga si aad u gasho</p>
+        </div>
+        <form id="loginForm">
+            <div class="mb-3">
+                <label class="form-label-custom">Username</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-transparent border-end-0"><i class="bi bi-person"></i></span>
+                    <input type="text" id="loginUser" class="form-control border-start-0 ps-0" placeholder="admin" required>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label-custom">Password</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-transparent border-end-0"><i class="bi bi-key"></i></span>
+                    <input type="password" id="loginPass" class="form-control border-start-0 ps-0" placeholder="******" required>
+                </div>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="rememberMe">
+                    <label class="form-check-label small text-muted" for="rememberMe">Remember me</label>
+                </div>
+            </div>
+            <button type="submit" id="loginBtn" class="btn btn-login w-100 py-2 fw-bold">
+                SIGN IN <i class="bi bi-arrow-right-short ms-1"></i>
+            </button>
+        </form>
+    </div>
+</div>
+
+<aside class="sidebar">
+    <div class="sidebar-brand">Geo<span>Survey</span></div>
+    
+    <nav class="nav-sidebar nav flex-column">
+        <button class="nav-link" onclick="switchTab('ref-view', this)">
+            <i class="bi bi-collection-fill"></i> <span>References</span>
+        </button>
+        <button class="nav-link active" onclick="switchTab('map-view', this)">
+            <i class="bi bi-compass-fill"></i> <span>Map Explorer</span>
+        </button>
+        <button class="nav-link" onclick="switchTab('list-view', this)">
+            <i class="bi bi-layers-half"></i> <span>Survey Records</span>
+        </button>
+        <button class="nav-link" onclick="switchTab('transfer-view', this)">
+            <i class="bi bi-arrow-left-right"></i> <span>Wareejin Dhul</span>
+        </button>
+        <button class="nav-link" onclick="switchTab('receipt-view', this)">
+            <i class="bi bi-wallet2"></i> <span>Financials</span>
+        </button>
+        <button class="nav-link" id="userTabBtn" onclick="switchTab('user-management', this)" style="display: none;">
+            <i class="bi bi-shield-lock-fill"></i> <span>User Control</span>
+        </button>
+    </nav>
+
+    <div class="sidebar-footer">
+        <div class="user-profile">
+            <div class="user-avatar">
+                <i class="bi bi-person-circle"></i>
+            </div>
+            <div class="user-info">
+                <span class="user-name" id="display_fullname">Loading...</span>
+                <span class="user-role" id="display_role">User</span>
+            </div>
+        </div>
+        <button class="btn-logout" onclick="logout()">
+            <i class="bi bi-box-arrow-right"></i>
+            <span>Logout</span>
+        </button>
+    </div>
+</aside>
+
+<main class="main-content">
+<div id="ref-view" class="app-view">
+    <div class="p-2 p-md-3 overflow-auto">
+        <div class="mb-3 bg-white p-3 rounded-4 border shadow-sm">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="fw-bold m-0 text-dark">Reference Records</h4>
+                    <p class="text-muted small m-0">Maamulka tixraacyada iyo dukumiintiyada.</p>
+                </div>
+                <button class="btn btn-primary d-flex align-items-center gap-2 px-4 shadow-sm" onclick="showRefForm()">
+                    <i class="bi bi-plus-lg"></i> <span>Add New Ref</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="refListArea">
+            <div class="table-responsive bg-white rounded-4 shadow-sm border overflow-hidden">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Sumad (Ref)</th>
+                            <th>Survey Lr</th>
+                            <th>Ujeedo</th>
+                            <th>Taariikh</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="refTableBody">
+                        <tr><td colspan="5" class="text-center p-4">Loading references...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="refFormArea" style="display: none;">
+            <div class="form-container p-0">
+                <div class="form-card">
+                    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+                        <h3 class="fw-bold m-0">Diiwaangelinta Sumadda (Ref)</h3>
+                        <button class="btn btn-light rounded-circle" onclick="hideRefForm()"><i class="bi bi-x-lg"></i></button>
+                    </div>
+
+                    <form id="refForm">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="section-title">Sumad (Ref Number)</label>
+                                <input type="text" id="ref_sumad" class="form-control" placeholder="Tusaale: REF-2026-001" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="section-title">Taarikhda iyo Saacadda</label>
+                                <input type="datetime-local" id="ref_date" class="form-control" required>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="section-title">Ujeedo (Subject)</label>
+                                <select id="ref_ujeedo" class="form-select" required onchange="checkSurveyLrVisibility()">
+                                    <option value="">Dooro Ujeedada...</option>
+                                    <option value="Beec Dhul">Beec Dhul</option>
+                                    <option value="Beec Gaari">Beec Gaari</option>
+                                    <option value="Beec Mooto">Beec Mooto</option>
+                                    <option value="Sugitaan Milkiyad Dhul">Sugitaan Milkiyad Dhul</option>
+                                    <option value="Sugitaan Dhaxalkoob">Sugitaan Dhaxalkoob</option>
+                                    <option value="Sugitaan Milkiyad Gaari/Koox/Nooc kale">Sugitaan Milkiyad Gaari/Koox/Nooc kale</option>
+                                    <option value="Codsi Sabarloog">Codsi Sabarloog</option>
+                                    <option value="Wakaalad">Wakaalad</option>
+                                    <option value="Damaanad">Damaanad</option>
+                                    <option value="Heshiis">Heshiis</option>
+                                    <option value="Cadeyn">Cadeyn</option>
+                                    <option value="Cadeyn Heshiis Kiro">Cadeyn Heshiis Kiro</option>
+                                    <option value="Xeer Hoosaad">Xeer Hoosaad</option>
+                                    <option value="Cadeyn Rahan">Cadeyn Rahan</option>
+                                    <option value="Qiimeyn Guri">Qiimeyn Guri</option>
+                                    <option value="Cadeyn Hibeyn/ Waqaf">Cadeyn Hibeyn/ Waqaf</option>
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-12">
+                                <label class="section-title">Faahfaahin (Details)</label>
+                                <textarea id="ref_faahfaahin" class="form-control" rows="4" placeholder="Faahfaahin dheeraad ah..." oninput="checkSurveyLrVisibility()"></textarea>
+                            </div>
+
+                            <div class="col-md-12" id="surveyLrWrapper" style="display: none;"> 
+                                <label class="section-title text-primary fw-bold">Survey Lr (Xidhiidhka Sahanka)</label>
+                                <select id="ref_survey_link" class="form-select border-primary shadow-sm">
+                                    <option value="">Dooro Sahanka (S/N & Magaca)...</option>
+                                </select>
+                                <div class="form-text text-primary small mt-1"><i class="bi bi-info-circle"></i> Dukumiintigan wuxuu u baahan yahay in lala xidhiidhiyo Sahan hore u jiray.</div>
+                            </div>
+
+                            <div class="col-md-12 text-center mt-4">
+                                <button type="submit" id="refSaveBtn" class="btn-save shadow w-100">SAVE REFERENCE</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+    <div id="map-view" class="app-view active">
+    <div class="map-overlay-controls" style="position: absolute; top: 10px; right: 10px; z-index: 1000;">
+        <div class="bg-white p-2 rounded-3 shadow-sm border d-flex align-items-center gap-2">
+            <div class="form-check form-switch m-0">
+                <input class="form-check-input" type="checkbox" id="labelToggle" checked onchange="togglePolygonLabels()">
+                <label class="form-check-label small fw-bold text-dark" for="labelToggle">Show Names</label>
+            </div>
+        </div>
+    </div>
+    <div id="mainMap" style="height: 100%;"></div>
+</div>
+
+<div id="list-view" class="app-view">
+    <div class="p-2 p-md-3 overflow-auto">
+        <div class="mb-3 bg-white p-3 rounded-4 border shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="fw-bold m-0 text-dark">Land Survey</h4>
+                <button class="btn btn-primary d-none d-md-flex align-items-center gap-2 px-4 shadow-sm" style="height: 40px;" onclick="switchTab('form-view')">
+                    <i class="bi bi-plus-lg"></i> <span>Add New</span>
+                </button>
+            </div>
+
+            <div class="row g-1 align-items-center">
+                <div class="col-md-4 col-12">
+                    <div class="input-group input-group-sm custom-height-group">
+                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-search"></i></span>
+                        <input type="text" id="filterSearch" class="form-control bg-light border-start-0 border-end-0 shadow-none" placeholder="Magaca/Xaafadda..." onkeyup="applyFilters()">
+                        
+                        <button class="btn btn-light border border-start-0 d-md-none text-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileFilterSidebar">
+                            <i class="bi bi-sliders h5 m-0"></i>
+                        </button>
+                        
+                        <button class="btn btn-light border border-start-0 d-none d-md-block" type="button" data-bs-toggle="collapse" data-bs-target="#soohdimahaSearch" title="Filter Soohdimaha">
+                            <i class="bi bi-filter-right h5 m-0"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="col-md-1 d-none d-md-block">
+                    <select id="filterXaafada" class="form-select form-select-sm bg-light custom-height" onchange="applyFilters()">
+                        <option value="">Xaafad...</option>
+                        <option>Waaberi</option><option>Towfiiq</option><option>Horseed</option><option>Cadaada</option>
+                    </select>
+                </div>
+                <div class="col-md-1 d-none d-md-block">
+                    <select id="filterLaanta" class="form-select form-select-sm bg-light custom-height" onchange="applyFilters()">
+                        <option value="">Laan...</option>
+                        <option>1aad</option><option>2aad</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-none d-md-block">
+                    <input type="date" id="filterStart" class="form-control form-control-sm bg-light custom-height" onchange="applyFilters()">
+                </div>
+                <div class="col-md-3 d-none d-md-block">
+                    <input type="date" id="filterEnd" class="form-control form-control-sm bg-light custom-height" onchange="applyFilters()">
+                </div>
+            </div>
+
+            <div class="collapse mt-2 d-none d-md-block" id="soohdimahaSearch">
+            <div class="p-3 bg-light border rounded-3 border-dashed">
+                <div class="row g-2">
+                    <div class="col-md-3"><input type="text" id="searchW" class="form-control form-control-sm" placeholder="Waqooyi (W)" onkeyup="applyFilters()"></div>
+                    <div class="col-md-3"><input type="text" id="searchB" class="form-control form-control-sm" placeholder="Bari (B)" onkeyup="applyFilters()"></div>
+                    <div class="col-md-3"><input type="text" id="searchK" class="form-control form-control-sm" placeholder="Koonfur (K)" onkeyup="applyFilters()"></div>
+                    <div class="col-md-3"><input type="text" id="searchG" class="form-control form-control-sm" placeholder="Galbeed (G)" onkeyup="applyFilters()"></div>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <div id="recordsContent">
+             <div class="table-responsive d-none d-md-block">
+                <table class="table table-hover align-middle mb-0 bg-white border rounded-4">
+                    <thead class="table-light">
+                        <tr><th>S/N</th><th>Milkiilaha</th><th>Taarikh</th><th>Xaafad</th><th>Soohdimaha</th><th>Location</th></tr>
+                    </thead>
+                    <tbody id="recordsBody"></tbody>
+                </table>
+            </div>
+            <div id="mobileCards" class="mobile-cards-container d-md-none"></div>
+        </div>
+    </div>
+</div>
+
+<div id="transfer-view" class="app-view">
+    <div class="p-2 p-md-3 overflow-auto">
+        <div class="mb-3 bg-white p-3 rounded-4 border shadow-sm">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="fw-bold m-0 text-dark">Wareejinta Dhulka</h4>
+                    <p class="text-muted small m-0">Diiwaangelinta iibka iyo kala wareejinta hantida.</p>
+                </div>
+                <button class="btn btn-primary d-flex align-items-center gap-2 px-4 shadow-sm" onclick="showTransferForm()">
+                    <i class="bi bi-plus-lg"></i> <span>Wareejin Cusub</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="transferListArea">
+            <div class="table-responsive bg-white rounded-4 shadow-sm border overflow-hidden">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>S/N</th>
+                            <th>Iibiyaha</th>
+                            <th>Iibsadaha</th>
+                            <th>Survey Lr</th>
+                            <th>Lacagta</th>
+                            <th>Taariikhda</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transferTableBody">
+                        <tr><td colspan="6" class="text-center p-4">Loading transfers...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="transferFormArea" style="display: none;">
+            <div class="form-container p-0">
+                <div class="form-card">
+                    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+                        <h3 class="fw-bold m-0">Foomka Wareejinta</h3>
+                        <button class="btn btn-light rounded-circle" onclick="hideTransferForm()"><i class="bi bi-x-lg"></i></button>
+                    </div>
+
+                    <form id="transferForm">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="section-title">Iibiyaha / Iibisada</label>
+                                <input type="text" id="tr_iibiyaha" class="form-control" placeholder="Magaca qofka dhulka iibinaya" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="section-title">Tel Lr Iibiyaha</label>
+                                <input type="tel" id="tr_tel_iibiyaha" class="form-control" placeholder="Ex: 61xxxxxxx" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="section-title">Iibsadaha / Iibsatada</label>
+                                <input type="text" id="tr_iibsadaha" class="form-control" placeholder="Magaca qofka iibsanaya" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="section-title">Tel Lr Iibsadaha</label>
+                                <input type="tel" id="tr_tel_iibsadaha" class="form-control" placeholder="Ex: 61xxxxxxx" required>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="section-title">Survey Lr (Xogta Dhulka)</label>
+                                <select id="tr_survey_link" class="form-select border-primary" required>
+                                    <option value="">Dooro Sahanka...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="section-title">Lacagta (Price)</label>
+                                <input type="number" id="tr_lacagta" class="form-control" placeholder="$0.00" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="section-title">Taariikhda</label>
+                                <input type="date" id="tr_date" class="form-control" required>
+                            </div>
+
+                            <div class="col-md-12 text-center mt-4">
+                                <button type="submit" id="trSaveBtn" class="btn-save shadow w-100">SAVE TRANSFER RECORD</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="receipt-view" class="app-view">
+    <div class="p-3">
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-success bg-opacity-10 text-success rounded-3 p-3 me-3">
+                            <i class="bi bi-cash-stack h3 mb-0"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-muted small fw-bold text-uppercase mb-1">Total Revenue</h6>
+                            <h3 class="fw-bold mb-0 text-dark" id="total_revenue">$0.00</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-danger bg-opacity-10 text-danger rounded-3 p-3 me-3">
+                            <i class="bi bi-cart-dash h3 mb-0"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-muted small fw-bold text-uppercase mb-1">Total Expenses</h6>
+                            <h3 class="fw-bold mb-0 text-dark" id="total_expenses">$0.00</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <ul class="nav nav-pills nav-fill mb-4 bg-white p-2 rounded-4 shadow-sm border" id="financeTabs">
+            <li class="nav-item">
+                <button class="nav-link active rounded-3 fw-bold" data-bs-toggle="pill" data-bs-target="#tab-payments">
+                    <i class="bi bi-receipt me-2"></i> Client Payments
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link rounded-3 fw-bold text-danger" data-bs-toggle="pill" data-bs-target="#tab-expenses">
+                    <i class="bi bi-wallet2 me-2"></i> Office Expenses
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="tab-payments">
+                <div class="table-responsive bg-white rounded-4 shadow-sm border overflow-hidden">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th class="ps-4">Ref No.</th>
+                                <th>Subject</th>
+                                <th>Date</th>
+                                <th class="text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="receiptRefTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-expenses">
+                <div class="d-flex justify-content-between align-items-center mb-3 px-1">
+                    <h5 class="fw-bold m-0"><i class="bi bi-list-ul me-2"></i> Expense List</h5>
+                    <button class="btn btn-danger btn-sm px-4 rounded-pill fw-bold shadow-sm" onclick="showExpenseModal()">
+                        <i class="bi bi-plus-lg me-1"></i> Add Expense
+                    </button>
+                </div>
+                
+                <div class="table-responsive bg-white rounded-4 shadow-sm border overflow-hidden">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th class="ps-4">S/N</th>
+                                <th>Description</th>
+                                <th>Date</th>
+                                <th>Qty</th>
+                                <th>Amount</th>
+                                <th class="fw-bold">Total</th>
+                                <th>Created By</th>
+                            </tr>
+                        </thead>
+                        <tbody id="expenseTableBody">
+                            <tr><td colspan="7" class="text-center p-4 text-muted">Loading expenses...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="payModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header border-bottom-0">
+                <h5 class="fw-bold"><i class="bi bi-cash-stack me-2 text-success"></i> Create Receipt</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="receiptForm">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="small fw-bold">Receipt No</label>
+                            <input type="text" id="rec_no" class="form-control bg-light" readonly>
+                        </div>
+                        <div class="col-6">
+                            <label class="small fw-bold">Sumad (Ref)</label>
+                            <input type="text" id="rec_ref" class="form-control bg-light" readonly>
+                        </div>
+                        <div class="col-12">
+                            <label class="small fw-bold">Faahfaahin</label>
+                            <input type="text" id="rec_details" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="small fw-bold">Date</label>
+                            <input type="date" id="rec_date" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="small fw-bold">Lacagta (Amount)</label>
+                            <input type="number" id="rec_amount" class="form-control" placeholder="$0.00" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="small fw-bold">Status</label>
+                            <select id="rec_status" class="form-select">
+                                <option value="Paid">Paid</option>
+                                <option value="Credit">Credit</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="small fw-bold">Payment Mode</label>
+                            <select id="rec_mode" class="form-select">
+                                <option value="EVC Plus">EVC Plus</option>
+                                <option value="eDahab">eDahab</option>
+                                <option value="Jeeb">Jeeb</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="submit" class="btn btn-success w-100 py-2 fw-bold">PRINT & SAVE RECEIPT</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+<div id="user-management" class="app-view">
+    <div class="p-2 p-md-3">
+        <div class="mb-3 bg-white p-3 rounded-4 border shadow-sm">
+            <div class="d-flex justify-content-between align-items-center">
+                <h4 class="fw-bold m-0 text-dark">Maamulka Isticmaalayaasha</h4>
+                <button class="btn btn-primary btn-sm px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                    <i class="bi bi-person-plus me-1"></i> Add User
+                </button>
+            </div>
+        </div>
+
+        <div class="table-responsive bg-white rounded-4 shadow-sm border overflow-hidden">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Username</th>
+                        <th>Full Name</th>
+                        <th>Role</th>
+                        <th class="text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="userTableBody">
+                    <tr><td colspan="4" class="text-center p-4">Loading users...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addUserModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0">
+            <div class="modal-header border-bottom-0">
+                <h5 class="fw-bold">Add New User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addUserForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="small fw-bold">Full Name</label>
+                        <input type="text" id="new_fullname" class="form-control" placeholder="Maxamed Cali" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="small fw-bold">Username</label>
+                        <input type="text" id="new_username" class="form-control" placeholder="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="small fw-bold">Password</label>
+                        <input type="password" id="new_password" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="small fw-bold">Role</label>
+                        <select id="new_role" class="form-select">
+                            <option value="User">User</option>
+                            <option value="Admin">Admin</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="submit" class="btn btn-primary w-100">Save User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="offcanvas offcanvas-end rounded-start-4 d-md-none" tabindex="-1" id="mobileFilterSidebar">
+    <div class="offcanvas-header border-bottom py-3">
+        <h5 class="offcanvas-title fw-bold"><i class="bi bi-funnel me-2"></i>Shaandheey</h5>
+        <button type="button" class="btn-close shadow-none" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div class="mb-3">
+            <label class="detail-label mb-1">XAAFADDA</label>
+            <select id="m_filterXaafada" class="form-select bg-light py-2" onchange="syncFilters('m_filterXaafada', 'filterXaafada')">
+                <option value="">Dhamaan...</option>
+                <option>Waaberi</option><option>Towfiiq</option><option>Horseed</option><option>Cadaada</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="detail-label mb-1">LAANTA</label>
+            <select id="m_filterLaanta" class="form-select bg-light py-2" onchange="syncFilters('m_filterLaanta', 'filterLaanta')">
+                <option value="">Dhamaan...</option>
+                <option>1aad</option><option>2aad</option>
+            </select>
+        </div>
+        <div class="row g-2 mb-3">
+            <div class="col-6">
+                <label class="detail-label mb-1">KA BILOW</label>
+                <input type="date" id="m_filterStart" class="form-control bg-light" onchange="syncFilters('m_filterStart', 'filterStart')">
+            </div>
+            <div class="col-6">
+                <label class="detail-label mb-1">KU JOOJI</label>
+                <input type="date" id="m_filterEnd" class="form-control bg-light" onchange="syncFilters('m_filterEnd', 'filterEnd')">
+            </div>
+        </div>
+        <div class="p-3 bg-light rounded-3 border">
+            <label class="detail-label mb-2 text-primary small fw-bold">SOOHDIMAHA (METERS)</label>
+            <div class="row g-2">
+                <div class="col-6"><input type="text" id="m_searchW" class="form-control form-control-sm" placeholder="Waqooyi" onkeyup="syncFilters('m_searchW', 'searchW')"></div>
+                <div class="col-6"><input type="text" id="m_searchB" class="form-control form-control-sm" placeholder="Bari" onkeyup="syncFilters('m_searchB', 'searchB')"></div>
+                <div class="col-6"><input type="text" id="m_searchK" class="form-control form-control-sm" placeholder="Koonfur" onkeyup="syncFilters('m_searchK', 'searchK')"></div>
+                <div class="col-6"><input type="text" id="m_searchG" class="form-control form-control-sm" placeholder="Galbeed" onkeyup="syncFilters('m_searchG', 'searchG')"></div>
+            </div>
+        </div>
+        <button class="btn btn-primary w-100 py-3 mt-4 fw-bold rounded-3 shadow" data-bs-dismiss="offcanvas">XIDH & FILTARAY</button>
+    </div>
+</div>
+
+    <div id="form-view" class="app-view">
+        <div class="form-container">
+            <div class="form-card">
+                <div class="mb-4">
+                    <h3 class="fw-bold m-0">Diiwaangelinta Cusub</h3>
+                    <p class="text-muted small">Diiwaangeli macluumaadka dhulka iyo milkiilaha.</p>
+                </div>
+                
+                <form id="surveyForm">
+                    <div class="row g-4">
+                        <div class="col-md-12">
+                            <label class="section-title">Magaca Milkiilaha</label>
+                            <input type="text" id="magaca" class="form-control" placeholder="Magaca oo saddexan" required>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label class="section-title">Xaafadda</label>
+                            <select id="xaafadda" class="form-select" required>
+                                <option value="">Dooro...</option>
+                                <option>Waaberi</option><option>Towfiiq</option><option>Horseed</option><option>Cadaada</option>
+                                <option>Berdaale</option><option>Isha</option><option>Howlwadaag</option><option>Salaamay</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="section-title">Laanta</label>
+                            <select id="laanta" class="form-select" required>
+                                <option value="">Dooro...</option>
+                                <option>Laanta 1aad</option><option>Laanta 2aad</option><option>Laanta 3aad</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="section-title">Nawaaxiga</label>
+                            <input type="text" id="nawaaxiga" class="form-control" placeholder="Tusaale: Masjidka weyn agtiisa">
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="section-title">Nooca Dhulka</label>
+                            <select id="nooca" class="form-select" required onchange="toggleDhisanField()">
+                                <option value="">Dooro...</option>
+                                <option value="Dhul Banaan">Dhul Banaan</option>
+                                <option value="Dhul dhisan">Dhul dhisan</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-12" id="dhulDhisanDetails">
+                            <label class="section-title text-danger">Waxa ku dhisan</label>
+                            <input type="text" id="maxaa_dhisan" class="form-control border-danger" placeholder="Maxaa ku dhisan?">
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="section-title">Soohdimaha Dhulka (Cabirka & Deriska)</label>
+                            <div class="boundary-grid">
+                                <div class="boundary-item">
+                                    <label class="small fw-bold text-primary mb-2 d-block">WAQOOYI</label>
+                                    <input type="text" id="w_val" class="form-control form-control-sm mb-2" placeholder="Cabirka">
+                                    <input type="text" id="w_deris" class="form-control form-control-sm" placeholder="Deriska">
+                                </div>
+                                <div class="boundary-item">
+                                    <label class="small fw-bold text-primary mb-2 d-block">BARI</label>
+                                    <input type="text" id="b_val" class="form-control form-control-sm mb-2" placeholder="Cabirka">
+                                    <input type="text" id="b_deris" class="form-control form-control-sm" placeholder="Deriska">
+                                </div>
+                                <div class="boundary-item">
+                                    <label class="small fw-bold text-primary mb-2 d-block">KOONFUR</label>
+                                    <input type="text" id="k_val" class="form-control form-control-sm mb-2" placeholder="Cabirka">
+                                    <input type="text" id="k_deris" class="form-control form-control-sm" placeholder="Deriska">
+                                </div>
+                                <div class="boundary-item">
+                                    <label class="small fw-bold text-primary mb-2 d-block">GALBEED</label>
+                                    <input type="text" id="g_val" class="form-control form-control-sm mb-2" placeholder="Cabirka">
+                                    <input type="text" id="g_deris" class="form-control form-control-sm" placeholder="Deriska">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="section-title">Location (Guji Maabka ama Sawir Polygon)</label>
+                            <div class="map-box" id="miniMapContainer">
+                                <div id="miniMap"></div>
+                                
+                                <button type="button" class="btn btn-light shadow-sm position-absolute" 
+                                        style="top: 10px; right: 10px; z-index: 1000; border-radius: 8px;" 
+                                        onclick="toggleMiniMapFullScreen()">
+                                    <i class="bi bi-arrows-fullscreen"></i>
+                                </button>
+
+                                <div class="map-overlay">
+                                    <input type="text" id="gpsInput" class="border-0 bg-transparent fw-bold" style="width: 50%; font-size: 0.8rem;" placeholder="0.0, 0.0" readonly>
+                                    <button type="button" class="btn btn-primary btn-sm rounded-pill px-4" onclick="getLiveLocation()">
+                                        <i class="bi bi-geo-alt"></i> Auto
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="sketchContainer">
+                            <div class="sketch-header"><i class="bi bi-vector-pen"></i> Qaabka Dhulka (Sketch)</div>
+                            <div id="sketchCanvas"></div>
+                        </div>
+
+                        <div class="col-md-12 text-center mt-4">
+                            <button type="submit" id="saveBtn" class="btn-save shadow">SYNC TO CLOUD DATABASE</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</main>
+
+<div class="modal fade" id="receiptDetailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 24px;">
+            <div class="modal-header border-0 p-4" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 24px 24px 0 0;">
+                <div class="d-flex align-items-center">
+                    <div class="bg-white shadow-sm rounded-3 p-2 me-3 text-success">
+                        <i class="bi bi-receipt-cutoff h4 mb-0"></i>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold mb-0 text-dark">Xogta Resiidhka</h5>
+                        <p class="text-muted small mb-0" id="v_rec_status_text">Payment Information</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body p-4 bg-white">
+                <div class="row g-3 mb-4">
+                    <div class="col-6">
+                        <div class="p-3 border rounded-4 bg-light bg-opacity-50">
+                            <label class="text-uppercase small fw-bold text-muted mb-1" style="font-size: 10px;">Receipt No</label>
+                            <div id="v_rec_no" class="h6 fw-bold text-dark mb-0">-</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 border rounded-4 bg-light bg-opacity-50">
+                            <label class="text-uppercase small fw-bold text-muted mb-1" style="font-size: 10px;">Sumad (Ref)</label>
+                            <div id="v_rec_ref" class="h6 fw-bold text-primary mb-0">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="text-uppercase small fw-bold text-muted mb-2 d-block" style="font-size: 10px;">Lacagta (Amount)</label>
+                    <div class="p-3 border rounded-4 bg-white shadow-sm d-flex justify-content-between align-items-center">
+                        <div class="h4 fw-bold text-success mb-0" id="v_rec_amount">$0.00</div>
+                        <span id="v_rec_mode" class="badge bg-secondary px-3 py-2 rounded-pill">Mode</span>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="text-uppercase small fw-bold text-muted mb-2 d-block" style="font-size: 10px;">Faahfaahin</label>
+                    <div id="v_rec_details" class="p-3 rounded-4 bg-light" style="font-size: 0.95rem;">-</div>
+                </div>
+
+                <div class="p-3 rounded-4 border border-success border-opacity-25 bg-success bg-opacity-10 d-flex justify-content-between align-items-center">
+                    <div>
+                        <label class="text-uppercase small fw-bold text-success d-block" style="font-size: 10px;">Taariikhda Bixinta</label>
+                        <div id="v_rec_date" class="fw-bold text-dark small">-</div>
+                    </div>
+                    <i class="bi bi-patch-check-fill text-success h3 mb-0"></i>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0 p-4 pt-0">
+                <button class="btn btn-dark w-100 py-3 fw-bold shadow" onclick="window.print()" style="border-radius: 16px;">
+                    <i class="bi bi-printer me-2"></i> PRINT RECEIPT
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" id="refDetailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: 24px;">
+            <div class="modal-header border-0 p-4 bg-primary text-white" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+                <div class="d-flex align-items-center">
+                    <div class="bg-white bg-opacity-20 rounded-circle p-2 me-3">
+                        <i class="bi bi-shield-check h4 mb-0"></i>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold mb-0">Official Reference Record</h5>
+                        <p class="mb-0 opacity-75 small">Verified Document Tracking System</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white shadow-none" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body p-0">
+                <div class="row g-0">
+                    <div class="col-md-7 p-4 border-end">
+                        <div class="mb-4">
+                            <span class="text-uppercase fw-bold text-muted" style="font-size: 11px; letter-spacing: 1.5px;">Reference ID</span>
+                            <h3 class="fw-bold text-primary mb-0" id="v_ref_sumad_badge">REF-000</h3>
+                        </div>
+
+                        <div class="row g-4">
+                            <div class="col-6">
+                                <label class="detail-label"><i class="bi bi-bookmark-fill me-1"></i> Subject</label>
+                                <div id="v_ref_ujeedo" class="fw-bold text-dark">-</div>
+                            </div>
+                            <div class="col-6">
+                                <label class="detail-label"><i class="bi bi-calendar-event me-1"></i> Date Issued</label>
+                                <div id="v_ref_date" class="fw-bold text-dark small">-</div>
+                            </div>
+                            <div class="col-12" id="v_ref_survey_section">
+                                <div class="p-3 bg-light rounded-4 border-start border-4 border-primary">
+                                    <label class="detail-label text-primary">Connected Survey</label>
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-geo-alt-fill text-primary me-2"></i>
+                                        <span id="v_ref_survey_lr" class="fw-bold">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="detail-label">Note / Description</label>
+                                <p id="v_ref_faahfaahin" class="text-muted bg-light p-3 rounded-4 small mb-0" style="min-height: 80px; border: 1px solid #edf2f7;">
+                                    -
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-5 p-4 bg-light bg-opacity-50">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h6 class="fw-bold mb-0">Workflow Status</h6>
+                            <span id="current_status_badge" class="badge rounded-pill bg-warning text-dark small px-3">In Progress</span>
+                        </div>
+                        
+                        <div class="workflow-stepper">
+                            <div class="step-item" id="step_In_Progress" onclick="updateStatusUI('In Progress')">
+                                <div class="step-line"></div>
+                                <div class="step-icon bg-warning shadow-sm">
+                                    <i class="bi bi-gear-fill"></i>
+                                </div>
+                                <div class="step-content">
+                                    <span class="step-title">In Progress</span>
+                                    <small class="text-muted d-block">Document is being processed</small>
+                                </div>
+                            </div>
+
+                            <div class="step-item" id="step_Completed" onclick="updateStatusUI('Completed')">
+                                <div class="step-line"></div>
+                                <div class="step-icon bg-white border shadow-sm">
+                                    <i class="bi bi-check-lg"></i>
+                                </div>
+                                <div class="step-content">
+                                    <span class="step-title">Completed</span>
+                                    <small class="text-muted d-block">Ready for client collection</small>
+                                </div>
+                            </div>
+
+                            <div class="step-item" id="step_Picked_Up" onclick="updateStatusUI('Picked Up')">
+                                <div class="step-icon bg-white border shadow-sm">
+                                    <i class="bi bi-hand-thumbs-up"></i>
+                                </div>
+                                <div class="step-content">
+                                    <span class="step-title">Picked Up</span>
+                                    <small class="text-muted d-block">Archived and handed over</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <button class="btn btn-dark w-100 py-3 rounded-4 shadow fw-bold d-flex align-items-center justify-content-center" onclick="printRefPDF()">
+                                <i class="bi bi-file-earmark-pdf me-2"></i> DOWNLOAD PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="expenseModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px; overflow: hidden;">
+            <div class="modal-header border-0 p-4" style="background: #f8fafc;">
+                <div class="d-flex align-items-center">
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-3 p-2 me-3">
+                        <i class="bi bi-wallet2 h4 mb-0"></i>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold mb-0 text-dark">Kharash Cusub</h5>
+                        <small class="text-muted">Diiwaangeli kharashyada xafiiska</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal"></button>
+            </div>
+
+            <form id="expenseForm">
+                <div class="modal-body p-4 bg-white">
+                    <div class="mb-4">
+                        <label class="form-label small fw-bold text-secondary text-uppercase" style="letter-spacing: 0.5px;">Faahfaahinta (Description)</label>
+                        <input type="text" id="exp_desc" class="form-control form-control-lg border-0 bg-light shadow-none" 
+                               placeholder="Tusaale: Internet Bill" style="border-radius: 12px; font-size: 1rem;" required>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary text-uppercase">Tirada (Qty)</label>
+                            <input type="number" id="exp_qty" class="form-control border-0 bg-light shadow-none" 
+                                   value="1" min="1" oninput="calculateExpTotal()" style="border-radius: 12px;" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary text-uppercase">Qiimaha ($)</label>
+                            <input type="number" step="0.01" id="exp_amount" class="form-control border-0 bg-light shadow-none" 
+                                   placeholder="0.00" oninput="calculateExpTotal()" style="border-radius: 12px;" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary text-uppercase">Taariikhda</label>
+                            <input type="date" id="exp_date" class="form-control border-0 bg-light shadow-none" 
+                                   style="border-radius: 12px;" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary text-uppercase">Wadarta (Total)</label>
+                            <div class="d-flex align-items-center h-100 ps-3 border-0 bg-primary bg-opacity-10 text-primary fw-bold" 
+                                 style="border-radius: 12px; height: 45px !important;">
+                                <span class="me-1">$</span><input type="text" id="exp_total" value="0.00" class="bg-transparent border-0 fw-bold text-primary w-100 shadow-none" readonly>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 p-4 pt-0">
+                    <button type="submit" class="btn btn-primary w-100 py-3 fw-bold shadow-sm" 
+                            style="border-radius: 15px; background: #4f46e5; border: none;">
+                        <i class="bi bi-check-circle-fill me-2"></i> KEYDI KHARASHKA
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="detailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content rounded-5 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header border-0 bg-white px-4 pt-4 pb-0">
+                <div class="d-flex align-items-center">
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-3 p-2 me-3">
+                        <i class="bi bi-file-earmark-text-fill h4 mb-0"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark mb-0">Warbixinta Sahanka Dhulka</h5>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-danger btn-sm shadow-sm px-3 fw-bold" onclick="generateProfessionalPDF()">
+                        <i class="bi bi-printer-fill me-1"></i> PRINT REPORT (PDF)
+                    </button>
+                    <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal"></button>
+                </div>
+            </div>
+
+<div class="modal-body p-0 bg-white"> <div class="row g-0 row-cols-1 row-cols-lg-2">
+        <div class="col border-end">
+            <div class="survey-details-sidebar p-3">
+                <div class="row g-2 mb-3 text-start">
+                    <div class="col-6">
+                        <div class="p-2 border rounded-3 bg-light bg-opacity-50">
+                            <span class="detail-label text-primary">SERIAL NO.</span>
+                            <div id="view_sn" class="detail-value text-primary">1</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-2 border rounded-3 bg-light bg-opacity-50">
+                            <span class="detail-label">DIIWAANGELINTA</span>
+                            <div id="view_taarikh" class="detail-value" style="font-size: 0.8rem !important;">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <span class="detail-label">MILKIILAHA DHULKA</span>
+                    <div id="view_magaca" class="detail-value text-dark">Mohamed Ibrahim</div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <span class="detail-label">XAAFADDA</span>
+                        <div id="view_xaafada" class="detail-value">Waaberi</div>
+                    </div>
+                    <div class="col-6">
+                        <span class="detail-label">LAANTA</span>
+                        <div id="view_laanta" class="detail-value">Laanta 1aad</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <span class="detail-label">SOOHDIMAHA (ASALKA)</span>
+                    <div class="border rounded-3 mt-1 overflow-hidden">
+                        <table class="clean-table w-100 mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="ps-2">Jihada</th>
+                                    <th class="text-center">M</th>
+                                    <th class="ps-2">Deriska</th>
+                                </tr>
+                            </thead>
+                            <tbody id="boundaryTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center p-2 border rounded-3 mb-2 bg-light">
+                    <span class="detail-label m-0">NOOCA DHULKA</span>
+                    <span id="view_nooca" class="detail-value">Dhul Banaan</span>
+                </div>
+
+                <div class="p-2 border border-danger border-opacity-25 rounded-3 bg-danger bg-opacity-10">
+                    <span class="detail-label text-danger">GPS COORDINATES</span>
+                    <code id="view_location" class="detail-value text-danger" style="font-size: 0.85rem !important;">3.111539, 43.649540</code>
+                </div>
+            </div>
+        </div>
+
+        <div class="col bg-light">
+            <div class="p-3">
+                <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-3">
+                    <div class="card-header bg-dark text-white py-2 px-3 small d-flex justify-content-between">
+                        <span><i class="bi bi-layers-fill me-1"></i> SATELLITE</span>
+                    </div>
+                    <div id="modalMainMap" style="height: 300px; width: 100%;"></div>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                    <div class="card-header bg-white border-bottom py-2 px-3 small fw-bold text-secondary">
+                        <i class="bi bi-pencil-ruler me-1"></i> TECHNICAL SKETCH
+                    </div>
+                    <div id="modalSketchCanvas" style="height: 400px; width: 100%; background: white !important;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+        </div>
+    </div>
+</div>
+
+
+<button class="fab-btn d-md-none" id="smartFab" onclick="handleFabClick()">
+    <i class="bi bi-plus-lg"></i>
+</button>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-geometryutil@0.9.3/src/leaflet.geometryutil.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz4w7kC_NnWBu1xxb3HoOqb42DXF6ncQsnpVdAGFH8-Q9UEhKbiEscGrkOksH-QGmjZlQ/exec";
+    const satLayer = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains:['mt0','mt1','mt2','mt3'] });
+    const mainMap = L.map('mainMap', { center: [3.1192, 43.6498], zoom: 14, layers: [satLayer] });
+    
+let miniMap, miniMarker, drawnItems;
+let polygonData = ""; 
+let sketchMap; 
+
+function switchTab(viewId, el) {
+    // 1. XIR MODAL-KA
+    const modalElement = document.getElementById('detailsModal');
+    if (modalElement) {
+        const modalInstance = bootstrap.Modal.getInstance(modalElement);
+        if (modalInstance) modalInstance.hide();
+    }
+
+    // 2. VIEW MANAGEMENT
+    document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
+    const activeView = document.getElementById(viewId);
+    if (activeView) activeView.classList.add('active');
+
+    // 3. NAVIGATION ACTIVE STATE
+    document.querySelectorAll('.nav-sidebar .nav-link').forEach(n => n.classList.remove('active'));
+    if (el) el.classList.add('active');
+
+    // 4. MAAMULKA FAB (Dynamic Logic)
+    const fab = document.querySelector('.fab-btn');
+    if (fab) {
+        // Step A: Determine Visibility
+        // Hide FAB if we are already in the Survey Form
+        fab.style.display = (viewId === 'form-view') ? 'none' : 'flex';
+
+        // Step B: Assign Dynamic Actions
+        fab.onclick = () => {
+            switch (viewId) {
+                case 'ref-view':
+                    showRefForm(); // Opens Reference Form
+                    break;
+                case 'map-view':
+                case 'list-view':
+                    switchTab('form-view', document.querySelector('[onclick*="form-view"]')); // Opens Land Survey
+                    break;
+                case 'receipt-view':
+                    // Check if we are on the Expenses sub-tab
+                    const activeFinanceTab = document.querySelector('#financeTabs .nav-link.active')?.getAttribute('data-bs-target');
+                    if (activeFinanceTab === '#tab-expenses') {
+                        showExpenseModal();
+                    } else {
+                        alert("Fadlan dooro Reference aad lacag ka qabanayso liiska hoose.");
+                    }
+                    break;
+                case 'user-management':
+                    const userModal = new bootstrap.Modal(document.getElementById('addUserModal'));
+                    userModal.show();
+                    break;
+                default:
+                    console.log("No specific action for this tab.");
+            }
+        };
+    }
+
+    // 5. LAND SURVEY FORM (Maabka yar)
+    if (viewId === 'form-view') {
+        if (!miniMap) {
+            setTimeout(() => {
+                miniMap = L.map('miniMap', { 
+                    center: [3.1192, 43.6498], 
+                    zoom: 17,
+                    tap: false,
+                    clickTolerance: 30
+                });
+                L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { 
+                    maxZoom: 22, subdomains:['mt0','mt1','mt2','mt3'] 
+                }).addTo(miniMap);
+                drawnItems = new L.FeatureGroup().addTo(miniMap);
+                const drawControl = new L.Control.Draw({
+                    draw: { 
+                        polygon: { allowIntersection: false, shapeOptions: { color: '#3388ff', weight: 3 } }, 
+                        rectangle: { shapeOptions: { color: '#3388ff', weight: 3 } },
+                        marker: false, circle: false, polyline: false, circlemarker: false 
+                    },
+                    edit: { featureGroup: drawnItems }
+                });
+                miniMap.addControl(drawControl);
+
+                miniMap.on(L.Draw.Event.CREATED, (e) => {
+                    drawnItems.clearLayers();
+                    const layer = e.layer;
+                    drawnItems.addLayer(layer);
+                    generateSketch(layer); 
+                });
+            }, 300);
+        } else {
+            setTimeout(() => { miniMap.invalidateSize(); }, 350);
+        }
+    }
+
+    // 6. REFERENCES VIEW (Kaliya u diyaari foomka, xogtu mar hore ayey rarantahay)
+    if (viewId === 'ref-view') { 
+        hideRefForm();
+        setupRefForm(); 
+        populateSurveyDropdown(); 
+    }
+
+    // 7. MAPS & RECORDS (Cusboonaysiin cabirka kaliya)
+    if (viewId === 'map-view' && mainMap) { 
+        setTimeout(() => { 
+            mainMap.invalidateSize(); 
+            displayAllPolygons(); // <--- Add this call here
+        }, 300); 
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// FUNCTION-KA GUUD EE SKETCH-KA DHISA
+function generateSketch(layer) {
+    const latlngs = layer.getLatLngs()[0];
+    polygonData = latlngs.map(c => `${c.lat.toFixed(6)},${c.lng.toFixed(6)}`).join('; ');
+
+    // Soo saar kaadhka
+    document.getElementById('sketchContainer').style.display = 'block';
+    
+    if (sketchMap) { sketchMap.remove(); }
+
+    // Bilow maabka Sketch-ka
+    sketchMap = L.map('sketchCanvas', {
+        zoomControl: true,
+        attributionControl: false,
+        dragging: true,
+        scrollWheelZoom: true,
+        maxZoom: 22
+    });
+
+    // Sawir Polygon-ka (Black outline)
+    L.polygon(latlngs, { 
+        color: '#000', 
+        weight: 3, 
+        fillColor: '#f1f5f9', 
+        fillOpacity: 0.1 
+    }).addTo(sketchMap);
+
+    const center = layer.getBounds().getCenter();
+    const area = L.GeometryUtil.geodesicArea(latlngs).toFixed(2);
+
+    // Area Label
+    const areaMarker = L.marker(center, {
+        icon: L.divIcon({
+            className: 'sketch-area-label',
+            html: `<div contenteditable="true" spellcheck="false" class="editable-field">Area: ${area} m²</div>`,
+            iconSize: [140, 40],
+            iconAnchor: [70, 20]
+        })
+    }).addTo(sketchMap);
+
+    makeEditable(areaMarker);
+
+    // Dimension Lines
+    for (let i = 0; i < latlngs.length; i++) {
+        const start = latlngs[i];
+        const end = latlngs[(i + 1) % latlngs.length];
+        addSketchDimension(start, end, sketchMap, center);
+    }
+
+    // Zoom-ka & Fitting
+    sketchMap.invalidateSize();
+    const paddedBounds = layer.getBounds().pad(0.25);
+    sketchMap.fitBounds(paddedBounds, { padding: [20, 20], animate: false });
+
+    setTimeout(() => {
+        if (sketchMap.getZoom() > 21) { sketchMap.setZoom(21); }
+    }, 250);
+}
+
+// Function-ka sawiraya xariiqda cabirka oo EDITABLE ah
+function addSketchDimension(start, end, map, center) {
+    const dist = map.distance(start, end).toFixed(1);
+    const mid = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
+
+    let angle = Math.atan2(end.lat - start.lat, end.lng - start.lng) * 180 / Math.PI;
+    if (angle > 90 || angle < -90) { angle += 180; }
+
+    const dx = mid.lng - center.lng;
+    const dy = mid.lat - center.lat;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    
+    const offset = 0.000025; // Masaafada cabirka iyo xariiqda
+    const ox = (dx / len) * offset;
+    const oy = (dy / len) * offset;
+
+    const p1 = L.latLng(start.lat + oy, start.lng + ox);
+    const p2 = L.latLng(end.lat + oy, end.lng + ox);
+    const labelPos = L.latLng((p1.lat + p2.lat) / 2, (p1.lng + p2.lng) / 2);
+
+    L.polyline([p1, p2], { color: '#3388ff', weight: 1.5, opacity: 0.8 }).addTo(map);
+
+    const distMarker = L.marker(labelPos, {
+        icon: L.divIcon({
+            className: 'sketch-dist-label',
+            html: `
+                <div contenteditable="true" spellcheck="false" class="editable-field" 
+                     style="transform: rotate(${-angle}deg); min-width: 40px; transition: opacity 0.3s;">
+                     ${dist}m
+                </div>`,
+            iconSize: [0, 0],
+            iconAnchor: [0, 0] 
+        })
+    }).addTo(map);
+
+    makeEditable(distMarker);
+}
+// SHAQADA SAXAYSA EDITABLE-KA
+function makeEditable(marker) {
+    marker.on('add', function() {
+        const el = this.getElement().querySelector('.editable-field');
+        if (el) {
+            // Jooji in maabku xado Click-ka
+            L.DomEvent.disableClickPropagation(el);
+            L.DomEvent.on(el, 'mousedown touchstart dblclick', L.DomEvent.stopPropagation);
+            
+            // Cursor-ka u bedel qoraal
+            el.style.cursor = 'text';
+        }
+    });
+}
+
+function updateMarkerLocation(lat, lng) {
+    const coords = `${parseFloat(lat).toFixed(6)}, ${parseFloat(lng).toFixed(6)}`;
+    document.getElementById('gpsInput').value = coords;
+    if (miniMarker) {
+        miniMarker.setLatLng([lat, lng]);
+    } else {
+        miniMarker = L.marker([lat, lng], { draggable: true }).addTo(miniMap);
+        miniMarker.on('dragend', (event) => {
+            const pos = event.target.getLatLng();
+            updateMarkerLocation(pos.lat, pos.lng);
+        });
+    }
+    miniMap.panTo([lat, lng]);
+}
+
+    function getLiveLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((pos) => {
+                updateMarkerLocation(pos.coords.latitude, pos.coords.longitude);
+            });
+        }
+    }
+
+document.getElementById('surveyForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true; 
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Keydinaya...';
+
+    // 1. Ururi xogta Sketch-ka
+    let dimensions = [];
+    document.querySelectorAll('#sketchCanvas .sketch-dist-label .editable-field').forEach(label => {
+        dimensions.push(label.innerText.trim());
+    });
+    const sketchArea = document.querySelector('#sketchCanvas .sketch-area-label .editable-field');
+
+    const payload = {
+        magaca: document.getElementById('magaca').value,
+        xaafadda: document.getElementById('xaafadda').value,
+        laanta: document.getElementById('laanta').value,
+        nooca: document.getElementById('nooca').value + (document.getElementById('maxaa_dhisan').value ? ": " + document.getElementById('maxaa_dhisan').value : ""),
+        soohdimaha: `W:${document.getElementById('w_val').value}(${document.getElementById('w_deris').value}) | B:${document.getElementById('b_val').value}(${document.getElementById('b_deris').value}) | K:${document.getElementById('k_val').value}(${document.getElementById('k_deris').value}) | G:${document.getElementById('g_val').value}(${document.getElementById('g_deris').value})`,
+        sketch_info: `Area: ${sketchArea ? sketchArea.innerText.trim() : "N/A"} | Dim: ${dimensions.join(' | ')}`,
+        nawaaxiga: document.getElementById('nawaaxiga').value,
+        location: document.getElementById('gpsInput').value, 
+        polygon: polygonData 
+    };
+
+    try {
+        const response = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8'
+            }
+        });
+
+        const result = await response.json();
+
+        if (result.result === "success") {
+            alert("Xogta si guul leh ayaa loo keydiyey!");
+            
+            // --- CUSBOONAYSIINTA XOGTA (BACKGROUND SYNC) ---
+            allRecords = []; // Tirtir xogta hore ee local-ka ah
+            await loadRecords(); // Si toos ah u soo dejiso xogta cusub background-ka
+            // -----------------------------------------------
+
+            document.getElementById('surveyForm').reset();
+            document.getElementById('sketchContainer').style.display = 'none';
+            polygonData = ""; 
+            if (miniMarker) miniMap.removeLayer(miniMarker);
+            if (drawnItems) drawnItems.clearLayers();
+            
+            switchTab('list-view'); // Ku noqo Records si aad u aragto xogta cusub
+        } else {
+            throw new Error(result.message || "Keydintu ma suurogalin");
+        }
+
+    } catch (err) { 
+        console.error(err);
+        alert("Cillad: Ma suuragalin in xogta la keydiyo. Hubi internet-kaaga ama Google Script."); 
+    } finally { 
+        btn.disabled = false; 
+        btn.innerText = "SYNC TO CLOUD DATABASE"; 
+    }
+});
+
+let modalMainMap, modalSketchMap;
+
+async function showRowDetails(record) {
+    const modalElement = document.getElementById('detailsModal');
+    const myModal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    myModal.show();
+
+    // 1. Buuxi xogta qoraalka (Labels)
+    document.getElementById('view_sn').innerText = record['S/N'] || '-';
+    document.getElementById('view_magaca').innerText = record['Magaca Milkiilaha'] || 'N/A';
+    document.getElementById('view_taarikh').innerText = record['Taarikhda iyo Saacadda'] || 'N/A';
+    document.getElementById('view_xaafada').innerText = record['Xaafadda'] || '-';
+    document.getElementById('view_laanta').innerText = record['Laanta'] || '-';
+    
+    const nawaaxigaEl = document.getElementById('view_nawaaxiga');
+    if(nawaaxigaEl) nawaaxigaEl.innerText = record['Nawaaxiga'] || '-';
+
+    document.getElementById('view_nooca').innerText = record['Nooca Dhulka'] || 'N/A';
+    document.getElementById('view_location').innerText = record['Location'] || 'N/A';
+
+    // 2. KALA SAARISTA SOOHDIMAHA (TABLE)
+    const rawSoohdin = record['Cabirka iyo Soohdimaha Dhulka'] || "";
+    const tbody = document.getElementById('boundaryTableBody');
+    
+    if (tbody) {
+        tbody.innerHTML = ""; 
+        const directions = rawSoohdin.split(' | ');
+        const labelMap = { 'W': 'Waqooyi', 'B': 'Bari', 'K': 'Koonfur', 'G': 'Galbeed' };
+
+        directions.forEach(dir => {
+            const parts = dir.split(':');
+            if (parts.length === 2) {
+                const jihadaCode = parts[0].trim();
+                const jihadaName = labelMap[jihadaCode] || jihadaCode;
+                const subParts = parts[1].split('(');
+                const cabirka = subParts[0] ? subParts[0].trim() + "m" : "-";
+                const deriska = subParts[1] ? subParts[1].replace(')', '').trim() : "-";
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="ps-3 py-2 fw-semibold text-primary" style="font-size: 13px;">${jihadaName}</td>
+                        <td class="py-2 text-center fw-bold" style="font-size: 13px;">${cabirka}</td>
+                        <td class="py-2 text-muted" style="font-size: 13px;">${deriska}</td>
+                    </tr>`;
+            }
+        });
+    }
+
+    // 3. MAABYADA (MAPS) - XALKA CLEANUP IYO INVALIDATE
+    setTimeout(() => {
+        // Nadiifi maabyadii hore si looga fogaado "Map container already initialized"
+        if (modalMainMap) { modalMainMap.remove(); modalMainMap = null; }
+        if (modalSketchMap) { modalSketchMap.remove(); modalSketchMap = null; }
+
+        // Hubi in xogta Polygon-ku ay jirto
+        if (!record['Polygon Boundary'] || record['Polygon Boundary'] === "N/A") {
+            console.warn("Polygon-ku ma hayo xog dhisan.");
+            return;
+        }
+
+        try {
+            const polyCoords = record['Polygon Boundary'].split('; ').map(c => c.split(',').map(Number));
+            const polygon = L.polygon(polyCoords);
+            const bounds = polygon.getBounds();
+
+            // --- SATELLITE MAP ---
+            modalMainMap = L.map('modalMainMap', { 
+                attributionControl: false,
+                scrollWheelZoom: false 
+            }).fitBounds(bounds);
+
+            L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { 
+                maxZoom: 20, 
+                subdomains:['mt0','mt1','mt2','mt3'] 
+            }).addTo(modalMainMap);
+
+            L.polygon(polyCoords, { 
+                color: 'cyan', 
+                weight: 2, 
+                fillOpacity: 0.2 
+            }).addTo(modalMainMap);
+
+            // --- TECHNICAL SKETCH MAP ---
+            modalSketchMap = L.map('modalSketchCanvas', { 
+                zoomControl: false, 
+                attributionControl: false,
+                dragging: true 
+            });
+
+            L.polygon(polyCoords, { 
+                color: 'black', 
+                weight: 3, 
+                fillColor: '#ffffff', 
+                fillOpacity: 1 
+            }).addTo(modalSketchMap);
+
+            const modalCenter = bounds.getCenter();
+            
+            // Ku dar xariiqyada cabirka (Dimensions)
+            for (let i = 0; i < polyCoords.length; i++) {
+                const start = L.latLng(polyCoords[i]);
+                const end = L.latLng(polyCoords[(i + 1) % polyCoords.length]);
+                // Hubi in function-kan 'addSketchDimension' uu koodhkaaga ku jiro
+                if (typeof addSketchDimension === 'function') {
+                    addSketchDimension(start, end, modalSketchMap, modalCenter);
+                }
+            }
+
+            // Design-ka Area Label
+            const sketchInfo = record['Sketch Details (Edited)'] || "";
+            const areaValue = sketchInfo.split('|')[0].replace(/Area:|Area/gi, '').trim() || "N/A"; 
+
+            L.marker(modalCenter, {
+                icon: L.divIcon({ 
+                    className: 'sketch-area-label-modal', 
+                    html: `<div class="modal-area-box" style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; text-align: center; background: white; border: 2px solid black; padding: 5px; border-radius: 6px; box-shadow: 2px 2px 0px rgba(0,0,0,0.1);">
+                             <small style="display: block; font-size: 9px; color: #666; font-weight: 800; text-transform: uppercase; margin-bottom: -2px;">Area</small>
+                             <strong>${areaValue}</strong>
+                           </div>`, 
+                    iconSize: [110, 50], 
+                    iconAnchor: [55, 25]
+                })
+            }).addTo(modalSketchMap);
+
+            // Cusboonaysii cabirka maabyada (Xalka muhiimka ah ee Modal-ka)
+            modalMainMap.invalidateSize();
+            modalSketchMap.invalidateSize();
+            
+            // FitBounds oo leh padding ku filan si uu Sketch-ku si fiican u muuqdo
+            modalSketchMap.fitBounds(bounds, { 
+                padding: [60, 60], 
+                animate: true 
+            });
+
+        } catch (error) {
+            console.error("Cillad ka timid sawirista maabka modal-ka:", error);
+        }
+    }, 600); // 600ms waa wakhtiga modal-ku ku furmo (transition)
+}
+// Cusboonaysii loadRecords() si uu u ogolaado Click-ka
+let allRecords = []; // Halkan ku kaydi xogta si loo shaandheeyo
+
+async function loadRecords() {
+    const tbody = document.getElementById('recordsBody');
+    const mobileContainer = document.getElementById('mobileCards');
+
+    // 1. HUBI: Haddii allRecords ay xog hore u haysato, jooji Loading-ka cusub
+    if (allRecords && allRecords.length > 0) {
+        console.log("Xogta mar hore ayaa la soo dejiyey, dib looma load-gareynayo.");
+        applyFilters(); // Kaliya u muuji xogta hore u jirtay
+        return; 
+    }
+
+    // 2. Haddii ay madhan tahay, hadda soo dejiso
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4">Loading...</td></tr>';
+    
+    try {
+        const res = await fetch(SCRIPT_URL);
+        allRecords = await res.json();
+        applyFilters(); 
+        displayAllPolygons();
+    } catch (e) {
+        console.error("Cillad xogta: ", e);
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error loading data.</td></tr>';
+    }
+}
+
+function applyFilters() {
+    // 1. Qabashada xogta raadinta
+    const searchGeneral = document.getElementById('filterSearch').value.toLowerCase();
+    const sW = document.getElementById('searchW').value.trim();
+    const sB = document.getElementById('searchB').value.trim();
+    const sK = document.getElementById('searchK').value.trim();
+    const sG = document.getElementById('searchG').value.trim();
+    
+    const xaafada = document.getElementById('filterXaafada').value;
+    const laanta = document.getElementById('filterLaanta').value;
+    const start = document.getElementById('filterStart').value;
+    const end = document.getElementById('filterEnd').value;
+
+    const filtered = allRecords.filter(r => {
+        const boundaryText = (r['Cabirka iyo Soohdimaha Dhulka'] || "").toUpperCase();
+        
+        // A. Raadinta Guud (Magaca ama Xogta kale)
+        const matchGeneral = r['Magaca Milkiilaha'].toLowerCase().includes(searchGeneral) || 
+                             r['Xaafadda'].toLowerCase().includes(searchGeneral);
+
+        // B. Raadinta Soohdimaha (Mid kasta goonideeda)
+        // Waxay hubinaysaa tusaale: haddii W leedahay "25" (W:25)
+        const matchW = sW === "" || boundaryText.includes(`W:${sW}`);
+        const matchB = sB === "" || boundaryText.includes(`B:${sB}`);
+        const matchK = sK === "" || boundaryText.includes(`K:${sK}`);
+        const matchG = sG === "" || boundaryText.includes(`G:${sG}`);
+
+        // C. Taariikhda
+        const dateParts = r['Taarikhda iyo Saacadda'].split(' ')[0].split('/');
+        const recordDate = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
+        const matchStart = start === "" || recordDate >= new Date(start);
+        const matchEnd = end === "" || recordDate <= new Date(end);
+
+        // D. Dropdowns
+        const matchXaafada = xaafada === "" || r['Xaafadda'] === xaafada;
+        const matchLaanta = laanta === "" || r['Laanta'] === laanta;
+
+        // Isku dar dhammaan (AND Logic)
+        return matchGeneral && matchW && matchB && matchK && matchG && 
+               matchXaafada && matchLaanta && matchStart && matchEnd;
+    });
+
+    renderData(filtered);
+}
+
+function renderData(data) {
+    const tbody = document.getElementById('recordsBody');
+    const recordsContent = document.getElementById('recordsContent');
+    const isMobile = window.innerWidth < 768;
+
+    if (isMobile) {
+        let cardsHtml = `
+            <div class="mobile-cards-container">
+                ${data.map(r => `
+                    <div class="survey-card" onclick='showRowDetails(${JSON.stringify(r)})'>
+                        <div class="card-sn">#${r['S/N']}</div>
+                        <div class="card-info">
+                            <div class="card-name">${r['Magaca Milkiilaha']}</div>
+                            <div class="card-date"><i class="bi bi-clock me-1"></i> ${r['Taarikhda iyo Saacadda']}</div>
+                            <div class="mt-1">
+                                <span class="badge bg-light text-dark border-0" style="font-size:10px">${r['Xaafadda']}</span>
+                            </div>
+                        </div>
+                        <i class="bi bi-chevron-right text-muted"></i>
+                    </div>
+                `).join('')}
+            </div>`;
+        
+        // Target the mobile container specifically
+        document.getElementById('mobileCards').innerHTML = cardsHtml;
+    } else {
+        if (tbody) {
+            tbody.innerHTML = data.map(r => `
+                <tr onclick='showRowDetails(${JSON.stringify(r)})' style="cursor:pointer">
+                    <td>${r['S/N']}</td>
+                    <td class="fw-bold">${r['Magaca Milkiilaha']}</td>
+                    <td><small>${r['Taarikhda iyo Saacadda']}</small></td>
+                    <td><span class="badge bg-light text-dark border">${r['Xaafadda']}</span></td>
+                    <td><small class="text-muted">${r['Cabirka iyo Soohdimaha Dhulka']}</small></td>
+                    <td><code class="small text-primary">${r['Location']}</code></td>
+                </tr>
+            `).join('');
+        }
+    }
+}
+
+function syncFilters(sourceId, targetId) {
+    const val = document.getElementById(sourceId).value;
+    document.getElementById(targetId).value = val;
+    applyFilters(); // Kici raadinta guud
+}
+
+function toggleDhisanField() {
+    const noocaSelect = document.getElementById('nooca');
+    const dhulDhisanDetails = document.getElementById('dhulDhisanDetails');
+    const maxaaDhisanInput = document.getElementById('maxaa_dhisan');
+
+    if (noocaSelect.value === "Dhul dhisan") {
+        // Haddii uu doorto dhul dhisan, soo saar input-ka dheeriga ah
+        dhulDhisanDetails.style.display = 'block';
+        maxaaDhisanInput.setAttribute('required', 'true');
+    } else {
+        // Haddii kale, qari field-ka, nadiifina xogta ku jirtay
+        dhulDhisanDetails.style.display = 'none';
+        maxaaDhisanInput.removeAttribute('required');
+        maxaaDhisanInput.value = "";
+    }
+}
+
+function toggleMiniMapFullScreen() {
+    const container = document.getElementById('miniMapContainer');
+    const icon = document.querySelector('#miniMapContainer .bi');
+
+    // Bedel class-ka
+    container.classList.toggle('expanded-map');
+
+    // Bedel Icon-ka (Expand/Compress)
+    if (container.classList.contains('expanded-map')) {
+        icon.classList.replace('bi-arrows-fullscreen', 'bi-fullscreen-exit');
+    } else {
+        icon.classList.replace('bi-fullscreen-exit', 'bi-arrows-fullscreen');
+    }
+
+    // Dib u sax cabirka maabka (Muhiim)
+    setTimeout(() => {
+        miniMap.invalidateSize();
+        // Haddii uu jiro polygon hore loo sawiray, dhex-fariisi
+        if (drawnItems.getLayers().length > 0) {
+            miniMap.fitBounds(drawnItems.getBounds());
+        }
+    }, 300);
+}
+
+// 1. Marka tabka la riixo, geli taariikhda maanta automatic ahaan
+function setupRefForm() {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('ref_date').value = now.toISOString().slice(0, 16);
+}
+
+// 2. Buuxi dropdown-ka Survey Lr adigoo isticmaalaya xogta allRecords
+function populateSurveyDropdown() {
+    const dropdown = document.getElementById('ref_survey_link');
+    // Nadiifi xogta hore marka laga reebo option-ka kowaad
+    dropdown.innerHTML = '<option value="">Dooro Sahanka (S/N & Magaca)...</option>';
+    
+    // allRecords waa array-ga ay ku jiraan xogta miiska (Records table)
+    if (allRecords && allRecords.length > 0) {
+        allRecords.forEach(record => {
+            const sn = record['S/N'];
+            const magaca = record['Magaca Milkiilaha'];
+            
+            const option = document.createElement('option');
+            option.value = `${sn} - ${magaca}`;
+            option.textContent = `${sn}. ${magaca}`; // Habka: "1. Mohamed Ibrahim"
+            dropdown.appendChild(option);
+        });
+    }
+}
+
+// 3. Update switchTab function
+// Ku dhex dar function-kaaga switchTab meesha ay ku qoran tahay 'ref-view'
+/*
+    if (viewId === 'ref-view') { 
+        setupRefForm(); 
+        populateSurveyDropdown(); 
+    }
+*/
+
+// 4. Submit Handler for Reference Form (Updated with Survey Lr)
+document.getElementById('refForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('refSaveBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Keydinaya...';
+
+    const payload = {
+        type: "reference",
+        sumad: document.getElementById('ref_sumad').value,
+        survey_lr: document.getElementById('ref_survey_link').value, // Xidhiidhka Sahanka
+        taariikh: document.getElementById('ref_date').value,
+        ujeedo: document.getElementById('ref_ujeedo').value,
+        faahfaahin: document.getElementById('ref_faahfaahin').value
+    };
+
+    try {
+        await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+        });
+
+        alert("Sumadda si guul leh ayaa loo keydiyey!");
+        document.getElementById('refForm').reset();
+        switchTab('list-view'); 
+    } catch (err) {
+        console.error(err);
+        alert("Cillad ayaa dhacday xilliga keydinta. Hubi internet-kaaga.");
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "SAVE REFERENCE";
+    }
+});
+
+function populateSurveyDropdown() {
+    const dropdown = document.getElementById('ref_survey_link');
+    // Nadiifi xogta hore marka laga reebo option-ka kowaad
+    dropdown.innerHTML = '<option value="">Dooro Sahanka (S/N & Magaca)...</option>';
+    
+    // allRecords waa array-ga ay ku jiraan xogta miiska (Records table)
+    allRecords.forEach(record => {
+        const sn = record['S/N'];
+        const magaca = record['Magaca Milkiilaha'];
+        
+        const option = document.createElement('option');
+        option.value = `${sn} - ${magaca}`;
+        option.textContent = `${sn}. ${magaca}`; // Habka aad codsatay: "1. Mohamed Ibrahim"
+        dropdown.appendChild(option);
+    });
+}
+
+function checkSurveyLrVisibility() {
+    const ujeedo = document.getElementById('ref_ujeedo').value;
+    const faahfaahin = document.getElementById('ref_faahfaahin').value.toLowerCase();
+    const surveyLrContainer = document.getElementById('ref_survey_link').parentElement;
+
+    // 1. Shuruudda Kirada (Rental Check)
+    // Maadaama aynaan haysan badhan "Dhulka kirada", waxaan u qaadanaynaa inuu yahay TRUE 
+    // haddii uusan ahayn "Cadeyn Heshiis Kiro".
+    const rentalCondition = (ujeedo !== "Cadeyn Heshiis Kiro");
+
+    // 2. Shuruudda Nooca (Type Check - IN & CONTAINS)
+    const allowedUjeedo = ["Beec Dhul", "Sugitaan Milkiyad Dhul", "Sugitaan Dhaxalkoob", "Cadeyn Hibeyn/ Waqaf", "Codsi Sabarloog"];
+    const keywords = ["dhul", "guri", "boos", "beer"];
+    const hasKeyword = keywords.some(word => faahfaahin.includes(word));
+    const typeCondition = allowedUjeedo.includes(ujeedo) || hasKeyword;
+
+    // 3. Shuruudda Reebitaanka (Exclusion Check - NOT OR CONTAINS)
+    const excludedWords = ["nootaay", "notary", "notaay", "duleed", "deegaan", "tuul"];
+    const isExcluded = excludedWords.some(word => faahfaahin.includes(word));
+
+    // ISKU DAR LOGIC-GA (AND Condition)
+    if (rentalCondition && typeCondition && !isExcluded) {
+        surveyLrContainer.style.display = "block";
+        document.getElementById('ref_survey_link').setAttribute('required', 'true');
+    } else {
+        surveyLrContainer.style.display = "none";
+        document.getElementById('ref_survey_link').removeAttribute('required');
+        document.getElementById('ref_survey_link').value = ""; // Nadiifi haddii la qariyo
+    }
+}
+
+// Ku xidh dhacdooyinka (Events) si uu u shaqeeyo marka qofka wax qorayo
+document.getElementById('ref_ujeedo').addEventListener('change', checkSurveyLrVisibility);
+document.getElementById('ref_faahfaahin').addEventListener('input', checkSurveyLrVisibility);
+
+let allRefRecords = [];
+
+// 1. Kala beddelka View-yada (Liiska iyo Foomka)
+function showRefForm() {
+    document.getElementById('refListArea').style.display = 'none';
+    document.getElementById('refFormArea').style.display = 'block';
+    setupRefForm(); // Taariikhda maanta
+    populateSurveyDropdown(); // Buuxi dropdown-ka Survey Lr
+    checkSurveyLrVisibility(); // Hubi inuu muuqanayo Survey Lr
+}
+
+function hideRefForm() {
+    document.getElementById('refListArea').style.display = 'block';
+    document.getElementById('refFormArea').style.display = 'none';
+}
+
+// 2. AppSheet Logic: Goormuu muuqanayaa Survey Lr?
+function checkSurveyLrVisibility() {
+    const ujeedo = document.getElementById('ref_ujeedo').value;
+    const faahfaahin = document.getElementById('ref_faahfaahin').value.toLowerCase();
+    const wrapper = document.getElementById('surveyLrWrapper');
+    const select = document.getElementById('ref_survey_link');
+
+    // Logic-ga aad bixisay:
+    const rentalCondition = (ujeedo !== "Cadeyn Heshiis Kiro");
+    
+    const allowedUjeedo = ["Beec Dhul", "Sugitaan Milkiyad Dhul", "Sugitaan Dhaxalkoob", "Cadeyn Hibeyn/ Waqaf", "Codsi Sabarloog"];
+    const keywords = ["dhul", "guri", "boos", "beer"];
+    const hasKeyword = keywords.some(word => faahfaahin.includes(word));
+    const typeCondition = allowedUjeedo.includes(ujeedo) || hasKeyword;
+
+    const excludedWords = ["nootaay", "notary", "notaay", "duleed", "deegaan", "tuul"];
+    const isExcluded = excludedWords.some(word => faahfaahin.includes(word));
+
+    if (rentalCondition && typeCondition && !isExcluded) {
+        wrapper.style.display = "block";
+        select.setAttribute('required', 'true');
+    } else {
+        wrapper.style.display = "none";
+        select.removeAttribute('required');
+        select.value = "";
+    }
+}
+
+// 3. Load & Render References
+async function loadReferences() {
+    const tbody = document.getElementById('refTableBody');
+    
+    // 1. Hubi haddii xog hore ay jirto si aan mar kale loo soo dejin
+    if (allRefRecords && allRefRecords.length > 0) {
+        renderRefData(allRefRecords);
+        return;
+    }
+
+    try {
+        // MUHIIM: Waxaan ku darnay ?action=getReferences URL-ka
+        const res = await fetch(SCRIPT_URL + "?action=getReferences");
+        allRefRecords = await res.json();
+        
+        if (allRefRecords.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4">Ma jirto xog Reference ah oo la helay.</td></tr>';
+        } else {
+            renderRefData(allRefRecords);
+        }
+    } catch (e) {
+        console.error("Error:", e);
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger p-4">Cillad ayaa dhacday xilliga soo dejinta xogta.</td></tr>';
+    }
+}
+
+function renderRefData(data) {
+    const tbody = document.getElementById('refTableBody');
+    const isMobile = window.innerWidth < 768;
+    const refListArea = document.getElementById('refListArea');
+
+    // Helper function to clean technical dates (e.g., 2026-03-21T13:58:00.000Z)
+    const formatDateMobile = (dateStr) => {
+        if (!dateStr || dateStr === 'N/A') return '';
+        try {
+            // Split by 'T' and take the date and first 5 chars of time
+            const parts = dateStr.split('T');
+            return parts[0] + ' ' + parts[1].substring(0, 5);
+        } catch (e) {
+            return dateStr;
+        }
+    };
+
+    if (isMobile) {
+        const cardsHtml = `<div class="mobile-cards-container">
+            ${data.map(r => {
+                const status = r['Status'] || 'In Progress';
+                let badgeClass = status === 'Completed' ? 'bg-primary' : (status === 'Picked Up' ? 'bg-success' : 'bg-warning');
+                
+                return `
+                <div class="survey-card" onclick='showRefDetails(${JSON.stringify(r)})'>
+                    <div class="card-info">
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-bold text-primary">${r['Sumad (Ref)']}</span>
+                            <span class="badge ${badgeClass} rounded-pill" style="font-size:10px">${status}</span>
+                        </div>
+                        <div class="card-name mt-1">${r['Ujeedo']}</div>
+                        <div class="card-date small text-muted">
+                            <i class="bi bi-calendar3 me-1"></i> ${formatDateMobile(r['Taariikhda Dukumiintiga'])}
+                        </div>
+                    </div>
+                    <i class="bi bi-chevron-right text-muted"></i>
+                </div>`;
+            }).join('')}
+        </div>`;
+        
+        // 1. Hide the desktop table wrapper on mobile
+        const tableContainer = refListArea.querySelector('.table-responsive');
+        if (tableContainer) tableContainer.style.display = 'none';
+        
+        // 2. Populate the mobile card container
+        let mobileContainer = document.getElementById('refMobileCards');
+        if (!mobileContainer) {
+            mobileContainer = document.createElement('div');
+            mobileContainer.id = 'refMobileCards';
+            refListArea.appendChild(mobileContainer);
+        }
+        mobileContainer.innerHTML = cardsHtml;
+
+    } else {
+        // Desktop View: Ensure table is visible and cards are hidden
+        const tableContainer = refListArea.querySelector('.table-responsive');
+        if (tableContainer) tableContainer.style.display = 'block';
+        
+        const mobileContainer = document.getElementById('refMobileCards');
+        if (mobileContainer) mobileContainer.innerHTML = '';
+
+        tbody.innerHTML = data.map(r => {
+            const status = r['Status'] || 'In Progress';
+            let badgeClass = status === 'Completed' ? 'bg-primary' : (status === 'Picked Up' ? 'bg-success' : 'bg-warning');
+            return `
+                <tr onclick='showRefDetails(${JSON.stringify(r)})' style="cursor: pointer;">
+                    <td class="fw-bold text-primary">${r['Sumad (Ref)']}</td>
+                    <td><small>${r['Survey Lr'] || 'N/A'}</small></td>
+                    <td><span class="badge bg-light text-dark border">${r['Ujeedo']}</span></td>
+                    <td><span class="badge ${badgeClass} shadow-sm px-3 rounded-pill" style="font-size: 10px;">${status}</span></td>
+                    <td class="text-center"><button class="btn btn-sm btn-outline-info rounded-pill px-3 shadow-none">View</button></td>
+                </tr>`;
+        }).join('');
+    }
+}
+function showRefDetails(record) {
+    const rawDate = record['Taariikhda Dukumiintiga'] || '-';
+    const cleanDate = rawDate.replace('T', ' ').split('.')[0];
+
+    // Update Text Content
+    document.getElementById('v_ref_sumad_badge').innerText = record['Sumad (Ref)'] || '-';
+    document.getElementById('v_ref_date').innerText = cleanDate;
+    document.getElementById('v_ref_ujeedo').innerText = record['Ujeedo'] || '-';
+    document.getElementById('v_ref_faahfaahin').innerText = record['Faahfaahin'] || 'No additional notes provided.';
+    
+    // Toggle Survey Link Section
+    const surveyLr = record['Survey Lr'];
+    const section = document.getElementById('v_ref_survey_section');
+    if (surveyLr && surveyLr !== "N/A" && surveyLr !== "") {
+        section.style.setProperty('display', 'block', 'important');
+        document.getElementById('v_ref_survey_lr').innerText = surveyLr;
+    } else {
+        section.style.setProperty('display', 'none', 'important');
+    }
+
+    // Set initial active step based on record status
+    const status = record['Status'] || 'In Progress';
+    updateStatusUI_VisualOnly(status); // Helper to just set colors without triggering alert/DB
+
+    const myModal = new bootstrap.Modal(document.getElementById('refDetailsModal'));
+    myModal.show();
+}
+
+// Function to update UI visuals and call the database
+async function updateStatusUI(status) {
+    // 1. Trigger the actual DB update
+    await updateRefStatus(status);
+
+    // 2. Update UI Visuals
+    const statusMap = { 'In Progress': 'bg-warning text-dark', 'Completed': 'bg-primary text-white', 'Picked Up': 'bg-success text-white' };
+    
+    // Update top badge
+    const badge = document.getElementById('current_status_badge');
+    badge.innerText = status;
+    badge.className = `badge rounded-pill small px-3 ${statusMap[status]}`;
+
+    // Update steps
+    document.querySelectorAll('.step-item').forEach(item => item.classList.remove('active'));
+    const safeId = status.replace(/\s+/g, '_');
+    document.getElementById(`step_${safeId}`).classList.add('active');
+}
+
+function updateStatusUI_VisualOnly(status) {
+    const statusMap = { 'In Progress': 'bg-warning text-dark', 'Completed': 'bg-primary text-white', 'Picked Up': 'bg-success text-white' };
+    const badge = document.getElementById('current_status_badge');
+    if(badge) {
+        badge.innerText = status;
+        badge.className = `badge rounded-pill small px-3 ${statusMap[status] || 'bg-secondary'}`;
+    }
+    
+    document.querySelectorAll('.step-item').forEach(item => item.classList.remove('active'));
+    const safeId = (status || 'In Progress').replace(/\s+/g, '_');
+    const target = document.getElementById(`step_${safeId}`);
+    if(target) target.classList.add('active');
+}
+
+// 2. Soo saar liiska References si lacag looga qabto
+async function loadReceiptRefs() {
+    const tbody = document.getElementById('receiptRefTableBody');
+    // Muuji loading-ka labada dhinacba
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center p-4"><span class="spinner-border spinner-border-sm"></span> Cusboonaysiinaya xogta dakhliga...</td></tr>';
+    
+    try {
+        // 1. Mar quda wada wac dhammaan xogta (Parallel Fetching)
+        const [resRef, resRec, resExp] = await Promise.all([
+            fetch(SCRIPT_URL + "?action=getReferences"),
+            fetch(SCRIPT_URL + "?action=getReceipts"),
+            fetch(SCRIPT_URL + "?action=getExpenses") // Hubi in Apps Script uu leeyahay action-kan
+        ]);
+
+        allRefRecords = await resRef.json();
+        const allReceipts = await resRec.json();
+        const allExpenses = await resExp.json();
+        renderExpensesTable(allExpenses);
+
+        // 2. DASHBOARD CALCULATIONS
+        // Xisaabi Wadarta Dakhliga (Paid Only)
+        const totalRevenue = allReceipts
+            .filter(r => r && r['Status'] === 'Paid')
+            .reduce((sum, r) => sum + parseFloat(r['Amount'] || 0), 0);
+
+        // Xisaabi Wadarta Kharashka
+        const totalExpAmount = allExpenses
+            .reduce((sum, e) => sum + parseFloat(e['Amount'] || 0), 0);
+
+        // Cusboonaysii Dashboard-ka (HTML IDs waa inay jiraan)
+        document.getElementById('total_revenue').innerText = '$' + totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('total_expenses').innerText = '$' + totalExpAmount.toLocaleString(undefined, {minimumFractionDigits: 2});
+
+        // 3. RENDER PAYMENTS TABLE
+        const paidRefs = allReceipts
+            .filter(r => r && r['Sumad (Ref)'] && r['Status'] === 'Paid') 
+            .map(r => r['Sumad (Ref)'].toString().trim().toLowerCase());
+
+        const validRefs = allRefRecords.filter(r => r && r['Sumad (Ref)']);
+
+        if (validRefs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center p-4">Ma jiraan wax tixraac (References) ah.</td></tr>';
+        } else {
+            tbody.innerHTML = validRefs.map(r => {
+                const currentRefRaw = r['Sumad (Ref)'].toString().trim();
+                const isPaid = paidRefs.includes(currentRefRaw.toLowerCase());
+
+                return `
+                    <tr>
+                        <td class="fw-bold text-primary ps-4">${currentRefRaw}</td>
+                        <td>${r['Ujeedo'] || 'N/A'}</td>
+                        <td><small class="text-muted">${r['Taariikhda Dukumiintiga'] || '-'}</small></td>
+                        <td class="text-center">
+                            ${isPaid ? 
+                                `<span class="badge bg-success-subtle text-success border border-success px-3 py-2 rounded-pill shadow-sm">
+                                    <i class="bi bi-check-circle-fill me-1"></i> Paid
+                                 </span>` : 
+                                `<button class="btn btn-success btn-sm px-4 rounded-pill shadow-sm" 
+                                         onclick="openPayModal('${currentRefRaw}', '${r['Ujeedo']}')">
+                                    <i class="bi bi-currency-dollar"></i> Pay
+                                 </button>`
+                            }
+                        </td>
+                    </tr>`;
+            }).join('');
+        }
+
+        // 4. RENDER EXPENSES TABLE (Haddii aad leedahay meel loogu talagalay)
+        if (typeof renderExpensesTable === "function") {
+            renderExpensesTable(allExpenses);
+        }
+
+    } catch (e) {
+        console.error("Finance Loading Error:", e);
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger p-4">Cillad dhinaca xogta maaliyadda ah.</td></tr>';
+    }
+}
+
+// 3. Fur Modal-ka oo buuxi xogta qaar
+function openPayModal(ref, ujeedo, receiptInfo = null) {
+    document.getElementById('rec_ref').value = ref;
+    document.getElementById('rec_details').value = ujeedo;
+    document.getElementById('rec_date').value = new Date().toISOString().split('T')[0];
+    
+    const statusSelect = document.getElementById('rec_status');
+    const recNoInput = document.getElementById('rec_no');
+
+    // Function yar oo dhalisa Receipt No haddii ay muhiim tahay
+    const updateReceiptNo = () => {
+        if (statusSelect.value === "Paid") {
+            recNoInput.value = "REC-" + Math.floor(1000 + Math.random() * 9000);
+        } else {
+            recNoInput.value = "N/A"; // Ama bannaanteeda uga tag
+        }
+    };
+
+    // Marka hore deji status-ka
+    statusSelect.value = receiptInfo ? "Paid" : "Paid"; 
+    updateReceiptNo();
+
+    // Haddii qofku modal-ka dhexdiisa ka beddelo Status-ka (Paid -> Credit)
+    statusSelect.onchange = updateReceiptNo;
+
+    const amountInput = document.getElementById('rec_amount');
+    amountInput.value = receiptInfo ? receiptInfo['Amount'] : "";
+
+    new bootstrap.Modal(document.getElementById('payModal')).show();
+}
+
+// 4. Keydi Resiidhka
+document.getElementById('receiptForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Keydinaya...';
+
+    const payload = {
+        type: "receipt",
+        rec_no: document.getElementById('rec_no').value,
+        ref: document.getElementById('rec_ref').value,
+        details: document.getElementById('rec_details').value,
+        date: document.getElementById('rec_date').value,
+        amount: document.getElementById('rec_amount').value,
+        status: document.getElementById('rec_status').value,
+        mode: document.getElementById('rec_mode').value
+    };
+
+    try {
+        const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+        });
+        
+        const result = await res.json();
+        
+        if (result.result === "success") {
+            // 1. Qari Modal-ka
+            const payModal = bootstrap.Modal.getInstance(document.getElementById('payModal'));
+            if (payModal) payModal.hide();
+
+            // 2. Nadiifi foomka
+            document.getElementById('receiptForm').reset();
+            
+            alert("Resiidhka si guul leh ayaa loo keydiyey!");
+
+            // 3. MUHIIM: Dib u rari dhamaan xogta system-ka (Pre-loading function-kaaga)
+            // Kani wuxuu xaqiijinayaa in allReceipts ay cusboonaysiistaan
+            if (typeof loadAllSystemData === "function") {
+                await loadAllSystemData(); 
+            } else {
+                await loadReceiptRefs(); 
+            }
+        } else {
+            alert("Cillad: " + result.message);
+        }
+    } catch (err) {
+        console.error("Save Error:", err);
+        alert("Ma suuragalin in xogta la keydiyo.");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+});
+
+
+
+let currentUser = null;
+
+// 1. Run this when the page loads
+document.addEventListener("DOMContentLoaded", () => {
+    const savedUser = localStorage.getItem("geo_user");
+    const savedPass = localStorage.getItem("geo_pass");
+    const fab = document.getElementById('smartFab');
+    if (document.getElementById('loginOverlay').style.display !== 'none') {
+        if (fab) fab.style.display = 'none';
+    }
+
+    if (savedUser && savedPass) {
+        document.getElementById("loginUser").value = savedUser;
+        document.getElementById("loginPass").value = savedPass;
+        document.getElementById("rememberMe").checked = true;
+    }
+});
+
+// 2. Update your existing Login Form Listener
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const user = document.getElementById('loginUser').value;
+    const pass = document.getElementById('loginPass').value;
+    const remember = document.getElementById('rememberMe').checked;
+
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    btn.innerText = "Xaqiijinaya...";
+
+    // Handle Remember Me logic
+    if (remember) {
+        localStorage.setItem("geo_user", user);
+        localStorage.setItem("geo_pass", pass);
+    } else {
+        localStorage.removeItem("geo_user");
+        localStorage.removeItem("geo_pass");
+    }
+
+    const payload = { type: "login", username: user, password: pass };
+
+    try {
+        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+        const result = await res.json();
+
+        if (result.status === "success") {
+            currentUser = result;
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('display_fullname').innerText = result.name || result.username;
+            document.getElementById('display_role').innerText = result.role;
+            manageTabAccess(result.role);
+            loadAllSystemData();
+            const fab = document.getElementById('smartFab');
+             if (fab) fab.style.display = 'flex'; // Show FAB after login
+        } else {
+            alert("Username ama Password waa khalad!");
+        }
+    } catch (err) {
+        alert("Cillad ayaa dhacday xilliga login-ka!");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'SIGN IN <i class="bi bi-arrow-right-short ms-1"></i>';
+    }
+});
+
+// 2. TABS ACCESS CONTROL
+function manageTabAccess(role) {
+    const userTab = document.getElementById('userTabBtn');
+    if (userTab) {
+        if (role === "Admin") {
+            userTab.style.setProperty('display', 'block', 'important');
+        } else {
+            userTab.style.setProperty('display', 'none', 'important');
+        }
+    }
+}
+
+/**
+ * Function-ka sawiraya (Render) xogta isticmaalayaasha ee miiska.
+ * Kani wuxuu xallinayaa "renderUserData is not defined".
+ */
+function renderUserData(users) {
+    const tbody = document.getElementById('userTableBody');
+    const userView = document.getElementById('user-management');
+    const isMobile = window.innerWidth < 768;
+
+    if (!userView) return;
+    const validUsers = users.filter(u => u && u.Username);
+
+    if (isMobile) {
+        let mobileUserContainer = document.getElementById('mobileUserCards');
+        if (!mobileUserContainer) {
+            mobileUserContainer = document.createElement('div');
+            mobileUserContainer.id = 'mobileUserCards';
+            mobileUserContainer.className = 'mobile-cards-container';
+            userView.querySelector('.p-2').appendChild(mobileUserContainer);
+        }
+
+        mobileUserContainer.innerHTML = validUsers.length === 0
+            ? '<div class="text-center p-4">No users found.</div>'
+            : validUsers.map(u => `
+                <div class="survey-card">
+                    <div class="user-avatar me-3"><i class="bi bi-person-circle h3 text-primary mb-0"></i></div>
+                    <div class="card-info">
+                        <div class="fw-bold">${u['Full Name'] || u.fullname || u.Username}</div>
+                        <div class="small text-muted">@${u.Username}</div>
+                        <span class="badge ${u.Role === 'Admin' ? 'bg-danger' : 'bg-info'} mt-1">${u.Role}</span>
+                    </div>
+                    <button class="btn text-danger ms-auto" onclick="deleteUser('${u.Username}')" 
+                        ${u.Username.toLowerCase() === 'admin' ? 'disabled' : ''}>
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            `).join('');
+    } else if (tbody) {
+        tbody.innerHTML = validUsers.map(u => `
+            <tr>
+                <td class="fw-bold text-dark">${u.Username}</td>
+                <td>${u['Full Name'] || u.fullname || '-'}</td>
+                <td><span class="badge ${u.Role === 'Admin' ? 'bg-danger' : 'bg-info'} px-3 rounded-pill">${u.Role}</span></td>
+                <td class="text-center">
+                    <button class="btn btn-sm text-danger" onclick="deleteUser('${u.Username}')" 
+                        ${u.Username.toLowerCase() === 'admin' ? 'disabled' : ''}>
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+}
+
+/**
+ * Cusboonaysii loadUsers() si uu u isticmaalo renderUserData
+ */
+async function loadUsers() {
+    const tbody = document.getElementById('userTableBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center p-4">Loading users...</td></tr>';
+    
+    try {
+        const res = await fetch(SCRIPT_URL + "?action=getUsers");
+        const users = await res.json();
+        
+        // Hadda waxaan u yeeraynaa function-ka render-ka
+        renderUserData(users);
+        
+    } catch (e) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading users.</td></tr>';
+    }
+}
+
+document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Kaydinaya...';
+
+    const payload = {
+        type: "addUser",
+        username: document.getElementById('new_username').value,
+        password: document.getElementById('new_password').value,
+        role: document.getElementById('new_role').value,
+        fullname: document.getElementById('new_fullname').value
+    };
+
+    try {
+        const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+        });
+        const result = await res.json();
+        
+        if (result.result === "success") {
+            alert("User-ka si guul leh ayaa loo daray!");
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
+            modal.hide();
+            document.getElementById('addUserForm').reset();
+            loadUsers();
+        } else {
+            alert("Cillad: " + result.message);
+        }
+    } catch (err) {
+        alert("Cillad ayaa dhacday xilliga kaydinta.");
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "Save User";
+    }
+});
+
+// 4. DELETE USER
+async function deleteUser(username) {
+    if (username === 'admin') return;
+    if (!confirm("Ma hubaal ayaad tahay inaad tirtirto " + username + "?")) return;
+    
+    const payload = { type: "deleteUser", username: username };
+    try {
+        await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+        loadUsers();
+    } catch (err) {
+        alert("Ma suuragalin in user-ka la tirtiro.");
+    }
+}
+
+// 5. LOGOUT
+function logout() {
+    currentUser = null;
+    location.reload(); 
+}
+
+// Function-ka hal mar wada raraya dhammaan xogta
+async function loadAllSystemData() {
+    console.log("System Loading: Keenista dhamaan xogta...");
+    
+    try {
+        // 1. Mar quda wada wac dhammaan 6-ta xogood (Parallel Fetching)
+        // Waxaan ku darnay 'getTransfers'
+        const [resRecords, resRefs, resReceipts, resUsers, resExpenses, resTransfers] = await Promise.all([
+            fetch(SCRIPT_URL),                                  // SurveyData
+            fetch(SCRIPT_URL + "?action=getReferences"),        // References
+            fetch(SCRIPT_URL + "?action=getReceipts"),          // Receipts
+            fetch(SCRIPT_URL + "?action=getUsers"),             // Users
+            fetch(SCRIPT_URL + "?action=getExpenses"),          // Office Expenses
+            fetch(SCRIPT_URL + "?action=getTransfers")          // CUSUB: Wareejin Dhul
+        ]);
+
+        // 2. Bedel xogta una rogo JSON
+        allRecords = await resRecords.json();
+        allRefRecords = await resRefs.json();
+        const allReceipts = await resReceipts.json();
+        const allUsers = await resUsers.json();
+        const allExpenses = await resExpenses.json();
+        allTransferRecords = await resTransfers.json(); // CUSUB: Keydi xogta wareejinta
+
+        // --- MUHIIM: Draw polygons on the Map Explorer once records are ready ---
+        if (allRecords && allRecords.length > 0) {
+            displayAllPolygons();
+        }
+
+        // 3. DASHBOARD CALCULATIONS
+        // A. Dakhliga Guud (Receipts)
+        const totalRevenue = allReceipts
+            .filter(r => r && (r.Status === 'Paid' || r['Status'] === 'Paid'))
+            .reduce((sum, r) => sum + parseFloat(r.Amount || r['Amount'] || 0), 0);
+
+        // B. Kharashka Guud (Expenses)
+        const totalExpAmount = allExpenses
+            .reduce((sum, e) => sum + parseFloat(e.Total || e['Total'] || 0), 0);
+            
+        // C. (IKHTIYAARI) Dakhliga Iibka Dhulka - Haddii aad rabto inaad dashboardka ku darto
+        const totalTransferSales = allTransferRecords
+            .reduce((sum, t) => sum + parseFloat(t.Lacagta || t['Lacagta'] || 0), 0);
+
+        // Ku muuji Dashboard-ka dushiisa (Hubi in HTML IDs ay jiraan)
+        if(document.getElementById('total_revenue')) {
+            document.getElementById('total_revenue').innerText = '$' + totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 2});
+        }
+        if(document.getElementById('total_expenses')) {
+            document.getElementById('total_expenses').innerText = '$' + totalExpAmount.toLocaleString(undefined, {minimumFractionDigits: 2});
+        }
+        // Haddii aad leedahay meel loogu talagalay dakhliga iibka:
+        if(document.getElementById('total_transfer_sales')) {
+            document.getElementById('total_transfer_sales').innerText = '$' + totalTransferSales.toLocaleString(undefined, {minimumFractionDigits: 2});
+        }
+
+        // 4. Buuxi Tables-ka background-ka (Rendering)
+        applyFilters();                                 // 1. Records Table
+        renderRefData(allRefRecords);                   // 2. References Table
+        renderReceiptTable(allRefRecords, allReceipts); // 3. Receipts Table
+        renderExpensesTable(allExpenses);               // 4. Expenses Table
+        renderTransferTable(allTransferRecords);        // 5. CUSUB: Wareejinta Table
+
+        // 5. Buuxi Users Table (Kaliya haddii uu Admin yahay)
+        if (currentUser && currentUser.role === "Admin") {
+            renderUserData(allUsers);
+        }
+
+        console.log("System Ready: Dhamaan xogta (oo ay ku jirto Wareejinta) waa la soo dejiyey.");
+    } catch (error) {
+        console.error("Cillad xilliga pre-loading-ka:", error);
+    }
+}
+
+/**
+ * CUSUB: Function-ka render-gareynaya shaxda Wareejinta
+ */
+function renderTransferTable(transfers) {
+    const tbody = document.getElementById('transferTableBody');
+    if (!tbody) return;
+
+    if (transfers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4">Ma jirto xog wareejin ah.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = transfers.map(t => `
+        <tr>
+            <td>${t['S/N'] || t.sn}</td>
+            <td class="fw-bold">${t['Iibiyaha/Iibisada'] || t.iibiyaha}</td>
+            <td class="fw-bold text-primary">${t['Iibsadaha/Iibsatada'] || t.iibsadaha}</td>
+            <td><span class="badge bg-light text-dark border">${t['Survey lr ka'] || t.survey_lr}</span></td>
+            <td class="fw-bold text-success">$${parseFloat(t.Lacagta || 0).toLocaleString()}</td>
+            <td><small>${t.Taarikhda || t.taariikh}</small></td>
+        </tr>
+    `).join('');
+}
+
+// Helper function si Receipts loo render-gareeyo
+function renderReceiptTable(refs, receipts) {
+    const tbody = document.getElementById('receiptRefTableBody');
+    const isMobile = window.innerWidth < 768;
+    if (!tbody) return;
+
+    const htmlContent = refs.filter(r => r && r['Sumad (Ref)']).map(r => {
+        const refRaw = r['Sumad (Ref)'].toString().trim();
+        const receiptInfo = receipts.find(rec => rec['Sumad (Ref)'].toString().trim().toLowerCase() === refRaw.toLowerCase());
+        const isFullyPaid = receiptInfo && receiptInfo['Status'] === 'Paid';
+
+        if (isMobile) {
+            return `
+            <div class="survey-card" ${receiptInfo ? `onclick='showReceiptDetails(${JSON.stringify(receiptInfo)})'` : ''}>
+                <div class="card-info">
+                    <div class="fw-bold text-primary">${refRaw}</div>
+                    <div class="card-name small">${r['Ujeedo'] || 'N/A'}</div>
+                    <div class="mt-2">
+                        ${isFullyPaid ? 
+                            `<span class="badge bg-success-subtle text-success border border-success w-100 py-2">Paid</span>` : 
+                            `<button class="btn btn-success btn-sm w-100 rounded-pill" onclick='event.stopPropagation(); openPayModal("${refRaw}", "${r['Ujeedo']}", ${receiptInfo ? JSON.stringify(receiptInfo) : 'null'})'>Pay Now</button>`
+                        }
+                    </div>
+                </div>
+            </div>`;
+        } else {
+            return `
+            <tr ${receiptInfo ? `onclick='showReceiptDetails(${JSON.stringify(receiptInfo)})'` : ''} style="cursor: pointer;">
+                <td class="fw-bold text-primary">${refRaw}</td>
+                <td>${r['Ujeedo'] || 'N/A'}</td>
+                <td><small>${r['Taariikhda Dukumiintiga'] || '-'}</small></td>
+                <td class="text-center">
+                    ${isFullyPaid ? `<span class="badge bg-success-subtle text-success border border-success px-3 py-2 rounded-pill">Paid</span>` : 
+                    `<button class="btn btn-success btn-sm px-4 rounded-pill" onclick='event.stopPropagation(); openPayModal("${refRaw}", "${r['Ujeedo']}", ${receiptInfo ? JSON.stringify(receiptInfo) : 'null'})'>Pay</button>`}
+                </td>
+            </tr>`;
+        }
+    }).join('');
+
+    if (isMobile) {
+        tbody.closest('.table-responsive').style.display = 'none';
+        let mobileFinance = document.getElementById('mobileFinanceCards');
+        if (!mobileFinance) {
+            mobileFinance = document.createElement('div');
+            mobileFinance.id = 'mobileFinanceCards';
+            mobileFinance.className = 'mobile-cards-container';
+            tbody.closest('.tab-pane').appendChild(mobileFinance);
+        }
+        mobileFinance.innerHTML = htmlContent;
+    } else {
+        tbody.innerHTML = htmlContent;
+    }
+}
+
+function showReceiptDetails(receipt) {
+    document.getElementById('v_rec_no').innerText = receipt['Receipt No'] || 'N/A';
+    document.getElementById('v_rec_ref').innerText = receipt['Sumad (Ref)'] || '-';
+    document.getElementById('v_rec_amount').innerText = '$' + (receipt['Amount'] || '0.00');
+    document.getElementById('v_rec_mode').innerText = receipt['Mode'] || 'Cash';
+    document.getElementById('v_rec_details').innerText = receipt['Faahfaahin'] || '-';
+    document.getElementById('v_rec_date').innerText = receipt['Date'] || receipt['System Date'] || '-';
+    
+    // Bedel qoraalka status-ka
+    const statusText = document.getElementById('v_rec_status_text');
+    statusText.innerText = receipt['Status'] === 'Paid' ? 'Lacag Bixin Dhameystiran' : 'Xogta deynta (Credit)';
+    statusText.className = receipt['Status'] === 'Paid' ? 'text-success small mb-0' : 'text-danger small mb-0';
+
+    const myModal = new bootstrap.Modal(document.getElementById('receiptDetailsModal'));
+    myModal.show();
+}
+
+async function downloadSurveyPDF() {
+    // 1. Dooro qaybta Modal-ka ee la daabacayo
+    const element = document.querySelector("#detailsModal .modal-content");
+    const magaca = document.getElementById('view_magaca').innerText;
+    const sn = document.getElementById('view_sn').innerText;
+
+    // 2. Options-ka PDF-ka
+    const options = {
+        margin:       [10, 10, 10, 10],
+        filename:     `Survey_Report_${sn}_${magaca.replace(/\s+/g, '_')}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { 
+            scale: 2, 
+            useCORS: true, // Muhiim u ah sawirada maabka
+            logging: false,
+            letterRendering: true
+        },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    // 3. Muuji Loading state
+    const btn = document.querySelector('button[onclick="downloadSurveyPDF()"]');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Diyaarinta...';
+
+    // 4. Qari badhamada inta la qaadayo snapshot-ka
+    btn.style.visibility = 'hidden';
+    document.querySelector("#detailsModal .btn-close").style.visibility = 'hidden';
+
+    try {
+        await html2pdf().set(options).from(element).save();
+    } catch (error) {
+        console.error("PDF Error:", error);
+        alert("Ma suuragalin in PDF-ka la soo dejiyo.");
+    } finally {
+        // Dib u soo celi badhamada
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        btn.style.visibility = 'visible';
+        document.querySelector("#detailsModal .btn-close").style.visibility = 'visible';
+    }
+}
+
+async function generateProfessionalPDF() {
+    const element = document.querySelector("#detailsModal .modal-content");
+    const magaca = document.getElementById('view_magaca').innerText;
+    const sn = document.getElementById('view_sn').innerText;
+
+    // Options-ka PDF-ka
+    const options = {
+        margin: [10, 10, 10, 10],
+        filename: `Official_Survey_Report_${sn}.pdf`,
+        image: { type: 'jpeg', quality: 1.0 },
+        html2canvas: { scale: 3, useCORS: true, letterRendering: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    // 1. Samee Header rasmi ah oo ku meel gaar ah (Hidden Template)
+    const headerHTML = `
+        <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
+            <h2 style="margin: 0; color: #0d6efd;">GEOSURVEY PROFESSIONAL SYSTEM</h2>
+            <h4 style="margin: 5px 0;">WARBIXINTA SAHANKA IYO QIIMEYNTA DHULKA</h4>
+            <p style="margin: 0; font-size: 12px; color: #666;">Taariikhda: ${new Date().toLocaleDateString()}</p>
+        </div>
+    `;
+
+    // 2. Samee Footer-ka Saxiixa
+    const footerHTML = `
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; padding: 0 40px;">
+            <div style="text-align: center;">
+                <p style="border-top: 1px solid #000; padding-top: 5px; width: 150px;">Saxiixa Milkiilaha</p>
+            </div>
+            <div style="text-align: center;">
+                <p style="border-top: 1px solid #000; padding-top: 5px; width: 150px;">Saxiixa Injineerka</p>
+            </div>
+        </div>
+        <div style="text-align: center; margin-top: 30px;">
+            <p style="font-size: 10px; color: #999;">Dukumiintigan waa mid elektaroonig ah oo ka soo baxay GeoSurvey System.</p>
+        </div>
+    `;
+
+    // Diyaarinta Loading
+    const btn = document.querySelector('button[onclick="generateProfessionalPDF()"]');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Diyaarinta...';
+
+    // Qari badhamada nidaamka si aysan PDF-ka ugu soo bixin
+    const buttonsToHide = document.querySelectorAll("#detailsModal .btn-close, #detailsModal button");
+    buttonsToHide.forEach(b => b.style.opacity = '0');
+
+    try {
+        // Waxaan ku dhex dareynaa Header-ka iyo Footer-ka Modal-ka dhexdiisa si kumeel gaar ah
+        const modalBody = document.querySelector("#detailsModal .modal-content");
+        modalBody.insertAdjacentHTML('afterbegin', headerHTML);
+        modalBody.insertAdjacentHTML('beforeend', footerHTML);
+
+        await html2pdf().set(options).from(element).save();
+
+        // Ka saar Header-ka iyo Footer-ka kumeel gaarka ahaa
+        modalBody.querySelector('div').remove(); // Kii u horreeyey (Header)
+        modalBody.lastElementChild.remove();     // Kii dambeeyey (Footer)
+        
+    } catch (error) {
+        console.error("PDF Error:", error);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-printer-fill me-1"></i> PRINT REPORT (PDF)';
+        buttonsToHide.forEach(b => b.style.opacity = '1');
+    }
+}
+
+async function updateRefStatus(newStatus) {
+    // Change 'v_ref_sumad' to 'v_ref_sumad_badge'
+    const refId = document.getElementById('v_ref_sumad_badge').innerText; 
+    
+    if (!refId || refId === '-') return;
+
+    if (!confirm(`Ma rabtaa inaad u beddesho: ${newStatus}?`)) return;
+
+    try {
+        const payload = {
+            type: "updateRefStatus",
+            sumad: refId,
+            status: newStatus
+        };
+
+        const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        const result = await res.json();
+        if (result.result === "success") {
+            alert("Heerka shaqada waa la cusboonaysiiyey!");
+            bootstrap.Modal.getInstance(document.getElementById('refDetailsModal')).hide();
+            
+            // Refresh data
+            allRefRecords = []; 
+            loadReferences(); 
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Cillad ayaa dhacday xilliga beddelka status-ka.");
+    }
+}
+
+// 1. Fur Modal-ka oo deji taariikhda maanta
+function showExpenseModal() {
+    document.getElementById('expenseForm').reset();
+    document.getElementById('exp_date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('exp_total').value = "0.00";
+    new bootstrap.Modal(document.getElementById('expenseModal')).show();
+}
+
+// 2. Xisaabi Total-ka si otomaatik ah
+function calculateExpTotal() {
+    const qty = parseFloat(document.getElementById('exp_qty').value) || 0;
+    const amount = parseFloat(document.getElementById('exp_amount').value) || 0;
+    const total = qty * amount;
+    document.getElementById('exp_total').value = total.toFixed(2);
+}
+
+// 3. Save Expense to Database
+document.getElementById('expenseForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+
+    const payload = {
+        type: "expense",
+        description: document.getElementById('exp_desc').value,
+        date: document.getElementById('exp_date').value,
+        qty: document.getElementById('exp_qty').value,
+        amount: document.getElementById('exp_amount').value,
+        total: document.getElementById('exp_total').value,
+        created_by: currentUser ? currentUser.name : "Unknown User" // Created By
+    };
+
+    try {
+        const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (result.result === "success") {
+            alert("Kharashka waa la keydiyey!");
+            bootstrap.Modal.getInstance(document.getElementById('expenseModal')).hide();
+            loadReceiptRefs(); // Dib u rari Dashboard-ka iyo xogta
+        }
+    } catch (err) {
+        alert("Cillad ayaa dhacday xilliga keydinta kharashka.");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = "SAVE EXPENSE";
+    }
+});
+
+function renderExpensesTable(expenses) {
+    const tbody = document.getElementById('expenseTableBody');
+    const expenseTab = document.getElementById('tab-expenses');
+    const isMobile = window.innerWidth < 768;
+
+    if (!expenseTab) return;
+
+    const validExpenses = expenses.filter(e => e && (e.Description || e.description));
+
+    if (isMobile) {
+        // Create or get the mobile container
+        let mobileExpContainer = document.getElementById('mobileExpenseCards');
+        if (!mobileExpContainer) {
+            mobileExpContainer = document.createElement('div');
+            mobileExpContainer.id = 'mobileExpenseCards';
+            mobileExpContainer.className = 'mobile-cards-container';
+            expenseTab.appendChild(mobileExpContainer);
+        }
+
+        mobileExpContainer.innerHTML = validExpenses.length === 0 
+            ? '<div class="text-center p-4 text-muted">No expenses found.</div>'
+            : validExpenses.map(e => `
+                <div class="survey-card border-start border-4 border-danger">
+                    <div class="card-info">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="fw-bold">${e.Description || e.description}</div>
+                            <div class="fw-bold text-danger">$${parseFloat(e.Total || e.total || 0).toFixed(2)}</div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2 small text-muted">
+                            <span><i class="bi bi-calendar3"></i> ${formatDateMobile(e.Date || e.date)}</span>
+                            <span>Qty: ${e.Qty || e.qty} | By: ${e['Created By'] || e.created_by || 'Admin'}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+    } else if (tbody) {
+        // Desktop Table View
+        tbody.innerHTML = validExpenses.map(e => `
+            <tr>
+                <td class="ps-4 fw-bold text-muted">${e['S/N'] || '-'}</td>
+                <td class="fw-bold">${e.Description || e.description}</td>
+                <td><small>${e.Date || e.date}</small></td>
+                <td>${e.Qty || e.qty}</td>
+                <td>$${parseFloat(e.Amount || e.amount || 0).toFixed(2)}</td>
+                <td class="fw-bold text-danger">$${parseFloat(e.Total || e.total || 0).toFixed(2)}</td>
+                <td><span class="badge bg-light text-dark border">${e['Created By'] || e.created_by || 'Admin'}</span></td>
+            </tr>
+        `).join('');
+    }
+}
+
+function handleFabClick() {
+    // Detect which view is currently active
+    const activeView = document.querySelector('.app-view.active').id;
+
+    switch (activeView) {
+        case 'ref-view':
+            showRefForm(); // Opens the Reference registration form
+            break;
+        case 'map-view':
+        case 'list-view':
+            switchTab('form-view'); // Opens the Land Survey form
+            break;
+        case 'receipt-view':
+            // Check if we are on Payments or Expenses tab
+            const activeFinanceTab = document.querySelector('#financeTabs .nav-link.active').getAttribute('data-bs-target');
+            if (activeFinanceTab === '#tab-expenses') {
+                showExpenseModal();
+            } else {
+                alert("Fadlan dooro Reference aad lacag ka qabanayso liiska hoose.");
+            }
+            break;
+        case 'user-management':
+            const userModal = new bootstrap.Modal(document.getElementById('addUserModal'));
+            userModal.show();
+            break;
+        default:
+            switchTab('form-view');
+    }
+}
+
+function formatDateMobile(dateStr) {
+    if (!dateStr || dateStr === 'N/A') return 'N/A';
+    // Removes the 'T', the milliseconds, and the 'Z'
+    return dateStr.split('T')[0] + ' ' + dateStr.split('T')[1].substring(0, 5);
+}
+
+let polygonLabels = []; // Global array to track tooltips
+
+function displayAllPolygons() {
+    if (!allRecords || allRecords.length === 0) return;
+
+    // 1. Clean existing polygons and reset label tracker
+    mainMap.eachLayer((layer) => {
+        if (layer instanceof L.Polygon && !(layer instanceof L.Rectangle)) {
+            mainMap.removeLayer(layer);
+        }
+    });
+    polygonLabels = [];
+
+    allRecords.forEach(record => {
+        const polyString = record['Polygon Boundary'] || record['polygon'];
+        
+        if (polyString && polyString !== "N/A" && polyString.trim() !== "") {
+            try {
+                const polyCoords = polyString.split(/[;]+/)
+                    .map(coord => coord.trim())
+                    .filter(coord => coord.length > 0)
+                    .map(c => c.split(',').map(Number));
+
+                // 2. Create Yellow Polygon
+                const polygon = L.polygon(polyCoords, {
+                    color: '#FFD700',      // Gold/Yellow Outline
+                    fillColor: '#FFFF00',  // Bright Yellow Fill
+                    fillOpacity: 0.4,
+                    weight: 3
+                }).addTo(mainMap);
+
+                // 3. Create Permanent Owner Label (Tooltip)
+                const ownerName = record['Magaca Milkiilaha'] || 'Unknown';
+                const label = L.tooltip({
+                    permanent: true,
+                    direction: 'center',
+                    className: 'map-owner-label'
+                })
+                .setContent(ownerName)
+                .setLatLng(polygon.getBounds().getCenter());
+                
+                polygon.bindTooltip(label);
+                polygonLabels.push(label); 
+
+                // 4. Bind Detail Popup
+                polygon.bindPopup(`
+                    <div class="p-1">
+                        <h6 class="fw-bold mb-1">${ownerName}</h6>
+                        <p class="small text-muted mb-2">S/N: ${record['S/N']}</p>
+                        <button class="btn btn-sm btn-primary w-100" onclick='showRowDetails(${JSON.stringify(record)})'>
+                            View Full Details
+                        </button>
+                    </div>
+                `);
+                
+            } catch (err) {
+                console.error("Error drawing polygon", err);
+            }
+        }
+    });
+    
+    // Ensure initial toggle state is respected
+    togglePolygonLabels();
+}
+
+// Function to Show/Hide Labels
+function togglePolygonLabels() {
+    const isChecked = document.getElementById('labelToggle').checked;
+    const labels = document.querySelectorAll('.map-owner-label');
+    labels.forEach(el => {
+        el.style.display = isChecked ? 'block' : 'none';
+    });
+}
+
+let allTransferRecords = [];
+
+// Navigation Functions
+function showTransferForm() {
+    document.getElementById('transferListArea').style.display = 'none';
+    document.getElementById('transferFormArea').style.display = 'block';
+    document.getElementById('tr_date').value = new Date().toISOString().split('T')[0];
+    populateTransferSurveyDropdown();
+}
+
+function hideTransferForm() {
+    document.getElementById('transferListArea').style.display = 'block';
+    document.getElementById('transferFormArea').style.display = 'none';
+}
+
+// Populate the Survey Link dropdown using existing allRecords
+function populateTransferSurveyDropdown() {
+    const dropdown = document.getElementById('tr_survey_link');
+    dropdown.innerHTML = '<option value="">Dooro Sahanka...</option>';
+    allRecords.forEach(r => {
+        const option = document.createElement('option');
+        option.value = `${r['S/N']} - ${r['Magaca Milkiilaha']}`;
+        option.textContent = `${r['S/N']}. ${r['Magaca Milkiilaha']}`;
+        dropdown.appendChild(option);
+    });
+}
+
+// Submit Handler
+document.getElementById('transferForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('trSaveBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Keydinaya...';
+
+    const payload = {
+        type: "landTransfer",
+        iibiyaha: document.getElementById('tr_iibiyaha').value,
+        tel_iibiyaha: document.getElementById('tr_tel_iibiyaha').value,
+        iibsadaha: document.getElementById('tr_iibsadaha').value,
+        tel_iibsadaha: document.getElementById('tr_tel_iibsadaha').value,
+        survey_lr: document.getElementById('tr_survey_link').value,
+        lacagta: document.getElementById('tr_lacagta').value,
+        taariikh: document.getElementById('tr_date').value
+    };
+
+    try {
+        const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (result.result === "success") {
+            alert("Wareejinta si guul leh ayaa loo diiwaangeliyey!");
+            document.getElementById('transferForm').reset();
+            hideTransferForm();
+            loadAllSystemData(); // Refresh all data
+        }
+    } catch (err) {
+        alert("Cillad ayaa dhacday!");
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "SAVE TRANSFER RECORD";
+    }
+});
+
+</script>
+</body>
+</html>
