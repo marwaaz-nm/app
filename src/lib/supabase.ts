@@ -1,14 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// Fallback to placeholder values during build to prevent build-time crashes (like on Cloudflare Pages)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder-project-id.supabase.co';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
-console.log('[Supabase Client] Initializing client... URL:', supabaseUrl ? 'FOUND' : 'MISSING', '| Anon Key:', supabaseAnonKey ? 'FOUND' : 'MISSING');
+console.log('[Supabase Client] Initializing client... URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'FOUND' : 'MISSING', '| Anon Key:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'FOUND' : 'MISSING');
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
   console.warn(
-    'Supabase environment variables are missing. Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local file.'
+    'Warning: Supabase environment variables are missing. Falling back to placeholders for compilation/build.'
   );
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
