@@ -1,0 +1,36 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # Runs every 2 days at 06:00 UTC to keep it fresh
+    - cron: '0 6 */2 * *'
+  workflow_dispatch: # Allows you to run it manually from GitHub
+
+jobs:
+  ping-db:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Database
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "Error: Supabase secrets are not set in GitHub repository settings!"
+            exit 1
+          fi
+          
+          echo "Pinging Supabase API to keep it alive..."
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/profiles?limit=1")
+          
+          echo "Supabase responded with HTTP status: $response"
+          
+          if [ "$response" -ge 200 ] && [ "$response" -lt 400 ]; then
+            echo "Success: Supabase is active and responding."
+          else
+            echo "Warning: Received HTTP status $response. The project might be paused or misconfigured."
+            exit 1
+          fi
