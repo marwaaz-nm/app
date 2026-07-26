@@ -39,6 +39,57 @@ export default function MiniMap({
   const [showSketch, setShowSketch] = useState(false);
   const [locating, setLocating] = useState(false);
 
+  const [latInput, setLatInput] = useState('');
+  const [lngInput, setLngInput] = useState('');
+  const isDrawingRef = useRef(false);
+
+  // Sync inputs with gpsValue prop
+  useEffect(() => {
+    if (gpsValue) {
+      const parts = gpsValue.split(',').map(p => p.trim());
+      if (parts.length === 2) {
+        setLatInput(parts[0]);
+        setLngInput(parts[1]);
+      }
+    } else {
+      setLatInput('');
+      setLngInput('');
+    }
+  }, [gpsValue]);
+
+  // Sync marker when gpsValue is set (either from manual input, live location, click, or initial load)
+  useEffect(() => {
+    if (!mapRef.current || !gpsValue) {
+      if (markerRef.current) {
+        markerRef.current.remove();
+        markerRef.current = null;
+      }
+      return;
+    }
+
+    const parts = gpsValue.split(',').map(p => p.trim());
+    if (parts.length !== 2) return;
+
+    const lat = parseFloat(parts[0]);
+    const lng = parseFloat(parts[1]);
+
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+
+    if (markerRef.current) {
+      const currentPos = markerRef.current.getLatLng();
+      if (currentPos.lat !== lat || currentPos.lng !== lng) {
+        markerRef.current.setLatLng([lat, lng]);
+      }
+    } else {
+      const marker = L.marker([lat, lng], { draggable: true }).addTo(mapRef.current);
+      marker.on('dragend', (event) => {
+        const markerPos = event.target.getLatLng();
+        onGpsChange(`${markerPos.lat.toFixed(6)}, ${markerPos.lng.toFixed(6)}`);
+      });
+      markerRef.current = marker;
+    }
+  }, [gpsValue]);
+
   // Initialize Drawing Map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -49,8 +100,20 @@ export default function MiniMap({
       subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
     });
 
+    let initialCenter: L.LatLngExpression = [3.1192, 43.6498];
+    if (gpsValue) {
+      const parts = gpsValue.split(',').map(p => p.trim());
+      if (parts.length === 2) {
+        const lat = parseFloat(parts[0]);
+        const lng = parseFloat(parts[1]);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          initialCenter = [lat, lng];
+        }
+      }
+    }
+
     const map = L.map(mapContainerRef.current, {
-      center: [3.1192, 43.6498],
+      center: initialCenter,
       zoom: 17,
       layers: [satLayer],
       zoomControl: false,
@@ -84,6 +147,22 @@ export default function MiniMap({
       },
     });
     map.addControl(drawControl);
+
+    // Track drawing state to avoid click conflicts
+    map.on('draw:drawstart', () => {
+      isDrawingRef.current = true;
+    });
+    map.on('draw:drawstop', () => {
+      isDrawingRef.current = false;
+    });
+
+    // Map Click Listener to place marker
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      if (isDrawingRef.current) return;
+      const { lat, lng } = e.latlng;
+      onGpsChange(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+      map.panTo([lat, lng]);
+    });
 
     // Draw Event Listener
     map.on((L as any).Draw.Event.CREATED, (e: any) => {
@@ -190,8 +269,6 @@ export default function MiniMap({
     const isCCW = sum < 0;
 
     // Perpendicular vector pointing outward
-    // For CCW, outward is to the right: (dLat, -dLng)
-    // For CW, outward is to the left: (-dLat, dLng)
     let pLat = isCCW ? -dLng : dLng;
     let pLng = isCCW ? dLat : -dLat;
 
@@ -347,17 +424,6 @@ export default function MiniMap({
         
         if (mapRef.current) {
           mapRef.current.setView([latitude, longitude], 18);
-          
-          if (markerRef.current) {
-            markerRef.current.setLatLng([latitude, longitude]);
-          } else {
-            const marker = L.marker([latitude, longitude], { draggable: true }).addTo(mapRef.current);
-            marker.on('dragend', (event) => {
-              const markerPos = event.target.getLatLng();
-              onGpsChange(`${markerPos.lat.toFixed(6)}, ${markerPos.lng.toFixed(6)}`);
-            });
-            markerRef.current = marker;
-          }
         }
         setLocating(false);
       },
@@ -368,6 +434,34 @@ export default function MiniMap({
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
+  };
+
+  const handleLatChange = (val: string) => {
+    setLatInput(val);
+    const lat = parseFloat(val);
+    const lng = parseFloat(lngInput);
+    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      onGpsChange(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+      if (mapRef.current) {
+        mapRef.current.panTo([lat, lng]);
+      }
+    } else {
+      onGpsChange(`${val}, ${lngInput}`);
+    }
+  };
+
+  const handleLngChange = (val: string) => {
+    setLngInput(val);
+    const lat = parseFloat(latInput);
+    const lng = parseFloat(val);
+    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      onGpsChange(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+      if (mapRef.current) {
+        mapRef.current.panTo([lat, lng]);
+      }
+    } else {
+      onGpsChange(`${latInput}, ${val}`);
+    }
   };
 
   const toggleFullScreen = () => {
@@ -400,23 +494,43 @@ export default function MiniMap({
           </button>
 
           {/* Bottom GPS Display Overlay */}
-          <div className="absolute bottom-4 left-4 right-4 z-10 bg-slate-950/90 backdrop-blur-md px-5 py-3 rounded-2xl border border-slate-800 shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex items-center justify-between gap-4 max-w-xl mx-auto">
-            <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
-              <Compass className="h-5 w-5 text-teal-400 shrink-0 animate-pulse" />
-              <input
-                type="text"
-                readOnly
-                value={gpsValue}
-                placeholder="0.000000, 0.000000"
-                className="bg-transparent border-none text-xs font-mono font-bold text-teal-400 focus:outline-none w-full truncate cursor-default"
-              />
+          <div className="absolute bottom-4 left-4 right-4 z-10 bg-slate-950/95 backdrop-blur-md px-5 py-4 rounded-3xl border border-slate-800 shadow-[0_15px_40px_rgba(0,0,0,0.3)] flex flex-col sm:flex-row items-center justify-between gap-4 max-w-2xl mx-auto">
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto min-w-0">
+              <div className="flex items-center gap-2 text-teal-400 shrink-0">
+                <Compass className="h-5 w-5 animate-pulse" />
+                <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">GPS:</span>
+              </div>
+              
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="flex items-center bg-slate-900/80 rounded-xl px-3 py-1.5 border border-slate-800 w-full sm:w-36">
+                  <span className="text-[10px] font-black text-slate-500 mr-1.5 select-none">LAT:</span>
+                  <input
+                    type="text"
+                    value={latInput}
+                    onChange={(e) => handleLatChange(e.target.value)}
+                    placeholder="0.000000"
+                    className="bg-transparent border-none text-xs font-mono font-bold text-teal-400 focus:outline-none w-full"
+                  />
+                </div>
+                
+                <div className="flex items-center bg-slate-900/80 rounded-xl px-3 py-1.5 border border-slate-800 w-full sm:w-36">
+                  <span className="text-[10px] font-black text-slate-500 mr-1.5 select-none">LNG:</span>
+                  <input
+                    type="text"
+                    value={lngInput}
+                    onChange={(e) => handleLngChange(e.target.value)}
+                    placeholder="0.000000"
+                    className="bg-transparent border-none text-xs font-mono font-bold text-teal-400 focus:outline-none w-full"
+                  />
+                </div>
+              </div>
             </div>
             
             <button
               type="button"
               onClick={getLiveLocation}
               disabled={locating}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition-all cursor-pointer select-none shrink-0 shadow-[0_4px_12px_rgba(45,138,112,0.15)]"
+              className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-white text-xs font-black px-5 py-3 rounded-2xl transition-all cursor-pointer select-none w-full sm:w-auto shrink-0 shadow-[0_4px_12px_rgba(45,138,112,0.15)]"
             >
               {locating ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
