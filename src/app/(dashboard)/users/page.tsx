@@ -14,7 +14,13 @@ import {
   Loader2, 
   UserX,
   KeyRound,
-  UserCheck2
+  UserCheck2,
+  Files,
+  Compass,
+  Layers,
+  ArrowLeftRight,
+  Wallet,
+  Shield
 } from 'lucide-react';
 
 export default function UsersPage() {
@@ -380,23 +386,47 @@ export default function UsersPage() {
               </div>
 
               {role === 'User' && (
-                <div className="space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
+                <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
                     Menus Loo Fasaxayo (Permitted Menus)
                   </label>
-                  <div className="grid grid-cols-1 gap-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <div className="grid grid-cols-2 gap-3 bg-slate-50/50 p-4 rounded-3xl border border-slate-200/60 max-h-72 overflow-y-auto">
                     {AVAILABLE_MENUS.map((menu) => {
                       const isChecked = permittedMenus.includes(menu.href);
+                      const Icon = 
+                        menu.href === '/references' ? Files :
+                        menu.href === '/explorer' ? Compass :
+                        menu.href === '/records' ? Layers :
+                        menu.href === '/transfers' ? ArrowLeftRight :
+                        menu.href === '/financials' ? Wallet : Shield;
+
                       return (
-                        <label key={menu.href} className="flex items-center gap-2.5 text-xs text-slate-700 font-semibold cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => handleMenuToggle(menu.href)}
-                            className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4"
-                          />
-                          <span>{menu.label}</span>
-                        </label>
+                        <button
+                          key={menu.href}
+                          type="button"
+                          onClick={() => handleMenuToggle(menu.href)}
+                          className={`flex items-center gap-3 p-3 rounded-2xl border text-left transition-all cursor-pointer select-none active:scale-[0.97] duration-150 ${
+                            isChecked
+                              ? 'border-teal-500 bg-teal-50/60 text-teal-700 shadow-sm shadow-teal-500/5'
+                              : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-500 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className={`flex h-8 w-8 items-center justify-center rounded-xl border shrink-0 transition-colors duration-150 ${
+                            isChecked
+                              ? 'bg-teal-600 border-teal-600 text-white'
+                              : 'bg-slate-50 border-slate-200 text-slate-400'
+                          }`}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className={`text-[11px] font-black truncate leading-tight ${isChecked ? 'text-teal-850' : 'text-slate-700'}`}>
+                              {menu.label.split('(')[0].trim()}
+                            </div>
+                            <div className="text-[9px] text-slate-450 font-bold mt-0.5 truncate leading-tight">
+                              {menu.label.match(/\(([^)]+)\)/)?.[1] || ''}
+                            </div>
+                          </div>
+                        </button>
                       );
                     })}
                   </div>
