@@ -1,15 +1,34 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import Sidebar from '@/components/Sidebar';
+import { usePathname, useRouter } from 'next/navigation';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // Route protection based on permitted_menus
+  useEffect(() => {
+    if (!loading && user && profile && profile.role !== 'Admin') {
+      const standardRoutes = ['/references', '/explorer', '/records', '/transfers', '/financials'];
+      const currentBaseRoute = standardRoutes.find(route => pathname.startsWith(route));
+      
+      if (currentBaseRoute && profile.permitted_menus && Array.isArray(profile.permitted_menus)) {
+        if (!profile.permitted_menus.includes(currentBaseRoute)) {
+          // Redirect to the first permitted menu, or explorer if none
+          const firstPermitted = profile.permitted_menus[0] || '/explorer';
+          router.push(firstPermitted);
+        }
+      }
+    }
+  }, [loading, user, profile, pathname, router]);
 
   if (loading) {
     return (

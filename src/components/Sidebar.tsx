@@ -20,7 +20,7 @@ export default function Sidebar() {
   const { profile, logout } = useAuth();
   const isAdmin = profile?.role === 'Admin';
 
-  const navItems = [
+  let navItems = [
     { href: '/references', label: 'References', icon: Files },
     { href: '/explorer', label: 'Map Explorer', icon: Compass },
     { href: '/records', label: 'Survey Records', icon: Layers },
@@ -28,8 +28,13 @@ export default function Sidebar() {
     { href: '/financials', label: 'Financials', icon: Wallet },
   ];
 
-  // Add User Control tab if admin
-  if (isAdmin) {
+  // If user is NOT admin, filter based on permitted_menus
+  if (!isAdmin) {
+    if (profile?.permitted_menus && Array.isArray(profile.permitted_menus)) {
+      navItems = navItems.filter(item => profile.permitted_menus?.includes(item.href));
+    }
+  } else {
+    // Add User Control tab if admin
     navItems.push({ href: '/users', label: 'User Control', icon: Lock });
   }
 

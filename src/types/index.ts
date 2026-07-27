@@ -3,6 +3,7 @@ export interface Profile {
   username: string;
   fullname: string;
   role: 'Admin' | 'User';
+  permitted_menus?: string[];
   created_at?: string;
 }
 

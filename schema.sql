@@ -11,6 +11,7 @@ CREATE TABLE public.profiles (
     username VARCHAR(255) UNIQUE NOT NULL,
     fullname VARCHAR(255) NOT NULL,
     role VARCHAR(50) DEFAULT 'User' CHECK (role IN ('Admin', 'User')),
+    permitted_menus TEXT[] DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

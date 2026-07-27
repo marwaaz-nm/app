@@ -35,6 +35,31 @@ export default function UsersPage() {
   const [role, setRole] = useState<'User' | 'Admin'>('User');
   const [error, setError] = useState<string | null>(null);
 
+  // Permitted menus selection
+  const AVAILABLE_MENUS = [
+    { href: '/references', label: 'References (Tixraac)' },
+    { href: '/explorer', label: 'Map Explorer (Maabka)' },
+    { href: '/records', label: 'Survey Records (Sahanka)' },
+    { href: '/transfers', label: 'Wareejin Dhul (Wareejinta)' },
+    { href: '/financials', label: 'Financials (Xisaabta)' }
+  ];
+  
+  const [permittedMenus, setPermittedMenus] = useState<string[]>([
+    '/references',
+    '/explorer',
+    '/records',
+    '/transfers',
+    '/financials'
+  ]);
+
+  const handleMenuToggle = (href: string) => {
+    if (permittedMenus.includes(href)) {
+      setPermittedMenus(permittedMenus.filter(m => m !== href));
+    } else {
+      setPermittedMenus([...permittedMenus, href]);
+    }
+  };
+
   // Guard: Make sure only Admins can access
   useEffect(() => {
     if (profile && profile.role !== 'Admin') {
@@ -78,7 +103,8 @@ export default function UsersPage() {
         fullname,
         username: username.trim().toLowerCase(),
         password,
-        role
+        role,
+        permitted_menus: role === 'Admin' ? null : permittedMenus
       };
 
       const res = await fetch('/api/users', {
@@ -102,6 +128,13 @@ export default function UsersPage() {
       setUsername('');
       setPassword('');
       setRole('User');
+      setPermittedMenus([
+        '/references',
+        '/explorer',
+        '/records',
+        '/transfers',
+        '/financials'
+      ]);
       fetchUsers();
     } catch (err: any) {
       console.error('Add user error:', err);
@@ -202,6 +235,7 @@ export default function UsersPage() {
                   <th className="px-6 py-4">Username</th>
                   <th className="px-6 py-4">Full Name</th>
                   <th className="px-6 py-4">Role</th>
+                  <th className="px-6 py-4">Fasaxan (Menus)</th>
                   <th className="px-6 py-4 text-center">Action</th>
                 </tr>
               </thead>
@@ -222,6 +256,30 @@ export default function UsersPage() {
                       }`}>
                         {u.role}
                       </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {u.role === 'Admin' ? (
+                        <span className="text-[10px] font-bold text-slate-450 italic">Dhammaan (All)</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {(!u.permitted_menus || u.permitted_menus.length === 0) ? (
+                            <span className="text-[10px] font-bold text-rose-500 italic">Ma jiraan (None)</span>
+                          ) : (
+                            u.permitted_menus.map(menu => {
+                              const label = menu === '/references' ? 'References' :
+                                            menu === '/explorer' ? 'Explorer' :
+                                            menu === '/records' ? 'Records' :
+                                            menu === '/transfers' ? 'Transfers' :
+                                            menu === '/financials' ? 'Financials' : menu;
+                              return (
+                                <span key={menu} className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[9px] font-bold text-slate-600">
+                                  {label}
+                                </span>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <button
@@ -320,6 +378,30 @@ export default function UsersPage() {
                   <option value="Admin">Admin (Administrator)</option>
                 </select>
               </div>
+
+              {role === 'User' && (
+                <div className="space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
+                    Menus Loo Fasaxayo (Permitted Menus)
+                  </label>
+                  <div className="grid grid-cols-1 gap-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    {AVAILABLE_MENUS.map((menu) => {
+                      const isChecked = permittedMenus.includes(menu.href);
+                      return (
+                        <label key={menu.href} className="flex items-center gap-2.5 text-xs text-slate-700 font-semibold cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleMenuToggle(menu.href)}
+                            className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4"
+                          />
+                          <span>{menu.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <button
                 type="submit"
