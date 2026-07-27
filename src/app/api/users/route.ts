@@ -32,19 +32,22 @@ const verifyAdmin = async (req: NextRequest) => {
     const { data: { user }, error: userError } = await supabaseAnon.auth.getUser(token);
     if (userError || !user) return { authenticated: false, userId: null, error: 'Unauthorized: Invalid token' };
 
-    // Fetch profile role from database
-    const { data: profile, error: profileError } = await supabaseAnon
+    // Fetch profile role from database using the admin client to bypass RLS policies
+    const supabaseAdmin = getAdminClient();
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
     if (profileError || !profile || profile.role !== 'Admin') {
+      console.error('[verifyAdmin] Forbidden access attempt:', { profileError, profile, userId: user.id });
       return { authenticated: false, userId: user.id, error: 'Forbidden: Admin access required' };
     }
 
     return { authenticated: true, userId: user.id, error: null };
   } catch (err) {
+    console.error('[verifyAdmin] Exception:', err);
     return { authenticated: false, userId: null, error: 'Verification failed' };
   }
 };
