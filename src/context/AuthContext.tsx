@@ -1,12 +1,13 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Profile } from '@/types';
+import type { Session, User } from '@supabase/supabase-js';
 
 interface AuthContextType {
-  user: any | null;
+  user: User | null;
   profile: Profile | null;
   loading: boolean;
   logout: () => Promise<void>;
@@ -20,80 +21,65 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const initialRouteHandledRef = useRef(false);
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    const checkUser = async () => {
-      console.log('[AuthContext] checkUser: Starting session check...');
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        console.log('[AuthContext] checkUser: Session retrieved:', session ? `User ID: ${session.user.id}` : 'No session');
-        if (session) {
-          setUser(session.user);
-          await fetchProfile(session.user.id);
-        } else {
+    let cancelled = false;
+    let activeToken: string | null | undefined;
+
+    const applySession = async (session: Session | null) => {
+      const nextToken = session?.access_token || null;
+      if (activeToken === nextToken) return;
+      activeToken = nextToken;
+
+      if (!session) {
+        if (!cancelled) {
           setUser(null);
           setProfile(null);
+          setLoading(false);
         }
-      } catch (err) {
-        console.error('[AuthContext] checkUser: Error checking session:', err);
-      } finally {
-        console.log('[AuthContext] checkUser: Setting loading to false');
-        setLoading(false);
+        return;
       }
-    };
 
-    checkUser();
-
-    console.log('[AuthContext] Setting up onAuthStateChange listener...');
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[AuthContext] onAuthStateChange event: ${event}`, session ? `User ID: ${session.user.id}` : 'No session');
-      if (session) {
-        setUser(session.user);
-        await fetchProfile(session.user.id);
-      } else {
-        setUser(null);
-        setProfile(null);
-      }
-      setLoading(false);
-    });
-
-    return () => {
-      console.log('[AuthContext] Cleaning up onAuthStateChange listener...');
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const fetchProfile = async (userId: string) => {
-    try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', userId)
+        .eq('id', session.user.id)
         .single();
+      if (cancelled || activeToken !== nextToken) return;
+      if (error) console.error('[Auth] Profile fetch failed:', error.message);
+      setUser(session.user);
+      setProfile(error ? null : data as Profile);
+      setLoading(false);
+    };
 
-      if (error) {
-        console.error('Error fetching profile:', error);
-      } else {
-        setProfile(data as Profile);
-      }
-    } catch (err) {
-      console.error('Exception fetching profile:', err);
-    }
-  };
+    void supabase.auth.getSession().then(({ data }) => applySession(data.session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      void applySession(session);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Auth routing protection
   useEffect(() => {
     if (!loading) {
       const isPublicPath = pathname === '/login';
+      const isInitialRoute = !initialRouteHandledRef.current;
+      initialRouteHandledRef.current = true;
+
       if (!user && !isPublicPath) {
-        router.push('/login');
-      } else if (user && isPublicPath) {
-        router.push('/explorer');
+        router.replace('/login');
+      } else if (user && (isPublicPath || (isInitialRoute && pathname !== '/dashboard'))) {
+        router.replace('/dashboard');
       }
     }
   }, [user, loading, pathname, router]);

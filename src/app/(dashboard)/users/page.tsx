@@ -47,7 +47,19 @@ export default function UsersPage() {
     { href: '/explorer', label: 'Map Explorer (Maabka)' },
     { href: '/records', label: 'Survey Records (Sahanka)' },
     { href: '/transfers', label: 'Wareejin Dhul (Wareejinta)' },
-    { href: '/financials', label: 'Financials (Xisaabta)' }
+    { href: '/financials', label: 'Financials (Xisaabta)' },
+    { href: '/reports', label: 'Reports & Export (Warbixin)' }
+  ];
+  const AVAILABLE_ACTIONS = [
+    { id: 'survey.create', label: 'Abuur survey' },
+    { id: 'survey.edit', label: 'Wax ka beddel + dukumenti' },
+    { id: 'survey.submit', label: 'U dir ansixin' },
+    { id: 'survey.approve', label: 'Ansixi ama diid' },
+    { id: 'survey.archive', label: 'Archive geli' },
+    { id: 'reference.manage', label: 'Maamul references' },
+    { id: 'transfer.create', label: 'Samee wareejin' },
+    { id: 'finance.manage', label: 'Maamul xisaabta' },
+    { id: 'report.view', label: 'Arag reports + exports' },
   ];
   
   const [permittedMenus, setPermittedMenus] = useState<string[]>([
@@ -55,7 +67,11 @@ export default function UsersPage() {
     '/explorer',
     '/records',
     '/transfers',
-    '/financials'
+    '/financials',
+    '/reports'
+  ]);
+  const [permittedActions, setPermittedActions] = useState<string[]>([
+    'survey.create', 'survey.edit', 'survey.submit', 'reference.manage', 'transfer.create', 'finance.manage', 'report.view'
   ]);
 
   const handleMenuToggle = (href: string) => {
@@ -64,6 +80,11 @@ export default function UsersPage() {
     } else {
       setPermittedMenus([...permittedMenus, href]);
     }
+  };
+  const handleActionToggle = (action: string) => {
+    setPermittedActions((current) => current.includes(action)
+      ? current.filter((item) => item !== action)
+      : [...current, action]);
   };
 
   // Guard: Make sure only Admins can access
@@ -110,7 +131,8 @@ export default function UsersPage() {
         username: username.trim().toLowerCase(),
         password,
         role,
-        permitted_menus: role === 'Admin' ? null : permittedMenus
+        permitted_menus: role === 'Admin' ? null : permittedMenus,
+        permitted_actions: role === 'Admin' ? [] : permittedActions,
       };
 
       const res = await fetch('/api/users', {
@@ -139,8 +161,10 @@ export default function UsersPage() {
         '/explorer',
         '/records',
         '/transfers',
-        '/financials'
+        '/financials',
+        '/reports'
       ]);
+      setPermittedActions(['survey.create', 'survey.edit', 'survey.submit', 'reference.manage', 'transfer.create', 'finance.manage', 'report.view']);
       fetchUsers();
     } catch (err: any) {
       console.error('Add user error:', err);
@@ -276,7 +300,8 @@ export default function UsersPage() {
                                             menu === '/explorer' ? 'Explorer' :
                                             menu === '/records' ? 'Records' :
                                             menu === '/transfers' ? 'Transfers' :
-                                            menu === '/financials' ? 'Financials' : menu;
+                                            menu === '/financials' ? 'Financials' :
+                                            menu === '/reports' ? 'Reports' : menu;
                               return (
                                 <span key={menu} className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[9px] font-bold text-slate-600">
                                   {label}
@@ -428,6 +453,17 @@ export default function UsersPage() {
                           </div>
                         </button>
                       );
+                    })}
+                  </div>
+                  <label className="block pt-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Actions Loo Fasaxayo
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 rounded-3xl border border-slate-200/60 bg-slate-50/50 p-4">
+                    {AVAILABLE_ACTIONS.map((action) => {
+                      const checked = permittedActions.includes(action.id);
+                      return <button key={action.id} type="button" onClick={() => handleActionToggle(action.id)} className={`rounded-xl border px-3 py-2.5 text-left text-[10px] font-black transition-colors ${checked ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500'}`}>
+                        <span className={`mr-2 inline-flex h-4 w-4 items-center justify-center rounded text-[9px] ${checked ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{checked ? '✓' : '–'}</span>{action.label}
+                      </button>;
                     })}
                   </div>
                 </div>

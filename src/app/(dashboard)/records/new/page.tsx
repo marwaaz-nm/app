@@ -4,8 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/context/AuthContext';
-import { ArrowLeft, Check, AlertCircle, Loader2, Compass, Ruler, User, ArrowUp, ArrowDown, ArrowRight, X } from 'lucide-react';
+import { ArrowLeft, Check, AlertCircle, Loader2, Compass, Ruler, User, ArrowUp, ArrowDown, ArrowRight, X, MapPinned } from 'lucide-react';
 import Link from 'next/link';
 
 // Dynamically import MiniMap (SSR false)
@@ -23,8 +22,6 @@ const MiniMap = dynamic(() => import('@/components/MiniMap'), {
 
 export default function NewRecordPage() {
   const router = useRouter();
-  const { user } = useAuth();
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +43,61 @@ export default function NewRecordPage() {
   const [gVal, setGVal] = useState('');
   const [gNeighbor, setGNeighbor] = useState('');
 
+  const boundaryDirections = [
+    {
+      key: 'north',
+      somali: 'Waqooyi',
+      english: 'North',
+      compass: 'N',
+      icon: ArrowUp,
+      value: wVal,
+      setValue: setWVal,
+      neighbor: wNeighbor,
+      setNeighbor: setWNeighbor,
+      accent: 'from-blue-500 to-cyan-400',
+      iconStyle: 'bg-blue-50 text-blue-600',
+    },
+    {
+      key: 'east',
+      somali: 'Bari',
+      english: 'East',
+      compass: 'E',
+      icon: ArrowRight,
+      value: bVal,
+      setValue: setBVal,
+      neighbor: bNeighbor,
+      setNeighbor: setBNeighbor,
+      accent: 'from-violet-500 to-blue-500',
+      iconStyle: 'bg-violet-50 text-violet-600',
+    },
+    {
+      key: 'south',
+      somali: 'Koonfur',
+      english: 'South',
+      compass: 'S',
+      icon: ArrowDown,
+      value: kVal,
+      setValue: setKVal,
+      neighbor: kNeighbor,
+      setNeighbor: setKNeighbor,
+      accent: 'from-amber-400 to-orange-500',
+      iconStyle: 'bg-amber-50 text-amber-600',
+    },
+    {
+      key: 'west',
+      somali: 'Galbeed',
+      english: 'West',
+      compass: 'W',
+      icon: ArrowLeft,
+      value: gVal,
+      setValue: setGVal,
+      neighbor: gNeighbor,
+      setNeighbor: setGNeighbor,
+      accent: 'from-emerald-400 to-teal-500',
+      iconStyle: 'bg-emerald-50 text-emerald-600',
+    },
+  ];
+
   // Map & Polygon Coordinates
   const [gpsLocation, setGpsLocation] = useState('');
   const [polygonBoundary, setPolygonBoundary] = useState('');
@@ -63,19 +115,7 @@ export default function NewRecordPage() {
     }
 
     try {
-      // 1. Fetch next serial number (max + 1)
-      const { data: maxData, error: maxError } = await supabase
-        .from('surveys')
-        .select('serial_no')
-        .order('serial_no', { ascending: false })
-        .limit(1);
-
-      if (maxError) throw maxError;
-      const nextSerialNo = maxData && maxData.length > 0 ? maxData[0].serial_no + 1 : 1;
-
-      // 3. Prepare payload for Supabase insertion
       const payload = {
-        serial_no: nextSerialNo,
         owner_name: ownerName,
         neighborhood,
         branch,
@@ -94,20 +134,31 @@ export default function NewRecordPage() {
         polygon_boundary: polygonBoundary,
         sketch_area: sketchDetails.split(' | ')[0]?.replace(/Area:|Area/gi, '').trim() || null,
         sketch_dimensions: sketchDetails || null,
-        created_by: user?.id
       };
 
-      const { error: insertError } = await supabase
-        .from('surveys')
-        .insert([payload]);
-
-      if (insertError) throw insertError;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Fadlan dib u gal si aad sahanka u kaydiso.');
+      const response = await fetch('/api/surveys', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        const overlapMessage = Array.isArray(result.overlaps) && result.overlaps.length
+          ? ` Wuxuu ku dul dhacay: ${result.overlaps.map((item: { serial_no: number; owner_name: string; overlap_area_m2: number }) => `#${item.serial_no} ${item.owner_name} (${Number(item.overlap_area_m2).toFixed(1)} m²)`).join(', ')}.`
+          : '';
+        throw new Error(`${result.error || 'Kaydinta waa fashilantay.'}${overlapMessage}`);
+      }
 
       router.push('/records');
       router.refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error saving survey record:', err);
-      setError(err.message || 'Cillad ayaa dhacday xilliga kaydinta sahnaka.');
+      setError(err instanceof Error ? err.message : 'Cillad ayaa dhacday xilliga kaydinta sahnaka.');
     } finally {
       setLoading(false);
     }
@@ -251,200 +302,139 @@ export default function NewRecordPage() {
         </div>
 
         {/* Boundary Card */}
-        <div className="bg-transparent md:bg-white border-0 md:border border-slate-200/60 rounded-none md:rounded-3xl p-0 md:p-8 space-y-6 shadow-none md:shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
-          <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-600 text-[11px] font-black border border-teal-200/50">2</span>
-            <div>
-              <h4 className="text-xs font-black uppercase tracking-widest text-slate-700">
-                SOOHDIMAHA DHULKA (Boundaries)
-              </h4>
-              <p className="text-[10px] text-slate-400 mt-0.5 font-semibold">Geli cabirada iyo magacyada deriska ee afarta jiho.</p>
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-col gap-4 border-b border-slate-100 bg-gradient-to-r from-white via-blue-50/50 to-white p-5 sm:flex-row sm:items-center sm:justify-between md:px-6">
+            <div className="flex items-center gap-3.5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)]">
+                <Compass className="h-5 w-5" />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-black uppercase tracking-[0.18em] text-teal-600">Step 02</span>
+                  <span className="h-1 w-1 rounded-full bg-slate-300" />
+                  <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">4 directions</span>
+                </div>
+                <h4 className="mt-1 text-sm font-black tracking-[-0.02em] text-slate-900">
+                  Soohdimaha Dhulka
+                </h4>
+                <p className="mt-0.5 text-[10px] font-medium text-slate-500">
+                  Geli cabbirka iyo magaca deriska ee jiho kasta.
+                </p>
+              </div>
+            </div>
+            <div className="hidden items-center gap-1 rounded-xl border border-blue-100 bg-white p-1.5 shadow-sm sm:flex">
+              {['N', 'E', 'S', 'W'].map((direction) => (
+                <span key={direction} className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-50 text-[9px] font-black text-slate-500">
+                  {direction}
+                </span>
+              ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:bg-slate-50/40 p-0 md:p-6 md:rounded-3xl border-0 md:border border-slate-200/60 md:shadow-[inset_0_1px_4px_rgba(0,0,0,0.02)]">
-            {/* Waqooyi (North) */}
-            <div className="p-0 md:p-5 bg-transparent md:bg-white border-0 md:border border-slate-200/80 md:hover:border-teal-500/30 md:hover:shadow-md rounded-none md:rounded-2xl space-y-4 transition-all duration-300 relative group border-b border-slate-200/60 pb-6 md:pb-0 last:border-0 last:pb-0">
-              <div className="hidden md:block absolute top-0 left-1/2 -translate-x-1/2 h-[3px] w-12 rounded-b-full bg-teal-500/20 group-hover:bg-teal-500 transition-all duration-300" />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
-                    <ArrowUp className="h-3.5 w-3.5" />
+          <div className="grid grid-cols-1 gap-3 p-4 sm:p-5 md:grid-cols-2 md:gap-4 md:p-6">
+            {boundaryDirections.map((direction) => {
+              const DirectionIcon = direction.icon;
+              return (
+                <fieldset
+                  key={direction.key}
+                  className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_3px_14px_rgba(15,23,42,0.035)] transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_10px_26px_rgba(15,23,42,0.07)]"
+                >
+                  <span className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${direction.accent}`} />
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${direction.iconStyle}`}>
+                        <DirectionIcon className="h-4 w-4" strokeWidth={2.4} />
+                      </span>
+                      <legend className="min-w-0">
+                        <span className="block truncate text-[11px] font-black uppercase tracking-[0.08em] text-slate-800">
+                          {direction.somali}
+                        </span>
+                        <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                          {direction.english} boundary
+                        </span>
+                      </legend>
+                    </div>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-[10px] font-black text-white shadow-sm">
+                      {direction.compass}
+                    </span>
                   </div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700">WAQOOYI (North)</label>
-                </div>
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[9px] font-black shadow-sm">N</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-slate-400">
-                    <Ruler className="h-3.5 w-3.5" />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Cabirka"
-                    value={wVal}
-                    onChange={(e) => setWVal(e.target.value)}
-                    className="w-full rounded-xl bg-slate-50/50 border border-slate-200/80 pl-9 pr-8 py-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
-                  />
-                  <span className="absolute right-3 text-[10px] font-bold text-slate-400 select-none">m</span>
-                </div>
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-slate-400">
-                    <User className="h-3.5 w-3.5" />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Deriska"
-                    value={wNeighbor}
-                    onChange={(e) => setWNeighbor(e.target.value)}
-                    className="w-full rounded-xl bg-slate-50/50 border border-slate-200/80 pl-9 pr-3 py-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
-                  />
-                </div>
-              </div>
-            </div>
 
-            {/* Bari (East) */}
-            <div className="p-0 md:p-5 bg-transparent md:bg-white border-0 md:border border-slate-200/80 md:hover:border-teal-500/30 md:hover:shadow-md rounded-none md:rounded-2xl space-y-4 transition-all duration-300 relative group border-b border-slate-200/60 pb-6 md:pb-0 last:border-0 last:pb-0">
-              <div className="hidden md:block absolute top-0 left-1/2 -translate-x-1/2 h-[3px] w-12 rounded-b-full bg-teal-500/20 group-hover:bg-teal-500 transition-all duration-300" />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700">BARI (East)</label>
-                </div>
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[9px] font-black shadow-sm">E</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-slate-400">
-                    <Ruler className="h-3.5 w-3.5" />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Cabirka"
-                    value={bVal}
-                    onChange={(e) => setBVal(e.target.value)}
-                    className="w-full rounded-xl bg-slate-50/50 border border-slate-200/80 pl-9 pr-8 py-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
-                  />
-                  <span className="absolute right-3 text-[10px] font-bold text-slate-400 select-none">m</span>
-                </div>
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-slate-400">
-                    <User className="h-3.5 w-3.5" />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Deriska"
-                    value={bNeighbor}
-                    onChange={(e) => setBNeighbor(e.target.value)}
-                    className="w-full rounded-xl bg-slate-50/50 border border-slate-200/80 pl-9 pr-3 py-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
-                  />
-                </div>
-              </div>
-            </div>
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                        Cabbirka
+                      </span>
+                      <span className="relative flex items-center">
+                        <Ruler className="pointer-events-none absolute left-4 h-4 w-4 text-slate-400" />
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0.00"
+                          value={direction.value}
+                          onChange={(event) => direction.setValue(event.target.value)}
+                          className="w-full rounded-2xl border border-slate-200/80 bg-slate-50/60 py-3.5 pl-11 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-teal-500/10 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
+                        />
+                        <span className="pointer-events-none absolute right-4 text-[10px] font-bold text-slate-400">
+                          m
+                        </span>
+                      </span>
+                    </label>
 
-            {/* Koonfur (South) */}
-            <div className="p-0 md:p-5 bg-transparent md:bg-white border-0 md:border border-slate-200/80 md:hover:border-teal-500/30 md:hover:shadow-md rounded-none md:rounded-2xl space-y-4 transition-all duration-300 relative group border-b border-slate-200/60 pb-6 md:pb-0 last:border-0 last:pb-0">
-              <div className="hidden md:block absolute top-0 left-1/2 -translate-x-1/2 h-[3px] w-12 rounded-b-full bg-teal-500/20 group-hover:bg-teal-500 transition-all duration-300" />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
-                    <ArrowDown className="h-3.5 w-3.5" />
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                        Magaca Deriska
+                      </span>
+                      <span className="relative flex items-center">
+                        <User className="pointer-events-none absolute left-4 h-4 w-4 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Geli magaca deriska"
+                          value={direction.neighbor}
+                          onChange={(event) => direction.setNeighbor(event.target.value)}
+                          className="w-full rounded-2xl border border-slate-200/80 bg-slate-50/60 py-3.5 pl-11 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-teal-500/10 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
+                        />
+                      </span>
+                    </label>
                   </div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700">KOONFUR (South)</label>
-                </div>
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[9px] font-black shadow-sm">S</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-slate-400">
-                    <Ruler className="h-3.5 w-3.5" />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Cabirka"
-                    value={kVal}
-                    onChange={(e) => setKVal(e.target.value)}
-                    className="w-full rounded-xl bg-slate-50/50 border border-slate-200/80 pl-9 pr-8 py-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
-                  />
-                  <span className="absolute right-3 text-[10px] font-bold text-slate-400 select-none">m</span>
-                </div>
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-slate-400">
-                    <User className="h-3.5 w-3.5" />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Deriska"
-                    value={kNeighbor}
-                    onChange={(e) => setKNeighbor(e.target.value)}
-                    className="w-full rounded-xl bg-slate-50/50 border border-slate-200/80 pl-9 pr-3 py-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Galbeed (West) */}
-            <div className="p-0 md:p-5 bg-transparent md:bg-white border-0 md:border border-slate-200/80 md:hover:border-teal-500/30 md:hover:shadow-md rounded-none md:rounded-2xl space-y-4 transition-all duration-300 relative group border-b border-slate-200/60 pb-6 md:pb-0 last:border-0 last:pb-0">
-              <div className="hidden md:block absolute top-0 left-1/2 -translate-x-1/2 h-[3px] w-12 rounded-b-full bg-teal-500/20 group-hover:bg-teal-500 transition-all duration-300" />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                  </div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700">GALBEED (West)</label>
-                </div>
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[9px] font-black shadow-sm">W</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-slate-400">
-                    <Ruler className="h-3.5 w-3.5" />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Cabirka"
-                    value={gVal}
-                    onChange={(e) => setGVal(e.target.value)}
-                    className="w-full rounded-xl bg-slate-50/50 border border-slate-200/80 pl-9 pr-8 py-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
-                  />
-                  <span className="absolute right-3 text-[10px] font-bold text-slate-400 select-none">m</span>
-                </div>
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-slate-400">
-                    <User className="h-3.5 w-3.5" />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Deriska"
-                    value={gNeighbor}
-                    onChange={(e) => setGNeighbor(e.target.value)}
-                    className="w-full rounded-xl bg-slate-50/50 border border-slate-200/80 pl-9 pr-3 py-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
-                  />
-                </div>
-              </div>
-            </div>
+                </fieldset>
+              );
+            })}
           </div>
         </div>
 
         {/* Map & Coordinates */}
-        <div className="bg-transparent md:bg-white border-0 md:border border-slate-200/60 rounded-none md:rounded-3xl p-0 md:p-8 space-y-6 shadow-none md:shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
-          <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-600 text-[11px] font-black border border-teal-200/50">3</span>
-            <h4 className="text-xs font-black uppercase tracking-widest text-slate-700">
-              MAABKA SAHANKA (Satellite GIS & Sketch)
-            </h4>
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-col gap-4 border-b border-slate-100 bg-gradient-to-r from-white via-blue-50/50 to-white p-5 sm:flex-row sm:items-center sm:justify-between md:px-6">
+            <div className="flex items-center gap-3.5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)]">
+                <MapPinned className="h-5 w-5" />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-black uppercase tracking-[0.18em] text-teal-600">Step 03</span>
+                  <span className="h-1 w-1 rounded-full bg-slate-300" />
+                  <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Satellite GIS</span>
+                </div>
+                <h4 className="mt-1 text-sm font-black tracking-[-0.02em] text-slate-900">Maabka Sahanka</h4>
+                <p className="mt-0.5 text-[10px] font-medium text-slate-500">
+                  Dooro goobta saxda ah, kadibna ku sawir soohdinta dhulka.
+                </p>
+              </div>
+            </div>
+            <span className="hidden rounded-xl border border-blue-100 bg-white px-3 py-2 text-[9px] font-extrabold uppercase tracking-[0.13em] text-teal-700 shadow-sm sm:block">
+              Location &amp; Boundary
+            </span>
           </div>
 
-          <MiniMap
-            gpsValue={gpsLocation}
-            onGpsChange={setGpsLocation}
-            polygonValue={polygonBoundary}
-            onPolygonChange={setPolygonBoundary}
-            onSketchDetailsChange={setSketchDetails}
-          />
+          <div className="p-4 sm:p-5 md:p-6">
+            <MiniMap
+              gpsValue={gpsLocation}
+              onGpsChange={setGpsLocation}
+              polygonValue={polygonBoundary}
+              onPolygonChange={setPolygonBoundary}
+              onSketchDetailsChange={setSketchDetails}
+            />
+          </div>
         </div>
 
         {/* Action buttons */}

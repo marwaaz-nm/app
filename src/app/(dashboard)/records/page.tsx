@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Survey } from '@/types';
 import DetailsModal from '@/components/DetailsModal';
+import SurveyManagementModal from '@/components/SurveyManagementModal';
 import { 
   Plus, 
   Search, 
@@ -14,6 +15,7 @@ import {
   Loader2, 
   Sliders,
   Layers,
+  Settings2,
   X
 } from 'lucide-react';
 
@@ -38,6 +40,15 @@ export default function RecordsPage() {
   const [searchG, setSearchG] = useState('');
   
   const [selectedRecord, setSelectedRecord] = useState<Survey | null>(null);
+  const [managedRecord, setManagedRecord] = useState<Survey | null>(null);
+
+  const statusClass = (status: Survey['status']) => ({
+    Draft: 'bg-slate-100 text-slate-600',
+    'Pending Review': 'bg-amber-50 text-amber-700',
+    Approved: 'bg-emerald-50 text-emerald-700',
+    Rejected: 'bg-rose-50 text-rose-700',
+    Archived: 'bg-violet-50 text-violet-700',
+  }[status || 'Draft']);
 
   // Fetch all records from Supabase
   const fetchRecords = async () => {
@@ -198,7 +209,7 @@ export default function RecordsPage() {
               onClick={() => setShowAdvanceFilters(!showAdvanceFilters)}
               className={`flex items-center gap-1.5 border rounded-xl md:rounded-2xl px-3 md:px-4 py-2.5 md:py-3.5 text-xs font-bold transition-all cursor-pointer ${
                 showAdvanceFilters
-                  ? 'bg-teal-50/80 border-teal-200/60 text-teal-600 shadow-[inset_0_0_0_1px_rgba(45,138,112,0.1)]'
+                  ? 'bg-teal-50/80 border-teal-200/60 text-teal-600 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.1)]'
                   : 'bg-slate-50/60 border-slate-200/80 text-slate-500 hover:text-slate-800 hover:bg-slate-50'
               }`}
             >
@@ -296,6 +307,8 @@ export default function RecordsPage() {
                     <th className="px-6 py-4">Xaafad</th>
                     <th className="px-6 py-4">Soohdimaha</th>
                     <th className="px-6 py-4">Location</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4 text-right">Maamul</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -332,6 +345,14 @@ export default function RecordsPage() {
                           {record.gps_location || '0.0, 0.0'}
                         </code>
                       </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[9px] font-black ${statusClass(record.status)}`}>{record.status || 'Draft'}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button onClick={(event) => { event.stopPropagation(); setManagedRecord(record); }} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
+                          <Settings2 className="h-3.5 w-3.5" /> Maamul
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -361,9 +382,10 @@ export default function RecordsPage() {
                       <span className="mx-1">•</span>
                       <span className="font-extrabold text-slate-600">{record.neighborhood}</span>
                     </p>
+                    <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[8px] font-black ${statusClass(record.status)}`}>{record.status || 'Draft'}</span>
                   </div>
                 </div>
-                <ChevronRight className="h-5 w-5 text-slate-400 shrink-0 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all" />
+                <button onClick={(event) => { event.stopPropagation(); setManagedRecord(record); }} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-blue-50 hover:text-blue-700" aria-label="Maamul survey"><Settings2 className="h-4 w-4" /></button>
               </div>
             ))}
           </div>
@@ -375,6 +397,14 @@ export default function RecordsPage() {
         <DetailsModal 
           record={selectedRecord} 
           onClose={() => setSelectedRecord(null)} 
+        />
+      )}
+
+      {managedRecord && (
+        <SurveyManagementModal
+          record={managedRecord}
+          onClose={() => setManagedRecord(null)}
+          onChanged={fetchRecords}
         />
       )}
 

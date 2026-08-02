@@ -36,3 +36,14 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
 # GeoSurvey-Pro
+
+## Survey governance database upgrade
+
+Before using survey editing, approval, version history, attachments, and overlap
+validation, run the following migration once in the Supabase SQL Editor:
+
+1. `supabase/migrations/20260802_survey_governance.sql`
+2. `supabase/migrations/20260802_workspace_intelligence.sql`
+
+The app server also requires `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`. Never
+expose that key through a `NEXT_PUBLIC_` environment variable.

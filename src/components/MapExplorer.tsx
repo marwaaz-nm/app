@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Survey } from '@/types';
-import { Eye, EyeOff, MapPin, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import L from 'leaflet';
 
 interface MapExplorerProps {
@@ -19,6 +19,14 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
+
+  const updateLabelsVisibility = useCallback((visible: boolean) => {
+    const tooltips = document.querySelectorAll('.map-owner-label');
+    tooltips.forEach((el) => {
+      const htmlEl = el as HTMLElement;
+      htmlEl.style.display = visible ? 'block' : 'none';
+    });
+  }, []);
 
   // Fetch surveys on mount
   useEffect(() => {
@@ -162,15 +170,7 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
 
     updateLabelsVisibility(showLabels);
 
-  }, [surveys, loading]);
-
-  const updateLabelsVisibility = (visible: boolean) => {
-    const tooltips = document.querySelectorAll('.map-owner-label');
-    tooltips.forEach((el) => {
-      const htmlEl = el as HTMLElement;
-      htmlEl.style.display = visible ? 'block' : 'none';
-    });
-  };
+  }, [surveys, loading, onViewDetails, showLabels, updateLabelsVisibility]);
 
   const handleToggleLabels = () => {
     const newState = !showLabels;
@@ -180,36 +180,52 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
 
   return (
     <div className="relative w-full h-full flex flex-col text-slate-800">
-      {/* Top Header controls */}
-      <div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-center pointer-events-none">
-        <div className="bg-slate-950/90 backdrop-blur-md px-5 py-3 rounded-2xl border border-slate-800 shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex items-center gap-3 pointer-events-auto">
-          <MapPin className="h-5 w-5 text-teal-400 animate-pulse" />
-          <div>
-            <h4 className="font-extrabold text-sm text-slate-100">Map Explorer</h4>
-            <p className="text-[10px] text-slate-400 font-semibold">Sahanka dhulka iyo cabiraada maabka.</p>
-          </div>
-        </div>
-
-        <div className="bg-slate-950/90 backdrop-blur-md p-1.5 rounded-2xl border border-slate-800 shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex items-center pointer-events-auto">
-          <button
-            onClick={handleToggleLabels}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              showLabels
-                ? 'bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-[0_2px_10px_rgba(45,138,112,0.25)] hover:scale-105 active:scale-95'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+      {/* Parcel label control */}
+      <div className="pointer-events-none absolute right-4 top-4 z-10">
+        <button
+          type="button"
+          onClick={handleToggleLabels}
+          aria-pressed={showLabels}
+          aria-label={showLabels ? 'Hide parcel owner names' : 'Show parcel owner names'}
+          className="pointer-events-auto group flex items-center gap-2.5 rounded-2xl border border-slate-200/90 bg-white/95 p-2 pr-3 text-left shadow-[0_10px_30px_rgba(15,23,42,0.16)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-[0_14px_34px_rgba(15,23,42,0.2)] active:translate-y-0"
+        >
+          <span
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
+              showLabels ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'
             }`}
           >
-            {showLabels ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            <span>Show Names</span>
-          </button>
-        </div>
+            {showLabels ? <Eye className="h-[17px] w-[17px]" /> : <EyeOff className="h-[17px] w-[17px]" />}
+          </span>
+
+          <span className="hidden min-w-[74px] sm:block">
+            <span className="block text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+              Parcel labels
+            </span>
+            <span className="mt-0.5 block text-[11px] font-extrabold text-slate-800">
+              {showLabels ? 'Names visible' : 'Names hidden'}
+            </span>
+          </span>
+
+          <span
+            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+              showLabels ? 'bg-teal-600' : 'bg-slate-200'
+            }`}
+            aria-hidden="true"
+          >
+            <span
+              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                showLabels ? 'translate-x-[18px]' : 'translate-x-0.5'
+              }`}
+            />
+          </span>
+        </button>
       </div>
 
       {loading && (
-        <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-20">
-          <div className="flex flex-col items-center gap-2.5 bg-slate-950/95 px-6 py-4 rounded-2xl border border-slate-800 shadow-2xl">
-            <Loader2 className="h-6 w-6 animate-spin text-teal-400" />
-            <span className="text-xs text-slate-200 font-semibold">Raryaa maabka...</span>
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/55 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-6 py-4 shadow-[0_16px_40px_rgba(15,23,42,0.14)]">
+            <Loader2 className="h-6 w-6 animate-spin text-teal-600" />
+            <span className="text-xs font-semibold text-slate-600">Raryaa maabka...</span>
           </div>
         </div>
       )}

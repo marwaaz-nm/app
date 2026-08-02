@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import Sidebar from '@/components/Sidebar';
+import WorkspaceHeader from '@/components/WorkspaceHeader';
 import { usePathname, useRouter } from 'next/navigation';
 
 export default function DashboardLayout({
@@ -17,14 +18,14 @@ export default function DashboardLayout({
   // Route protection based on permitted_menus
   useEffect(() => {
     if (!loading && user && profile && profile.role !== 'Admin') {
-      const standardRoutes = ['/references', '/explorer', '/records', '/transfers', '/financials'];
+      const standardRoutes = ['/references', '/explorer', '/records', '/transfers', '/financials', '/reports'];
       const currentBaseRoute = standardRoutes.find(route => pathname.startsWith(route));
       
       if (currentBaseRoute && profile.permitted_menus && Array.isArray(profile.permitted_menus)) {
-        if (!profile.permitted_menus.includes(currentBaseRoute)) {
-          // Redirect to the first permitted menu, or explorer if none
-          const firstPermitted = profile.permitted_menus[0] || '/explorer';
-          router.push(firstPermitted);
+        const missingMenu = !profile.permitted_menus.includes(currentBaseRoute);
+        const missingReportAction = currentBaseRoute === '/reports' && !profile.permitted_actions?.includes('report.view');
+        if (missingMenu || missingReportAction) {
+          router.push('/dashboard');
         }
       }
     }
@@ -54,7 +55,8 @@ export default function DashboardLayout({
       <Sidebar />
 
       {/* Main Content panel */}
-      <main className="flex-1 flex flex-col min-w-0 h-full relative overflow-y-auto pb-16 md:pb-0 bg-slate-50">
+      <main className="flex-1 flex flex-col min-w-0 h-full relative overflow-y-auto pb-24 md:pb-0 bg-slate-50">
+        <WorkspaceHeader />
         <div className="w-full min-h-full">
           {children}
         </div>

@@ -3,8 +3,8 @@
 @import "leaflet-draw/dist/leaflet.draw.css";
 
 :root {
-  --background: #f4f7f6;
-  --foreground: #0f172a;
+  --background: #f6f8fc;
+  --foreground: #172033;
 }
 
 @theme {
@@ -12,37 +12,37 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-plus-jakarta-sans);
 
-  /* Primary Accent: Premium Earth Forest/Eucalyptus Green (replaces Teal scale) */
-  --color-teal-50: #f0f7f4;
-  --color-teal-100: #dcefe7;
-  --color-teal-200: #bce0d2;
-  --color-teal-300: #90c7b4;
-  --color-teal-400: #60a793;
-  --color-teal-500: #2d8a70;
-  --color-teal-600: #1f6b56;
-  --color-teal-700: #185444;
-  --color-teal-800: #144437;
-  --color-teal-900: #10372d;
-  --color-teal-950: #081d18;
+  /* Primary Accent: Survey Blue. The teal token names are retained for compatibility. */
+  --color-teal-50: #eff6ff;
+  --color-teal-100: #dbeafe;
+  --color-teal-200: #bfdbfe;
+  --color-teal-300: #93c5fd;
+  --color-teal-400: #60a5fa;
+  --color-teal-500: #3b82f6;
+  --color-teal-600: #2563eb;
+  --color-teal-700: #1d4ed8;
+  --color-teal-800: #1e40af;
+  --color-teal-900: #1e3a8a;
+  --color-teal-950: #172554;
 
-  /* Neutrals: Cool Eucalyptus Sage Slate (replaces Slate scale) */
-  --color-slate-50: #f4f7f6;
-  --color-slate-100: #e5ebe9;
-  --color-slate-200: #d0dad7;
-  --color-slate-300: #b0beb9;
-  --color-slate-400: #889a94;
-  --color-slate-500: #657973;
-  --color-slate-600: #4f5f5a;
-  --color-slate-700: #3f4c48;
-  --color-slate-800: #2c3432;
-  --color-slate-900: #1a201e;
-  --color-slate-950: #0a0d0c;
+  /* Neutrals: clean cool slate for a bright, professional interface. */
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  background-image: radial-gradient(rgba(101, 121, 115, 0.08) 1.5px, transparent 1.5px);
+  background-image: radial-gradient(rgba(59, 130, 246, 0.07) 1.5px, transparent 1.5px);
   background-size: 24px 24px;
 }
 
@@ -57,12 +57,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(136, 154, 148, 0.3);
+  background: rgba(100, 116, 139, 0.3);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(136, 154, 148, 0.5);
+  background: rgba(100, 116, 139, 0.5);
 }
 
 /* Custom Leaflet Map styling overrides to match theme */
@@ -70,9 +70,14 @@ body {
   font-family: inherit;
 }
 
+.details-sketch-map,
+.details-sketch-map.leaflet-container {
+  background-color: #ffffff !important;
+}
+
 .map-owner-label {
-  background: rgba(10, 13, 12, 0.95) !important;
-  border: 1px solid rgba(45, 138, 112, 0.4) !important;
+  background: rgba(15, 23, 42, 0.95) !important;
+  border: 1px solid rgba(59, 130, 246, 0.45) !important;
   color: #ffffff !important;
   font-weight: 800 !important;
   font-size: 11px !important;
@@ -88,22 +93,71 @@ body {
   display: none !important;
 }
 
+.map-segment-measure-marker {
+  background: transparent !important;
+  border: 0 !important;
+  pointer-events: none !important;
+}
+
+.map-segment-measure-label {
+  display: flex;
+  min-width: 50px;
+  height: 21px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(37, 99, 235, 0.28);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #1e3a8a;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(3px);
+}
+
+.map-segment-measure-label.is-live {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.9);
+  color: #ffffff;
+  box-shadow: 0 5px 14px rgba(37, 99, 235, 0.24);
+}
+
+.leaflet-draw-tooltip {
+  border: 1px solid rgba(37, 99, 235, 0.28) !important;
+  border-radius: 10px !important;
+  background: rgba(15, 23, 42, 0.92) !important;
+  color: #ffffff !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.24) !important;
+}
+
+.leaflet-draw-tooltip:before {
+  border-right-color: rgba(15, 23, 42, 0.92) !important;
+}
+
+.leaflet-draw-tooltip-subtext {
+  color: #bfdbfe !important;
+  font-weight: 800 !important;
+}
+
 .modal-area-box {
   background: rgba(255, 255, 255, 0.95) !important;
-  border: 1.5px solid #0a0d0c !important;
+  border: 1.5px solid #0f172a !important;
   padding: 6px 12px !important;
   font-weight: 800 !important;
   font-size: 13px !important;
-  color: #0a0d0c !important;
+  color: #0f172a !important;
   border-radius: 10px;
   text-align: center;
-  box-shadow: 0 4px 12px rgba(10, 13, 12, 0.08);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
   line-height: 1.2;
 }
 
 .editable-field {
   background: white !important;
-  color: #0a0d0c !important;
+  color: #0f172a !important;
   font-weight: 800;
   white-space: nowrap;
   text-align: center;
@@ -114,28 +168,60 @@ body {
 }
 
 .sketch-area-label .editable-field {
-  border: 1.5px solid #0a0d0c !important;
+  border: 1.5px solid #0f172a !important;
   padding: 6px 14px !important;
   font-size: 13px !important;
 }
 
 .sketch-dist-label .editable-field {
-  border: 1px solid #3b82f6 !important;
-  padding: 3px 8px !important;
+  border: 1px solid #bfdbfe !important;
+  padding: 4px 8px !important;
   font-size: 10px !important;
+  color: #1d4ed8 !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+}
+
+.sketch-map-canvas,
+.sketch-map-canvas.leaflet-container {
+  background: #ffffff !important;
+}
+
+.sketch-map-canvas .leaflet-control-zoom {
+  overflow: hidden;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1) !important;
+}
+
+.sketch-map-canvas .leaflet-control-zoom a {
+  display: grid;
+  width: 36px !important;
+  height: 36px !important;
+  place-items: center;
+  border-color: #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+.sketch-map-canvas .leaflet-control-zoom a:hover {
+  background: #eff6ff !important;
+  color: #2563eb !important;
 }
 
 .editable-field:hover {
-  border-color: #0a0d0c !important;
-  background: #f4f7f6 !important;
+  border-color: #0f172a !important;
+  background: #f8fafc !important;
   transform: translateY(-1px);
 }
 
 .editable-field:focus {
   outline: none !important;
-  border-color: #2d8a70 !important;
-  background: #f0f7f4 !important;
-  box-shadow: 0 0 0 4px rgba(45, 138, 112, 0.15) !important;
+  border-color: #3b82f6 !important;
+  background: #eff6ff !important;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15) !important;
 }
 
 /* Premium card and container custom stylings */

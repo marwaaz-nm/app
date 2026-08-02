@@ -4,6 +4,7 @@ export interface Profile {
   fullname: string;
   role: 'Admin' | 'User';
   permitted_menus?: string[];
+  permitted_actions?: string[];
   created_at?: string;
 }
 
@@ -30,6 +31,47 @@ export interface Survey {
   sketch_dimensions?: string;
   created_at?: string;
   created_by?: string;
+  status?: SurveyStatus;
+  version?: number;
+  updated_at?: string;
+  updated_by?: string;
+  approved_at?: string;
+  approved_by?: string;
+  rejection_reason?: string;
+}
+
+export type SurveyStatus = 'Draft' | 'Pending Review' | 'Approved' | 'Rejected' | 'Archived';
+
+export interface SurveyRevision {
+  id: number;
+  survey_id: number;
+  version: number;
+  action: string;
+  notes?: string;
+  survey_snapshot: Partial<Survey>;
+  changed_fields?: Record<string, unknown>;
+  changed_by?: string;
+  created_at: string;
+}
+
+export interface SurveyDocument {
+  id: number;
+  survey_id: number;
+  name: string;
+  category: string;
+  storage_path: string;
+  mime_type?: string;
+  size_bytes: number;
+  uploaded_by?: string;
+  created_at: string;
+  signed_url?: string;
+}
+
+export interface SurveyOverlap {
+  id: number;
+  serial_no: number;
+  owner_name: string;
+  overlap_area_m2: number;
 }
 
 export interface Reference {

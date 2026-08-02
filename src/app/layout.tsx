@@ -7,6 +7,8 @@ import { ModalProvider } from "@/context/ModalContext";
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta-sans",
   subsets: ["latin"],
+  preload: false,
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -24,7 +26,7 @@ export default function RootLayout({
       lang="so"
       className={`${plusJakartaSans.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans bg-slate-50 text-slate-900">
+      <body className={`${plusJakartaSans.className} min-h-full flex flex-col bg-slate-50 text-slate-900`}>
         <AuthProvider>
           <ModalProvider>
             {children}

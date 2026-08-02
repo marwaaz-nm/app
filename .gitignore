@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local Codex/dev artifacts
+/.codex-dev.*.log
+/tmp/

@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: adminCheck.error }, { status: adminCheck.error?.includes('Forbidden') ? 403 : 401 });
     }
 
-    const { username, fullname, role, password, permitted_menus } = await req.json();
+    const { username, fullname, role, password, permitted_menus, permitted_actions } = await req.json();
 
     if (!username || !fullname || !role || !password) {
       return NextResponse.json({ error: 'Fadlan buuxi dhamaan meelaha loo baahan yahay.' }, { status: 450 });
@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
         fullname,
         role,
         permitted_menus,
+        permitted_actions,
       },
     });
 
@@ -86,10 +87,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: createError.message }, { status: 400 });
     }
 
-    // Update the newly created profile row with permitted_menus
+    // Keep authorization data in the server-controlled profile row.
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .update({ permitted_menus })
+      .update({
+        permitted_menus: role === 'Admin' ? null : permitted_menus,
+        permitted_actions: role === 'Admin' ? [] : permitted_actions,
+      })
       .eq('id', data.user.id);
 
     if (profileError) {

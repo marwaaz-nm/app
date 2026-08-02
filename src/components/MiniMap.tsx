@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Compass, Fullscreen, Navigation, Loader2 } from 'lucide-react';
+import { Compass, Fullscreen, Navigation, Loader2, MapPin, MousePointer2, PencilRuler, ZoomIn } from 'lucide-react';
 import L from 'leaflet';
 import { useModal } from '@/context/ModalContext';
 
@@ -19,6 +19,30 @@ interface MiniMapProps {
   onSketchDetailsChange: (value: string) => void;
 }
 
+const createGpsMarkerIcon = (isCurrentLocation: boolean) =>
+  L.divIcon({
+    className: 'gps-position-icon',
+    html: isCurrentLocation
+      ? `<div style="position:relative;width:60px;height:60px;display:flex;align-items:center;justify-content:center;">
+          <span style="position:absolute;width:30px;height:30px;border-radius:999px;background:rgba(37,99,235,.18);animation:pulse 1.8s ease-out infinite;"></span>
+          <span style="position:relative;width:16px;height:16px;border-radius:999px;background:#2563eb;border:4px solid white;box-shadow:0 4px 12px rgba(15,23,42,.3);"></span>
+          <span style="position:absolute;left:50%;top:-2px;transform:translateX(-50%);white-space:nowrap;border-radius:8px;background:white;padding:3px 7px;font:800 10px/1 sans-serif;color:#1e293b;box-shadow:0 4px 12px rgba(15,23,42,.18);">0 m</span>
+        </div>`
+      : `<div style="width:60px;height:60px;display:flex;align-items:center;justify-content:center;">
+          <span style="width:16px;height:16px;border-radius:999px;background:#2563eb;border:4px solid white;box-shadow:0 4px 12px rgba(15,23,42,.3);"></span>
+        </div>`,
+    iconSize: [60, 60],
+    iconAnchor: [30, 30],
+  });
+
+const createMapMeasurementIcon = (distance: number, isLive = false) =>
+  L.divIcon({
+    className: 'map-segment-measure-marker',
+    html: `<div class="map-segment-measure-label${isLive ? ' is-live' : ''}">${distance < 1000 ? `${distance.toFixed(1)} m` : `${(distance / 1000).toFixed(2)} km`}</div>`,
+    iconSize: [64, 22],
+    iconAnchor: [32, 32],
+  });
+
 export default function MiniMap({
   gpsValue,
   onGpsChange,
@@ -34,28 +58,16 @@ export default function MiniMap({
   const sketchMapRef = useRef<L.Map | null>(null);
   const drawnItemsRef = useRef<L.FeatureGroup | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const accuracyCircleRef = useRef<L.Circle | null>(null);
+  const measurementLayerRef = useRef<L.LayerGroup | null>(null);
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSketch, setShowSketch] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [isAtCurrentLocation, setIsAtCurrentLocation] = useState(false);
+  const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
 
-  const [latInput, setLatInput] = useState('');
-  const [lngInput, setLngInput] = useState('');
   const isDrawingRef = useRef(false);
-
-  // Sync inputs with gpsValue prop
-  useEffect(() => {
-    if (gpsValue) {
-      const parts = gpsValue.split(',').map(p => p.trim());
-      if (parts.length === 2) {
-        setLatInput(parts[0]);
-        setLngInput(parts[1]);
-      }
-    } else {
-      setLatInput('');
-      setLngInput('');
-    }
-  }, [gpsValue]);
 
   // Sync marker when gpsValue is set (either from manual input, live location, click, or initial load)
   useEffect(() => {
@@ -75,20 +87,31 @@ export default function MiniMap({
 
     if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
 
+    const markerIcon = createGpsMarkerIcon(isAtCurrentLocation);
+
     if (markerRef.current) {
       const currentPos = markerRef.current.getLatLng();
       if (currentPos.lat !== lat || currentPos.lng !== lng) {
         markerRef.current.setLatLng([lat, lng]);
       }
+      markerRef.current.setIcon(markerIcon);
     } else {
-      const marker = L.marker([lat, lng], { draggable: true }).addTo(mapRef.current);
+      const marker = L.marker([lat, lng], { draggable: true, icon: markerIcon }).addTo(mapRef.current);
+      marker.on('dragstart', () => {
+        setIsAtCurrentLocation(false);
+        setLocationAccuracy(null);
+        if (accuracyCircleRef.current) {
+          accuracyCircleRef.current.remove();
+          accuracyCircleRef.current = null;
+        }
+      });
       marker.on('dragend', (event) => {
         const markerPos = event.target.getLatLng();
         onGpsChange(`${markerPos.lat.toFixed(6)}, ${markerPos.lng.toFixed(6)}`);
       });
       markerRef.current = marker;
     }
-  }, [gpsValue]);
+  }, [gpsValue, isAtCurrentLocation, onGpsChange]);
 
   // Initialize Drawing Map
   useEffect(() => {
@@ -117,8 +140,12 @@ export default function MiniMap({
       zoom: 17,
       layers: [satLayer],
       zoomControl: false,
-      scrollWheelZoom: false,
-      dragging: !L.Browser.mobile,
+      scrollWheelZoom: true,
+      doubleClickZoom: true,
+      touchZoom: true,
+      boxZoom: true,
+      keyboard: true,
+      dragging: true,
     });
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -127,11 +154,40 @@ export default function MiniMap({
     const drawnItems = new L.FeatureGroup().addTo(map);
     drawnItemsRef.current = drawnItems;
 
+    const measurementLayer = new L.LayerGroup().addTo(map);
+    measurementLayerRef.current = measurementLayer;
+    let drawingVertices: L.LatLng[] = [];
+    let liveMeasurementMarker: L.Marker | null = null;
+    let drawingWasCompleted = false;
+
+    const drawSegmentMeasurements = (coords: L.LatLng[], includeClosingSegment: boolean) => {
+      measurementLayer.clearLayers();
+      liveMeasurementMarker = null;
+
+      const segmentCount = includeClosingSegment ? coords.length : Math.max(coords.length - 1, 0);
+      for (let index = 0; index < segmentCount; index += 1) {
+        const start = coords[index];
+        const end = coords[(index + 1) % coords.length];
+        if (!start || !end) continue;
+
+        const midpoint = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
+        L.marker(midpoint, {
+          interactive: false,
+          keyboard: false,
+          icon: createMapMeasurementIcon(map.distance(start, end)),
+          zIndexOffset: 1200,
+        }).addTo(measurementLayer);
+      }
+    };
+
     // Add Draw control
     const drawControl = new (L.Control as any).Draw({
       draw: {
         polygon: {
           allowIntersection: false,
+          metric: true,
+          feet: false,
+          showLength: false,
           shapeOptions: { color: '#3388ff', weight: 3 },
         },
         rectangle: {
@@ -151,15 +207,56 @@ export default function MiniMap({
     // Track drawing state to avoid click conflicts
     map.on('draw:drawstart', () => {
       isDrawingRef.current = true;
+      drawingWasCompleted = false;
+      drawingVertices = [];
+      measurementLayer.clearLayers();
+      liveMeasurementMarker = null;
     });
     map.on('draw:drawstop', () => {
       isDrawingRef.current = false;
+      drawingVertices = [];
+      liveMeasurementMarker = null;
+      if (!drawingWasCompleted) measurementLayer.clearLayers();
+      drawingWasCompleted = false;
+    });
+
+    map.on((L as any).Draw.Event.DRAWVERTEX, (event: L.LeafletEvent) => {
+      const vertexLayers = (event as L.LeafletEvent & { layers: L.LayerGroup }).layers;
+      drawingVertices = vertexLayers.getLayers()
+        .filter((layer): layer is L.Marker => layer instanceof L.Marker)
+        .map((marker) => marker.getLatLng());
+      drawSegmentMeasurements(drawingVertices, false);
+    });
+
+    map.on('mousemove', (event: L.LeafletMouseEvent) => {
+      if (!isDrawingRef.current || drawingVertices.length === 0) return;
+
+      const start = drawingVertices[drawingVertices.length - 1];
+      const distance = map.distance(start, event.latlng);
+
+      if (liveMeasurementMarker) {
+        liveMeasurementMarker.setLatLng(event.latlng);
+        liveMeasurementMarker.setIcon(createMapMeasurementIcon(distance, true));
+      } else {
+        liveMeasurementMarker = L.marker(event.latlng, {
+          interactive: false,
+          keyboard: false,
+          icon: createMapMeasurementIcon(distance, true),
+          zIndexOffset: 1300,
+        }).addTo(measurementLayer);
+      }
     });
 
     // Map Click Listener to place marker
     map.on('click', (e: L.LeafletMouseEvent) => {
       if (isDrawingRef.current) return;
       const { lat, lng } = e.latlng;
+      setIsAtCurrentLocation(false);
+      setLocationAccuracy(null);
+      if (accuracyCircleRef.current) {
+        accuracyCircleRef.current.remove();
+        accuracyCircleRef.current = null;
+      }
       onGpsChange(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
       map.panTo([lat, lng]);
     });
@@ -172,11 +269,19 @@ export default function MiniMap({
 
       // Handle polygon coordinates
       const latlngs = layer.getLatLngs()[0] as L.LatLng[];
+      drawingWasCompleted = true;
+      drawSegmentMeasurements(latlngs, true);
       const polyString = latlngs.map(c => `${c.lat.toFixed(6)},${c.lng.toFixed(6)}`).join('; ');
       onPolygonChange(polyString);
 
       // Update Center Coordinate as GPS Input
       const center = layer.getBounds().getCenter();
+      setIsAtCurrentLocation(false);
+      setLocationAccuracy(null);
+      if (accuracyCircleRef.current) {
+        accuracyCircleRef.current.remove();
+        accuracyCircleRef.current = null;
+      }
       onGpsChange(`${center.lat.toFixed(6)}, ${center.lng.toFixed(6)}`);
 
       // Draw Sketch
@@ -294,7 +399,7 @@ export default function MiniMap({
     const p2 = L.latLng(end.lat + oy, end.lng + ox);
     const labelPos = L.latLng((p1.lat + p2.lat) / 2, (p1.lng + p2.lng) / 2);
 
-    L.polyline([p1, p2], { color: '#3388ff', weight: 1.5, opacity: 0.8 }).addTo(map);
+    L.polyline([p1, p2], { color: '#2563eb', weight: 1.5, opacity: 0.72 }).addTo(map);
 
     const marker = L.marker(labelPos, {
       icon: L.divIcon({
@@ -337,17 +442,23 @@ export default function MiniMap({
       if (!sketchContainerRef.current) return;
 
       const skMap = L.map(sketchContainerRef.current, {
-        zoomControl: true,
+        zoomControl: false,
         attributionControl: false,
-        dragging: !L.Browser.mobile,
-        scrollWheelZoom: false,
+        dragging: true,
+        scrollWheelZoom: true,
+        doubleClickZoom: true,
+        touchZoom: true,
+        boxZoom: true,
+        keyboard: true,
       });
 
+      L.control.zoom({ position: 'bottomright' }).addTo(skMap);
+
       L.polygon(latlngs, {
-        color: '#000000',
-        weight: 3,
-        fillColor: '#f1f5f9',
-        fillOpacity: 0.1,
+        color: '#0f172a',
+        weight: 2.5,
+        fillColor: '#dbeafe',
+        fillOpacity: 0.42,
       }).addTo(skMap);
 
       const center = bounds.getCenter();
@@ -385,7 +496,7 @@ export default function MiniMap({
       }
 
       skMap.invalidateSize();
-      skMap.fitBounds(bounds.pad(0.25), { animate: false });
+      skMap.fitBounds(bounds.pad(0.08), { animate: false });
       sketchMapRef.current = skMap;
 
       // Initial save of details to parent form
@@ -419,11 +530,28 @@ export default function MiniMap({
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const { latitude, longitude } = pos.coords;
+        const { latitude, longitude, accuracy } = pos.coords;
+        setIsAtCurrentLocation(true);
+        setLocationAccuracy(Math.round(accuracy));
         onGpsChange(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
         
         if (mapRef.current) {
-          mapRef.current.setView([latitude, longitude], 18);
+          if (accuracyCircleRef.current) {
+            accuracyCircleRef.current.remove();
+          }
+          accuracyCircleRef.current = L.circle([latitude, longitude], {
+            radius: Math.max(accuracy, 1),
+            color: '#2563eb',
+            weight: 1.5,
+            opacity: 0.8,
+            fillColor: '#3b82f6',
+            fillOpacity: 0.12,
+            interactive: false,
+          }).addTo(mapRef.current);
+          accuracyCircleRef.current.bringToBack();
+
+          const targetZoom = accuracy <= 20 ? 20 : accuracy <= 50 ? 19 : 18;
+          mapRef.current.flyTo([latitude, longitude], targetZoom, { duration: 1.1 });
         }
         setLocating(false);
       },
@@ -432,35 +560,29 @@ export default function MiniMap({
         showAlert('Cillad', 'Ma suuragalin in GPS-kaaga la soo helo.', 'error');
         setLocating(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
-  const handleLatChange = (val: string) => {
-    setLatInput(val);
-    const lat = parseFloat(val);
-    const lng = parseFloat(lngInput);
-    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-      onGpsChange(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-      if (mapRef.current) {
-        mapRef.current.panTo([lat, lng]);
-      }
-    } else {
-      onGpsChange(`${val}, ${lngInput}`);
+  const handleGpsInputChange = (value: string) => {
+    setIsAtCurrentLocation(false);
+    setLocationAccuracy(null);
+    if (accuracyCircleRef.current) {
+      accuracyCircleRef.current.remove();
+      accuracyCircleRef.current = null;
     }
-  };
 
-  const handleLngChange = (val: string) => {
-    setLngInput(val);
-    const lat = parseFloat(latInput);
-    const lng = parseFloat(val);
+    onGpsChange(value);
+    const parts = value.split(',').map((part) => part.trim());
+    if (parts.length !== 2) return;
+
+    const lat = parseFloat(parts[0]);
+    const lng = parseFloat(parts[1]);
     if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
       onGpsChange(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
       if (mapRef.current) {
-        mapRef.current.panTo([lat, lng]);
+        mapRef.current.flyTo([lat, lng], Math.max(mapRef.current.getZoom(), 18), { duration: 0.8 });
       }
-    } else {
-      onGpsChange(`${latInput}, ${val}`);
     }
   };
 
@@ -469,92 +591,130 @@ export default function MiniMap({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-col">
-        <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-2">
-          Location & Boundary (Sawir Polygon / Guji Maabka)
-        </label>
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-teal-600">
+              <Compass className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.1em] text-slate-700">Location &amp; Boundary</p>
+              <p className="mt-0.5 text-[9px] font-medium text-slate-400">Guji maabka ama isticmaal goobta aad hadda joogto.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-[9px] font-bold text-slate-500">
+            <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">1. Dooro goobta</span>
+            <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">2. Sawir polygon</span>
+          </div>
+        </div>
+
+        <div className="mb-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end">
+          <label className="block sm:col-span-2 lg:col-span-1">
+            <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">GPS Coordinates (Latitude, Longitude)</span>
+            <span className="relative flex items-center">
+              <MapPin className="pointer-events-none absolute left-4 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                inputMode="decimal"
+                value={gpsValue}
+                onChange={(event) => handleGpsInputChange(event.target.value)}
+                placeholder="3.119200, 43.649800"
+                aria-label="GPS latitude and longitude"
+                className="w-full rounded-2xl border border-slate-200/80 bg-white py-3.5 pl-11 pr-4 font-mono text-sm font-semibold text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+              />
+            </span>
+          </label>
+
+          <button
+            type="button"
+            onClick={getLiveLocation}
+            disabled={locating}
+            className="flex h-[50px] cursor-pointer items-center justify-center gap-2 rounded-2xl bg-teal-600 px-5 text-xs font-extrabold text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)] transition-all hover:-translate-y-0.5 hover:bg-teal-500 disabled:cursor-wait disabled:bg-slate-400"
+          >
+            {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
+            {locating ? 'Helayaa goobta...' : 'Exact Location'}
+          </button>
+
+          <div className={`flex h-[50px] items-center justify-center gap-2 rounded-2xl border px-4 ${isAtCurrentLocation ? 'border-blue-200 bg-blue-50 text-teal-700' : 'border-slate-200 bg-white text-slate-500'}`}>
+            <span className={`h-2.5 w-2.5 rounded-full ${isAtCurrentLocation ? 'bg-teal-500 shadow-[0_0_0_4px_rgba(59,130,246,0.13)]' : 'bg-slate-300'}`} />
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-[0.1em]">
+                {isAtCurrentLocation ? 'Distance: 0 m' : 'GPS not active'}
+              </p>
+              {isAtCurrentLocation && locationAccuracy !== null && (
+                <p className="mt-0.5 text-[8px] font-bold text-slate-500">Accuracy: +/-{locationAccuracy} m</p>
+              )}
+            </div>
+          </div>
+        </div>
         
         <div 
-          className={`relative border border-slate-200/80 rounded-3xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.03)] transition-all duration-300 bg-slate-100 z-0 ${
+          className={`relative z-0 overflow-hidden rounded-3xl border border-slate-200 bg-slate-100 shadow-[0_8px_28px_rgba(15,23,42,0.08)] transition-all duration-300 ${
             isExpanded 
-              ? 'fixed inset-0 z-40 md:left-72 pb-16 md:pb-0' 
-              : 'h-[400px] w-full'
+              ? 'fixed inset-0 z-40 pb-20 md:left-[252px] md:pb-0'
+              : 'h-[460px] w-full'
           }`}
         >
           <div ref={mapContainerRef} className="w-full h-full" />
           
-          {/* Toggle Full Screen Button */}
-          <button
-            type="button"
-            onClick={toggleFullScreen}
-            className="absolute top-4 right-4 z-10 bg-white/95 hover:bg-slate-50 border border-slate-200/85 text-slate-700 p-2.5 rounded-xl cursor-pointer shadow-md backdrop-blur-md transition-all duration-200 hover:scale-105 active:scale-95"
-          >
-            <Fullscreen className="h-4.5 w-4.5" />
-          </button>
-
-          {/* Bottom GPS Display Overlay */}
-          <div className="absolute bottom-4 left-4 right-4 z-10 bg-slate-950/95 backdrop-blur-md px-5 py-4 rounded-3xl border border-slate-800 shadow-[0_15px_40px_rgba(0,0,0,0.3)] flex flex-col sm:flex-row items-center justify-between gap-4 max-w-2xl mx-auto">
-            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto min-w-0">
-              <div className="flex items-center gap-2 text-teal-400 shrink-0">
-                <Compass className="h-5 w-5 animate-pulse" />
-                <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">GPS:</span>
-              </div>
-              
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <div className="flex items-center bg-slate-900/80 rounded-xl px-3 py-1.5 border border-slate-800 w-full sm:w-36">
-                  <span className="text-[10px] font-black text-slate-500 mr-1.5 select-none">LAT:</span>
-                  <input
-                    type="text"
-                    value={latInput}
-                    onChange={(e) => handleLatChange(e.target.value)}
-                    placeholder="0.000000"
-                    className="bg-transparent border-none text-xs font-mono font-bold text-teal-400 focus:outline-none w-full"
-                  />
-                </div>
-                
-                <div className="flex items-center bg-slate-900/80 rounded-xl px-3 py-1.5 border border-slate-800 w-full sm:w-36">
-                  <span className="text-[10px] font-black text-slate-500 mr-1.5 select-none">LNG:</span>
-                  <input
-                    type="text"
-                    value={lngInput}
-                    onChange={(e) => handleLngChange(e.target.value)}
-                    placeholder="0.000000"
-                    className="bg-transparent border-none text-xs font-mono font-bold text-teal-400 focus:outline-none w-full"
-                  />
-                </div>
-              </div>
-            </div>
-            
+          {/* Map controls */}
+          <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
             <button
               type="button"
               onClick={getLiveLocation}
               disabled={locating}
-              className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-white text-xs font-black px-5 py-3 rounded-2xl transition-all cursor-pointer select-none w-full sm:w-auto shrink-0 shadow-[0_4px_12px_rgba(45,138,112,0.15)]"
+              className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-teal-600 px-3.5 text-[10px] font-extrabold text-white shadow-[0_8px_22px_rgba(37,99,235,0.3)] transition-all hover:-translate-y-0.5 hover:bg-teal-500 disabled:cursor-wait disabled:bg-slate-400"
+              aria-label="Go to my current location"
             >
-              {locating ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Navigation className="h-3.5 w-3.5" />
-              )}
-              <span>Auto GPS</span>
+              {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
+              <span className="hidden sm:inline">{locating ? 'Locating...' : 'My Location'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={toggleFullScreen}
+              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-700 shadow-md backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-slate-50"
+              aria-label={isExpanded ? 'Exit full screen map' : 'Open full screen map'}
+              title={isExpanded ? 'Exit full screen' : 'Full screen'}
+            >
+              <Fullscreen className="h-[18px] w-[18px]" />
             </button>
           </div>
+
         </div>
       </div>
 
       {/* Technical Sketch Preview Card */}
       {showSketch && (
-        <div className="border border-slate-200/80 rounded-3xl overflow-hidden bg-white shadow-[0_8px_30px_rgb(0,0,0,0.02)] animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="bg-slate-50/80 border-b border-slate-100 px-5 py-3.5 flex items-center gap-2 text-slate-800 font-extrabold text-sm">
-            <span className="h-2.5 w-2.5 rounded-full bg-teal-500 animate-pulse" />
-            <span>Qaabka Dhulka (Sketch Blueprint Preview)</span>
+        <div className="animate-in overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.06)] fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex flex-col gap-4 border-b border-slate-100 bg-white px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)]">
+                <PencilRuler className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-blue-600">Technical Sketch</p>
+                <h3 className="mt-1 text-sm font-extrabold text-slate-900">Qaabka iyo cabbirrada dhulka</h3>
+                <p className="mt-0.5 text-[10px] font-medium text-slate-500">Double-click ku samee cabbir ama area si aad wax uga beddesho.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[9px] font-bold text-slate-600">
+                <MousePointer2 className="h-3.5 w-3.5 text-blue-600" /> Editable
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[9px] font-bold text-slate-600">
+                <ZoomIn className="h-3.5 w-3.5 text-blue-600" /> Zoom &amp; Pan
+              </span>
+            </div>
           </div>
-          <div className="p-4 bg-white">
-            <div ref={sketchContainerRef} className="w-full h-[400px] border border-slate-200/60 rounded-2xl bg-white" />
-            <p className="text-[10px] text-slate-500 mt-2 italic text-center font-semibold">
-              * Waxaad laba-jeer gujin kartaa (Double Click) cabirada dhinacyada ama Area si aad wax uga bedesho haddii loo baahdo.
-            </p>
+          <div className="bg-white p-4 sm:p-5">
+            <div className="sketch-map-shell overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-inner shadow-slate-100">
+              <div ref={sketchContainerRef} className="sketch-map-canvas h-[420px] w-full rounded-xl bg-white" />
+            </div>
+            <div className="mt-3 flex items-center justify-center gap-2 text-[9px] font-semibold text-slate-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+              Isticmaal + / − ama mouse wheel si aad u zoom-gareyso.
+            </div>
           </div>
         </div>
       )}
