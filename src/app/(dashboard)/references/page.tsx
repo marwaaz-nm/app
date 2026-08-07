@@ -1,29 +1,36 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { supabase } from '@/lib/supabase';
 import { Reference, Survey } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
-import { 
-  Plus, 
-  Search, 
-  Files, 
-  Calendar, 
-  CheckCircle2, 
-  Clock, 
-  HelpCircle, 
-  FileText, 
-  X, 
-  Loader2, 
-  ChevronRight, 
+import { useSettings } from '@/context/SettingsContext';
+import DetailsModal from '@/components/DetailsModal';
+import {
+  Plus,
+  Search,
+  Files,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  HelpCircle,
+  FileText,
+  X,
+  Loader2,
+  ChevronRight,
   ArrowRight,
-  TrendingUp
+  TrendingUp,
+  QrCode,
+  Copy,
+  Check
 } from 'lucide-react';
 
 export default function ReferencesPage() {
   const { user } = useAuth();
   const { showAlert, showConfirm } = useModal();
+  const { settings } = useSettings();
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   
   const [references, setReferences] = useState<Reference[]>([]);
@@ -46,6 +53,48 @@ export default function ReferencesPage() {
   
   // Selected Ref Details Modal
   const [selectedRef, setSelectedRef] = useState<Reference | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  // Connected survey details modal
+  const [viewingSurvey, setViewingSurvey] = useState<Survey | null>(null);
+  const [loadingSurvey, setLoadingSurvey] = useState(false);
+
+  const handleViewSurvey = async (surveyId: number) => {
+    setLoadingSurvey(true);
+    try {
+      const { data, error } = await supabase.from('surveys').select('*').eq('id', surveyId).single();
+      if (error) throw error;
+      setViewingSurvey(data as Survey);
+    } catch (err) {
+      console.error('Error fetching survey details:', err);
+      showAlert('Cillad', 'Ma suuragalin in xogta sahanka la soo qaado.', 'error');
+    } finally {
+      setLoadingSurvey(false);
+    }
+  };
+
+  const publicVerifyUrl = (refId: number) =>
+    typeof window !== 'undefined' ? `${window.location.origin}/verify/${refId}` : '';
+
+  useEffect(() => {
+    if (!selectedRef) { setQrDataUrl(null); return; }
+    setLinkCopied(false);
+    QRCode.toDataURL(publicVerifyUrl(selectedRef.id), { margin: 1, width: 220 })
+      .then(setQrDataUrl)
+      .catch((err) => { console.error('Error generating QR code:', err); setQrDataUrl(null); });
+  }, [selectedRef]);
+
+  const handleCopyLink = async () => {
+    if (!selectedRef) return;
+    try {
+      await navigator.clipboard.writeText(publicVerifyUrl(selectedRef.id));
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (err) {
+      console.error('Error copying link:', err);
+    }
+  };
 
   // Fetch all references with joined surveys
   const fetchReferences = async () => {
@@ -112,7 +161,7 @@ export default function ReferencesPage() {
     setFilteredRecords(result);
   }, [searchQuery, statusFilter, references]);
 
-  // Set default issue date when opening form
+  // Set default issue date and suggested ref number when opening form
   const handleOpenAddForm = () => {
     const now = new Date();
     const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
@@ -120,6 +169,14 @@ export default function ReferencesPage() {
       .slice(0, 16);
     setIssueDate(localDateTime);
     setShowAddForm(true);
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc('next_reference_number');
+        if (!error && data) setRefNumber(data as string);
+      } catch (err) {
+        console.error('Error generating next reference number:', err);
+      }
+    })();
   };
 
   const handleCloseAddForm = () => {
@@ -324,22 +381,9 @@ export default function ReferencesPage() {
                   className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer"
                 >
                   <option value="">Dooro Ujeedada...</option>
-                  <option value="Beec Dhul">Beec Dhul</option>
-                  <option value="Beec Gaari">Beec Gaari</option>
-                  <option value="Beec Mooto">Beec Mooto</option>
-                  <option value="Sugitaan Milkiyad Dhul">Sugitaan Milkiyad Dhul</option>
-                  <option value="Sugitaan Dhaxalkoob">Sugitaan Dhaxalkoob</option>
-                  <option value="Sugitaan Milkiyad Gaari/Koox/Nooc kale">Sugitaan Milkiyad Gaari/Koox/Nooc kale</option>
-                  <option value="Codsi Sabarloog">Codsi Sabarloog</option>
-                  <option value="Wakaalad">Wakaalad</option>
-                  <option value="Damaanad">Damaanad</option>
-                  <option value="Heshiis">Heshiis</option>
-                  <option value="Cadeyn">Cadeyn</option>
-                  <option value="Cadeyn Heshiis Kiro">Cadeyn Heshiis Kiro</option>
-                  <option value="Xeer Hoosaad">Xeer Hoosaad</option>
-                  <option value="Cadeyn Rahan">Cadeyn Rahan</option>
-                  <option value="Qiimeyn Guri">Qiimeyn Guri</option>
-                  <option value="Cadeyn Hibeyn/ Waqaf">Cadeyn Hibeyn/ Waqaf</option>
+                  {settings.reference_subjects.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
                 </select>
               </div>
 
@@ -522,7 +566,7 @@ export default function ReferencesPage() {
 
       {/* Reference Details Modal with Status Stepper */}
       {selectedRef && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-4xl bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="flex justify-between items-center px-6 py-4 bg-slate-50 border-b border-slate-200">
@@ -568,19 +612,61 @@ export default function ReferencesPage() {
 
                 {/* Survey Connection Panel */}
                 {selectedRef.surveys && (
-                  <div className="p-5 bg-teal-50/40 border border-teal-100 rounded-2xl space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => handleViewSurvey(selectedRef.surveys!.id)}
+                    disabled={loadingSurvey}
+                    className="w-full p-5 bg-teal-50/40 border border-teal-100 rounded-2xl space-y-1 text-left transition-colors hover:bg-teal-50 cursor-pointer disabled:opacity-60"
+                  >
                     <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-1">CONNECTED LAND SURVEY</span>
-                    <div className="flex items-center gap-2 text-slate-855 font-extrabold text-sm">
-                      <span className="h-2 w-2 rounded-full bg-teal-500" />
-                      <span>Sahan Lr: #{selectedRef.surveys.serial_no} — {selectedRef.surveys.owner_name}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-slate-855 font-extrabold text-sm">
+                        <span className="h-2 w-2 rounded-full bg-teal-500" />
+                        <span className="text-teal-700 underline decoration-teal-300 underline-offset-2">
+                          Sahan Lr: #{selectedRef.surveys.serial_no} — {selectedRef.surveys.owner_name}
+                        </span>
+                      </div>
+                      {loadingSurvey ? (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-teal-600" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0 text-teal-500" />
+                      )}
                     </div>
-                  </div>
+                  </button>
                 )}
 
                 <div className="space-y-2">
                   <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-400">FAAHFAAHIN (NOTES/DETAILS)</span>
                   <div className="p-4 rounded-2xl bg-slate-50/40 border border-slate-200 text-sm text-slate-800 min-h-[100px] leading-relaxed">
                     {selectedRef.details || 'No additional notes provided.'}
+                  </div>
+                </div>
+
+                {/* Public QR Code + Verification Link */}
+                <div className="p-5 bg-slate-50/60 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-center gap-5">
+                  <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-2">
+                    {qrDataUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={qrDataUrl} alt="QR code for public verification link" className="h-28 w-28" />
+                    ) : (
+                      <div className="flex h-28 w-28 items-center justify-center text-slate-300">
+                        <QrCode className="h-8 w-8" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-2 text-center sm:text-left">
+                    <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-400">Link Xaqiijin (Public Verification)</span>
+                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                      Qof kasta oo scan-gareeya QR-kan wuxuu arki karaa xogtan iyada oo aan loo baahnayn in la soo galo app-ka.
+                      {selectedRef.surveys ? ' Wuxuu sidoo kale arki karaa mapka dhulka.' : ''}
+                    </p>
+                    <button
+                      onClick={handleCopyLink}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                      {linkCopied ? <Check className="h-3.5 w-3.5 text-teal-600" /> : <Copy className="h-3.5 w-3.5" />}
+                      {linkCopied ? 'La koobiyeeyay!' : 'Koobi Link-ga'}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -695,6 +781,10 @@ export default function ReferencesPage() {
         >
           <Plus className="h-7 w-7" />
         </button>
+      )}
+
+      {viewingSurvey && (
+        <DetailsModal record={viewingSurvey} onClose={() => setViewingSurvey(null)} />
       )}
 
     </div>

@@ -86,6 +86,7 @@ export interface Reference {
   created_by?: string;
   // Expanded relation from join
   surveys?: {
+    id: number;
     owner_name: string;
     serial_no: number;
   } | null;

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
+import { useSettings } from '@/context/SettingsContext';
 import { ArrowLeft, Check, AlertCircle, Loader2, Compass, Ruler, User, ArrowUp, ArrowDown, ArrowRight, X, MapPinned } from 'lucide-react';
 import Link from 'next/link';
 
@@ -22,6 +23,7 @@ const MiniMap = dynamic(() => import('@/components/MiniMap'), {
 
 export default function NewRecordPage() {
   const router = useRouter();
+  const { settings } = useSettings();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -277,8 +279,9 @@ export default function NewRecordPage() {
                 className="w-full rounded-2xl bg-slate-50/60 border border-slate-200/80 px-5 py-3.5 text-sm text-slate-900 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all cursor-pointer shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
               >
                 <option value="">Dooro...</option>
-                <option value="Dhul Banaan">Dhul Banaan</option>
-                <option value="Dhul dhisan">Dhul dhisan</option>
+                {settings.land_types.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
               </select>
             </div>
 

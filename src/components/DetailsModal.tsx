@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import L from 'leaflet';
 import { useModal } from '@/context/ModalContext';
+import { useSettings } from '@/context/SettingsContext';
 
 interface DetailsModalProps {
   record: Survey | null;
@@ -30,6 +31,7 @@ interface DetailsModalProps {
 
 export default function DetailsModal({ record, onClose }: DetailsModalProps) {
   const { showAlert } = useModal();
+  const { settings } = useSettings();
   const [mounted, setMounted] = useState(false);
   const [isSatFullscreen, setIsSatFullscreen] = useState(false);
   const [isSketchFullscreen, setIsSketchFullscreen] = useState(false);
@@ -44,6 +46,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
   
   const satelliteMapRef = useRef<L.Map | null>(null);
   const sketchMapRef = useRef<L.Map | null>(null);
+  const satTileLayerRef = useRef<L.TileLayer | null>(null);
 
   // Parse custom coordinate string e.g. "3.112,43.64; 3.113,43.65"
   const parsePolygonCoords = (polyString: string | undefined): [number, number][] => {
@@ -251,8 +254,8 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
       // --- SATELLITE MAP INITIALIZATION ---
       if (satelliteMapContainerRef.current) {
-        const satTile = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { 
-          maxZoom: 20, 
+        const satTile = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+          maxZoom: 20,
           subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
           crossOrigin: true
         });
@@ -263,19 +266,28 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           zoomControl: false,
           dragging: !L.Browser.mobile,
           preferCanvas: true,
+          zoomSnap: 0.5, // allows half-level zoom increments for finer framing control
+          // Both off so programmatic setZoom() (used during PDF export to grab
+          // a sharper capture) swaps straight to the new tiles at full opacity
+          // instead of showing a scaled snapshot of the old zoom level
+          // cross-fading into the new one — that in-between frame was what
+          // showed up as a washed-out ghost rectangle in the captured image.
+          zoomAnimation: false,
+          fadeAnimation: false,
         });
 
-        // Center on the polygon, but zoomed out by exactly 2 levels to show more houses/streets
-        const zoomLevel = satMap.getBoundsZoom(bounds) - 2;
+        // Center on the polygon, but zoomed out slightly to show some surrounding houses/streets
+        const zoomLevel = satMap.getBoundsZoom(bounds) - 0.5;
         satMap.setView(bounds.getCenter(), zoomLevel);
 
         satTile.addTo(satMap);
+        satTileLayerRef.current = satTile;
 
-        L.polygon(coords, { 
-          color: '#2563eb', // Changed to blue
-          weight: 2.5, 
-          fillColor: '#3b82f6',
-          fillOpacity: 0.15 
+        L.polygon(coords, {
+          color: '#eab308',
+          weight: 2.5,
+          fillColor: '#eab308',
+          fillOpacity: 0.15
         }).addTo(satMap);
 
         L.control.zoom({ position: 'bottomright' }).addTo(satMap);
@@ -388,22 +400,19 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
   }, [isSketchFullscreen, record]);
 
   if (!mounted || !record) return null;
-
   const boundaries = parseBoundaries(record.boundary_w_val ? 
     `W:${record.boundary_w_val}(${record.boundary_w_neighbor}) | B:${record.boundary_b_val}(${record.boundary_b_neighbor}) | K:${record.boundary_k_val}(${record.boundary_k_neighbor}) | G:${record.boundary_g_val}(${record.boundary_g_neighbor})` 
     : record.built_details
   );
-  const handlePrintPDF = async () => {
+  const handlePrintPDF = async () => {
     if (!record) return;
 
     const styleEl = document.createElement('style');
     styleEl.innerHTML = `
-      /* Map container background must be pure white */
       .leaflet-container {
         background-color: #ffffff !important;
         background: #ffffff !important;
       }
-      /* Style distance labels for clean CAD text */
       .sketch-dist-label .editable-field {
         border: none !important;
         background: transparent !important;
@@ -415,17 +424,14 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         padding: 0 !important;
         text-align: center !important;
       }
-      /* Hide unit 'm' inside distance text if needed (we already formatted to 15.600) */
       .sketch-dist-label .dist-text {
         font-size: 11px !important;
         color: #000000 !important;
         font-weight: bold !important;
       }
-      /* Make direction letters visible in the PDF */
       .sketch-dir-letter .dir-letter-val {
         display: block !important;
       }
-      /* Style area label */
       .sketch-area-label .modal-area-box {
         border: none !important;
         background: transparent !important;
@@ -437,36 +443,35 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         padding: 0 !important;
         text-align: center !important;
       }
-      /* Make all SVG paths (the polygon and the polylines) pure black */
       .leaflet-overlay-pane svg path {
         stroke: #000000 !important;
       }
     `;
 
+    let printContainer: HTMLDivElement | null = null;
+    let offscreenHost: HTMLDivElement | null = null;
+
     try {
       document.head.appendChild(styleEl);
       showAlert('Sug fadlan...', 'PDF-ka ayaa la diyaarinayaa, fadlan sug...', 'info');
 
-      const html2pdf = (await import('html2pdf.js')).default;
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = html2pdfModule.default || html2pdfModule;
       const html2canvas = (await import('html2canvas')).default;
 
-      // Helper to temporarily convert Leaflet CSS transforms to left/top positions for html2canvas
+      // Helper to temporarily prepare Leaflet map elements for html2canvas
       const prepareMapForCapture = (container: HTMLDivElement) => {
         const restoredElements: { el: HTMLElement; transform: string; left: string; top: string }[] = [];
         
-        // 1. Temporarily REMOVE the zoom controls and attributions from the DOM to guarantee they won't render
         const controls = Array.from(container.querySelectorAll('.leaflet-control, .leaflet-control-zoom, .leaflet-control-attribution'));
         const removedControls = controls.map(c => {
           const el = c as HTMLElement;
           const parent = el.parentNode;
           const nextSibling = el.nextSibling;
-          if (parent) {
-            parent.removeChild(el);
-          }
+          if (parent) { parent.removeChild(el); }
           return { el, parent, nextSibling };
         });
 
-        // 2. Temporarily remove parent container's rounded corners and overflow to prevent html2canvas from cropping
         const parent = container.parentElement as HTMLElement;
         const originalParentStyle = parent ? parent.style.borderRadius : '';
         const originalParentOverflow = parent ? parent.style.overflow : '';
@@ -477,28 +482,19 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           parent.className = parent.className.replace(/\brounded-\S+/g, '').replace('overflow-hidden', '');
         }
 
-        // Target ONLY the leaflet-map-pane to prevent double-shifting nested sub-panes/markers
         const mapPane = container.querySelector('.leaflet-map-pane') as HTMLElement;
         if (mapPane) {
           const style = window.getComputedStyle(mapPane);
           const transform = style.transform || style.webkitTransform;
           
           if (transform && transform !== 'none') {
-            let tx = 0;
-            let ty = 0;
-            
+            let tx = 0, ty = 0;
             if (transform.startsWith('matrix3d')) {
               const parts = transform.replace('matrix3d(', '').replace(')', '').split(',').map(parseFloat);
-              if (parts.length >= 16) {
-                tx = parts[12];
-                ty = parts[13];
-              }
+              if (parts.length >= 16) { tx = parts[12]; ty = parts[13]; }
             } else if (transform.startsWith('matrix')) {
               const parts = transform.replace('matrix(', '').replace(')', '').split(',').map(parseFloat);
-              if (parts.length >= 6) {
-                tx = parts[4];
-                ty = parts[5];
-              }
+              if (parts.length >= 6) { tx = parts[4]; ty = parts[5]; }
             }
             
             if (tx !== 0 || ty !== 0) {
@@ -520,21 +516,14 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         }
         
         return () => {
-          // Restore parent container styles/classes
           if (parent) {
             parent.style.borderRadius = originalParentStyle;
             parent.style.overflow = originalParentOverflow;
             parent.className = originalParentClassName;
           }
-
-          // Restore controls to DOM in their original positions
           removedControls.forEach(({ el, parent, nextSibling }) => {
-            if (parent) {
-              parent.insertBefore(el, nextSibling);
-            }
+            if (parent) { parent.insertBefore(el, nextSibling); }
           });
-          
-          // Restore positions
           restoredElements.forEach(({ el, transform, left, top }) => {
             el.style.transform = transform;
             el.style.left = left;
@@ -543,30 +532,83 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         };
       };
 
-      // 1. Capture Satellite Map as Image
+      // Pre-crop a captured canvas to a fixed aspect ratio (center-crop, like
+      // object-fit:cover) so the embedded <img> needs no CSS-level fitting.
+      // html2pdf's own html2canvas pass (which rasterizes the final assembled
+      // page) does not honor object-fit and stretches images to fill their
+      // box instead of cropping, which is what was squeezing the photo.
+      const cropCanvasToAspect = (source: HTMLCanvasElement, targetRatio: number) => {
+        const sourceRatio = source.width / source.height;
+        let sx = 0, sy = 0, sw = source.width, sh = source.height;
+        if (sourceRatio > targetRatio) {
+          sw = source.height * targetRatio;
+          sx = (source.width - sw) / 2;
+        } else {
+          sh = source.width / targetRatio;
+          sy = (source.height - sh) / 2;
+        }
+        const out = document.createElement('canvas');
+        out.width = sw;
+        out.height = sh;
+        out.getContext('2d')?.drawImage(source, sx, sy, sw, sh, 0, 0, sw, sh);
+        return out;
+      };
+
+      // 1. Capture Satellite Map
       let satImage = '';
-      if (satelliteMapContainerRef.current) {
-        const restoreMap = prepareMapForCapture(satelliteMapContainerRef.current);
+      if (satelliteMapContainerRef.current && satelliteMapRef.current) {
+        const satMap = satelliteMapRef.current;
+        const container = satelliteMapContainerRef.current;
+        const originalInlineWidth = container.style.width;
+        const originalInlineHeight = container.style.height;
+        let restoreMap: (() => void) | null = null;
         try {
-          const satCanvas = await html2canvas(satelliteMapContainerRef.current, {
-            useCORS: true,
-            scale: 2,
-            logging: false
+          // Capture at the SAME zoom level as the live view (so the
+          // surrounding plots/streets stay visible), but temporarily at a
+          // much larger on-screen pixel size. Leaflet fills the extra space
+          // with more real tiles at that zoom, giving genuinely more detail
+          // instead of us upscaling a small capture afterward — zooming in
+          // instead would have shown less area, which is the tradeoff we're
+          // avoiding here.
+          container.style.width = '720px';
+          container.style.height = '604px';
+          satMap.invalidateSize({ animate: false });
+          await new Promise<void>((resolve) => {
+            const tileLayer = satTileLayerRef.current;
+            if (!tileLayer) { resolve(); return; }
+            const done = () => resolve();
+            tileLayer.once('load', done);
+            setTimeout(done, 1200); // fallback in case tiles are already cached and 'load' never fires
           });
-          satImage = satCanvas.toDataURL('image/jpeg', 0.95);
+          await new Promise((resolve) => setTimeout(resolve, 150)); // settle buffer
+
+          restoreMap = prepareMapForCapture(container);
+
+          const satCanvas = await html2canvas(container, {
+            useCORS: true,
+            allowTaint: true,
+            scale: 2,
+            logging: false,
+            backgroundColor: '#ffffff'
+          });
+          // Target ratio matches the Page 3 image box: ~655px wide x 550px tall.
+          const satCropped = cropCanvasToAspect(satCanvas, 655 / 550);
+          satImage = satCropped.toDataURL('image/jpeg', 0.95);
         } catch (e) {
           console.error('Failed to capture satellite map', e);
         } finally {
-          restoreMap();
+          restoreMap?.();
+          container.style.width = originalInlineWidth;
+          container.style.height = originalInlineHeight;
+          satMap.invalidateSize({ animate: false });
         }
       }
 
-      // 2. Capture Sketch Map as Image
+      // 2. Capture Technical Sketch Map
       let sketchImage = '';
       if (sketchMapContainerRef.current) {
         const restoreSketch = prepareMapForCapture(sketchMapContainerRef.current);
 
-        // Find and temporarily format the area box text to CAD style "Area = \n {value}"
         const areaBox = sketchMapContainerRef.current.querySelector('.modal-area-box') as HTMLElement;
         const originalAreaHTML = areaBox ? areaBox.innerHTML : '';
         if (areaBox) {
@@ -575,7 +617,6 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           areaBox.innerHTML = `<div style="line-height: 1.3;">Area =<br/>${areaNum}</div>`;
         }
 
-        // Temporarily change all Leaflet vector styles to pure black & white for CAD look
         const originalStyles = new Map<any, any>();
         sketchMapRef.current?.eachLayer((layer: any) => {
           if (layer.setStyle) {
@@ -591,33 +632,35 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
                 color: '#000000',
                 weight: 4.0,
                 fillColor: '#ffffff',
-                fillOpacity: 1.0
-              });
-            } else if (layer instanceof L.Polyline) {
-              // Dimension and extension lines
-              layer.setStyle({
-                color: '#000000',
-                weight: 1.2
+                fillOpacity: 1.0,
+                opacity: 1
               });
             }
+            // Plain Polyline instances are the dimension/extension lines —
+            // left untouched so they keep their blue design color in the PDF.
           }
         });
+
+        // Leaflet's Canvas renderer batches setStyle repaints into the next
+        // animation frame, so wait for one to actually land before capturing —
+        // otherwise html2canvas grabs the pre-restyle (blue) pixels.
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
         try {
           const sketchCanvas = await html2canvas(sketchMapContainerRef.current, {
             useCORS: true,
+            allowTaint: true,
             scale: 2,
-            logging: false
+            logging: false,
+            backgroundColor: '#ffffff'
           });
           sketchImage = sketchCanvas.toDataURL('image/jpeg', 0.95);
         } catch (e) {
           console.error('Failed to capture sketch map', e);
         } finally {
-          // Restore original styles
           originalStyles.forEach((style, layer) => {
             layer.setStyle(style);
           });
-
           if (areaBox) {
             areaBox.innerHTML = originalAreaHTML;
           }
@@ -626,11 +669,18 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       }
 
       const options = {
-        margin: 10,
+        margin: [0, 0, 0, 0] as [number, number, number, number],
         filename: `Survey_Report_SN_${record.serial_no}_${record.owner_name.replace(/\s+/g, '_')}.pdf`,
-        image: { type: 'jpeg' as const, quality: 1.0 },
-        html2canvas: { scale: 2.5, useCORS: true, letterRendering: true, backgroundColor: '#ffffff' },
-        pagebreak: { mode: ['css', 'legacy'] },
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          letterRendering: true,
+          backgroundColor: '#ffffff',
+          logging: false
+        },
+        pagebreak: { mode: ['css', 'legacy'], after: '.html2pdf__page-break' },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
       };
 
@@ -639,45 +689,58 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       const lngVal = gpsParts[1] ? gpsParts[1].trim() : 'N/A';
       const areaClean = record.sketch_area ? record.sketch_area.replace(' m²', '').replace('m²', '').trim() : 'N/A';
       const issueDate = record.created_at ? new Date(record.created_at).toLocaleDateString('en-GB') : '-';
-      const vertexCount = parsePolygonCoords(record.polygon_boundary).length;
 
       const cleanVal = (val: string | undefined) => {
         if (!val) return '-';
         return val.replace('m', '').replace('M', '').trim();
       };
 
+      // Official Baidoa Emblem Seal SVG for Header & Background Watermark
+      const emblemSealSVG = `
+        <svg width="72" height="72" viewBox="0 0 100 100" style="display:block;margin:0 auto 4px;">
+          <circle cx="50" cy="50" r="46" fill="#ffffff" stroke="#166534" stroke-width="4"/>
+          <circle cx="50" cy="50" r="39" fill="none" stroke="#22c55e" stroke-width="1" stroke-dasharray="2,2"/>
+          <path id="curve-top" d="M 12,50 A 38,38 0 0,1 88,50" fill="none"/>
+          <text font-size="4.2" font-weight="900" fill="#15803d" letter-spacing="0.2">
+            <textPath href="#curve-top" startOffset="50%" text-anchor="middle">DOWLADDA HOOSE DEGMADA BAYDHABO</textPath>
+          </text>
+          <path id="curve-bottom" d="M 88,50 A 38,38 0 0,1 12,50" fill="none"/>
+          <text font-size="4" font-weight="900" fill="#15803d" letter-spacing="0.2">
+            <textPath href="#curve-bottom" startOffset="50%" text-anchor="middle">LOCAL GOVERNMENT BAIDOA DISTRICT</textPath>
+          </text>
+          <path d="M 36,36 A 14,14 0 0,0 64,36 C 64,54 50,68 50,68 C 50,68 36,54 36,36 Z" fill="#2563eb" stroke="#1d4ed8" stroke-width="1.5"/>
+          <polygon points="50,38 52.5,44.5 59.5,45.5 54.2,50 55.5,57 50,53.5 44.5,57 45.8,50 40.5,45.5 47.5,44.5" fill="#ffffff"/>
+          <path d="M 28,74 Q 50,82 72,74 L 68,78 Q 50,85 32,78 Z" fill="#b91c1c"/>
+          <text x="50" y="79" font-size="3.5" font-weight="bold" fill="#ffffff" text-anchor="middle">BAYDHABO / BAIDOA</text>
+        </svg>
+      `;
+
+      const watermarkHTML = `
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:360px;height:360px;opacity:0.025;pointer-events:none;z-index:0;">
+          <svg width="100%" height="100%" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="46" fill="none" stroke="#166534" stroke-width="3"/>
+            <circle cx="50" cy="50" r="39" fill="none" stroke="#22c55e" stroke-width="1" stroke-dasharray="2,2"/>
+            <path d="M 36,36 A 14,14 0 0,0 64,36 C 64,54 50,68 50,68 C 50,68 36,54 36,36 Z" fill="#2563eb" stroke="#1d4ed8" stroke-width="1.5"/>
+            <polygon points="50,38 52.5,44.5 59.5,45.5 54.2,50 55.5,57 50,53.5 44.5,57 45.8,50 40.5,45.5 47.5,44.5" fill="#ffffff"/>
+          </svg>
+        </div>
+      `;
+
       const headerHTML = `
-        <div style="border-top:6px solid #2563eb;display:grid;grid-template-columns:1.2fr 1fr 1.2fr;gap:18px;align-items:center;border-bottom:1px solid #dbe3ef;padding:14px 0 12px;margin-bottom:12px;font-family:Arial,sans-serif;">
+        <div style="display:grid;grid-template-columns:1.2fr 1fr 1.2fr;gap:12px;align-items:center;padding:10px 0 8px;font-family:Arial,sans-serif;position:relative;z-index:1;">
           <!-- Left Column: Somali -->
-          <div style="font-size:9px;font-weight:700;line-height:1.45;color:#334155;text-align:left;">
+          <div style="font-size:10px;font-weight:700;line-height:1.45;color:#000000;text-align:left;">
             Dowladda Koonfur Galbeed Soomaaliya<br/>
             Dowladda Hoose ee Baydhabo<br/>
-            <span style="color:#1d4ed8;">Waaxda Howlaha Guud iyo Maamulka Dhulka</span>
+            Waaxda Howlaha Guud, Guryeynta<br/>
+            Iyo Maamulka Dhulka
           </div>
           
-          <!-- Center Column: Logo & English -->
+          <!-- Center Column: Seal Emblem & English -->
           <div style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-            <svg width="52" height="52" viewBox="0 0 100 100" style="margin-bottom:5px;font-family:Arial,sans-serif;">
-              <!-- Outer green ring -->
-              <circle cx="50" cy="50" r="47" fill="#ffffff" stroke="#2563eb" stroke-width="4"/>
-              <!-- Inner green circle -->
-              <circle cx="50" cy="50" r="39" fill="none" stroke="#3b82f6" stroke-width="1" stroke-dasharray="2,2"/>
-              <!-- Shield/Emblem base -->
-              <path d="M 35,40 A 15,15 0 0,0 65,40 C 65,58 50,72 50,72 C 50,72 35,58 35,40 Z" fill="#3b82f6" stroke="#1d4ed8" stroke-width="1.5"/>
-              <!-- White star -->
-              <polygon points="50,42 53,49 61,50 55,55 56,62 50,58 44,62 45,55 39,50 47,49" fill="#ffffff"/>
-              <!-- Text paths -->
-              <path id="curve-top" d="M 20,50 A 30,30 0 0,1 80,50" fill="none" stroke="none"/>
-              <text font-size="6.5" font-weight="bold" fill="#1d4ed8" letter-spacing="0.5">
-                <textPath href="#curve-top" startOffset="50%" text-anchor="middle">BAYDHABO</textPath>
-              </text>
-              <path id="curve-bottom" d="M 80,50 A 30,30 0 0,1 20,50" fill="none" stroke="none"/>
-              <text font-size="6.5" font-weight="bold" fill="#1d4ed8" letter-spacing="0.5">
-                <textPath href="#curve-bottom" startOffset="50%" text-anchor="middle">BAIDOA</textPath>
-              </text>
-            </svg>
-            <div style="font-size:7.5px;font-weight:900;line-height:1.25;color:#0f172a;text-transform:uppercase;white-space:nowrap;letter-spacing:.15px;">
-              Southwest State of Somalia<br/>
+            ${emblemSealSVG}
+            <div style="font-size:8.5px;font-weight:bold;line-height:1.3;color:#000000;text-transform:none;white-space:nowrap;">
+              <strong>Southwest State of Somalia</strong><br/>
               Municipality of Baidoa<br/>
               Public works, Housing and land<br/>
               Administration Department
@@ -685,239 +748,191 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           </div>
 
           <!-- Right Column: Arabic -->
-          <div style="font-size: 9.5px; font-weight: bold; line-height: 1.4; color: #1e293b; text-align: right; direction: rtl;">
+          <div style="font-size: 11px; font-weight: bold; line-height: 1.45; color: #000000; text-align: right; direction: rtl;">
             ولاية جنوب غرب الصومال<br/>
             حكومة بلدية بيدوا<br/>
             إدارة الأشغال العامة والإسكان<br/>
             وإدارة الأراضي
           </div>
         </div>
+        <div style="border-bottom:2px solid #000080;margin:10px 0 16px;"></div>
       `;
 
-      const footerHTML = (pageNum: number) => `
-        <div style="display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;border-top:1px solid #dbe3ef;padding-top:8px;font-family:Arial,sans-serif;">
-          <div style="font-size:7.5px;font-weight:900;color:#1d4ed8;">GEOSURVEY PRO</div>
-          <div style="text-align:center;font-size:7.5px;color:#64748b;">hssnmoalim@gmail.com&nbsp; | &nbsp;+252 611122205&nbsp; | &nbsp;Baidoa - Somalia</div>
-          <div style="text-align:right;font-size:8px;font-weight:900;color:#0f172a;">PAGE ${pageNum} / 3</div>
+      const footerHTML = `
+        <div style="border-top:1.5px solid #000000;padding-top:10px;margin-top:auto;text-align:center;font-size:11px;color:#000000;line-height:1.6;font-family:Arial,sans-serif;position:relative;z-index:1;">
+          <div>Email :<a href="mailto:${settings.contact_email}" style="color:#0000ee;text-decoration:underline;">${settings.contact_email}</a></div>
+          <div>Mobile: ${settings.contact_phone}</div>
+          <div>${settings.contact_address}</div>
+          <div style="margin-top:4px;font-size:9px;color:#475569;">System-ka waxaa maamula ${settings.org_name_so} (${settings.org_name_en})</div>
         </div>
       `;
 
-      const printContainer = document.createElement('div');
+      // Host is the one allowed to use out-of-flow positioning (keeps it off-screen).
+      // printContainer itself must stay position:static — html2pdf.js clones it and
+      // re-parents the clone into its own height:auto wrapper; a fixed/absolute
+      // printContainer would be pulled out of flow there and capture as zero-height.
+      offscreenHost = document.createElement('div');
+      offscreenHost.style.position = 'fixed';
+      offscreenHost.style.top = '0px';
+      offscreenHost.style.left = '-10000px';
+      offscreenHost.style.zIndex = '-1';
+      offscreenHost.style.pointerEvents = 'none';
+
+      printContainer = document.createElement('div');
       printContainer.className = 'bg-white text-slate-950 font-sans';
       printContainer.style.width = '750px';
+      printContainer.style.backgroundColor = '#ffffff';
 
       printContainer.innerHTML = `
-        <style>
-          .survey-table { width:100% !important; border-collapse:separate !important; border-spacing:0 !important; border:1px solid #dbe3ef !important; border-radius:11px !important; overflow:hidden !important; font-size:9px !important; }
-          .survey-table th { padding:8px 10px !important; background:#eff6ff !important; color:#1e3a8a !important; border:0 !important; border-bottom:1px solid #bfdbfe !important; text-align:left !important; font-size:8px !important; letter-spacing:.5px !important; text-transform:uppercase !important; }
-          .survey-table td { padding:8px 10px !important; border:0 !important; border-bottom:1px solid #e2e8f0 !important; color:#334155 !important; }
-          .survey-table tr:last-child td { border-bottom:0 !important; }
-          .survey-table td:first-child { font-weight:900 !important; color:#0f172a !important; }
-          .pdf-section-kicker { display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:7px;background:#2563eb;color:#fff;font-size:9px;font-weight:900;margin-right:8px; }
-        </style>
-        <!-- Page 1: Details & Tables -->
-        <div style="min-height:980px;padding:22px 28px 18px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;background:#ffffff;color:#0f172a;page-break-inside:avoid;page-break-after:always;">
-          <div>
+        <!-- Page 1: Official Land Survey Form -->
+        <div style="width:750px;min-height:1040px;padding:32px 38px 28px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;background:#ffffff;color:#000000;position:relative;">
+          ${watermarkHTML}
+          <div style="position:relative;z-index:1;">
             ${headerHTML}
             
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:14px 0 18px;">
-              <div style="border:1px solid #dbe3ef;border-radius:10px;padding:9px 11px;background:#f8fafc;">
-                <div style="font-size:7px;font-weight:900;letter-spacing:.8px;color:#64748b;">DOCUMENT ID</div>
-                <div style="margin-top:3px;font-size:11px;font-weight:900;color:#0f172a;">SRV-${record.serial_no}</div>
-              </div>
-              <div style="border:1px solid #dbe3ef;border-radius:10px;padding:9px 11px;background:#f8fafc;">
-                <div style="font-size:7px;font-weight:900;letter-spacing:.8px;color:#64748b;">ISSUE DATE</div>
-                <div style="margin-top:3px;font-size:11px;font-weight:900;color:#0f172a;">${issueDate}</div>
-              </div>
-              <div style="border:1px solid #bfdbfe;border-radius:10px;padding:9px 11px;background:#eff6ff;">
-                <div style="font-size:7px;font-weight:900;letter-spacing:.8px;color:#2563eb;">DOCUMENT STATUS</div>
-                <div style="margin-top:3px;font-size:11px;font-weight:900;color:#1d4ed8;">OFFICIAL RECORD</div>
-              </div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:bold;margin-bottom:20px;color:#000000;">
+              <span>Ref No: ${record.serial_no}</span>
+              <span>Date: ${issueDate}</span>
             </div>
 
-            <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px;">
-              <div>
-                <div style="font-size:8px;font-weight:900;letter-spacing:1.2px;color:#2563eb;">LAND ADMINISTRATION • SURVEY 01</div>
-                <h2 style="font-size:22px;font-weight:900;color:#0f172a;margin:4px 0 0;letter-spacing:-.4px;">Official Land Survey Report</h2>
-              </div>
-              <div style="font-size:8px;color:#64748b;text-align:right;line-height:1.5;">Digitally prepared record<br/>Baidoa Municipality</div>
-            </div>
+            <h2 style="text-align:center;font-size:16px;font-weight:bold;margin:18px 0 22px;letter-spacing:0.5px;color:#000000;">OFFICIAL LAND SURVEY FORM</h2>
 
-            <div style="border:1px solid #dbe3ef;border-radius:14px;overflow:hidden;margin-bottom:16px;">
-              <div style="background:#0f172a;color:#ffffff;padding:8px 12px;font-size:8px;font-weight:900;letter-spacing:.9px;">PARCEL &amp; OWNERSHIP INFORMATION</div>
-              <div style="display:grid;grid-template-columns:1.35fr 1fr 1fr;">
-                <div style="padding:12px;border-right:1px solid #e2e8f0;">
-                  <div style="font-size:7px;font-weight:900;color:#64748b;letter-spacing:.7px;">REGISTERED OWNER</div>
-                  <div style="margin-top:4px;font-size:13px;font-weight:900;color:#0f172a;">${record.owner_name}</div>
-                  <div style="margin-top:4px;font-size:8px;color:#64748b;">Primary survey record holder</div>
-                </div>
-                <div style="padding:12px;border-right:1px solid #e2e8f0;">
-                  <div style="font-size:7px;font-weight:900;color:#64748b;letter-spacing:.7px;">PLOT LOCATION</div>
-                  <div style="margin-top:4px;font-size:11px;font-weight:900;color:#0f172a;">${record.neighborhood}</div>
-                  <div style="margin-top:4px;font-size:8px;color:#64748b;">Branch ${record.branch || '-'}</div>
-                </div>
-                <div style="padding:12px;">
-                  <div style="font-size:7px;font-weight:900;color:#64748b;letter-spacing:.7px;">LAND TYPE</div>
-                  <div style="margin-top:4px;font-size:11px;font-weight:900;color:#0f172a;">${record.land_type || '-'}</div>
-                  <div style="margin-top:4px;font-size:8px;color:#64748b;">${record.vicinity || 'Registered parcel'}</div>
-                </div>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid #e2e8f0;background:#f8fafc;">
-                <div style="padding:9px 12px;border-right:1px solid #e2e8f0;"><span style="font-size:7px;font-weight:900;color:#64748b;">TOTAL AREA</span><div style="margin-top:3px;font-size:12px;font-weight:900;color:#1d4ed8;">${areaClean} m²</div></div>
-                <div style="padding:9px 12px;border-right:1px solid #e2e8f0;"><span style="font-size:7px;font-weight:900;color:#64748b;">LATITUDE</span><div style="margin-top:3px;font-size:10px;font-weight:800;color:#0f172a;">${latVal}</div></div>
-                <div style="padding:9px 12px;"><span style="font-size:7px;font-weight:900;color:#64748b;">LONGITUDE</span><div style="margin-top:3px;font-size:10px;font-weight:800;color:#0f172a;">${lngVal}</div></div>
-              </div>
+            <div style="font-size:12px;line-height:2.0;color:#000000;margin-bottom:24px;">
+              <div><strong>Plot Location:</strong> ${record.neighborhood}${record.branch ? ' Laanta ' + record.branch : ''}</div>
+              <div><strong>Parcel Number:</strong> ${record.serial_no ? 'SRV-' + record.serial_no : 'N/A'}</div>
+              <div><strong>Owner's Full Name:</strong> ${record.owner_name}</div>
+              <div><strong>Contact Number:</strong> ${(record as unknown as { phone_number?: string }).phone_number || '+252611122205'}</div>
+              <div><strong>GPS Coordinates:</strong> Latitude: ${latVal} &nbsp;&nbsp;&nbsp;&nbsp; Longitude: ${lngVal}</div>
+              <div><strong>Total Area (Sq.m):</strong> ${areaClean}</div>
             </div>
 
             <!-- Table 1: PLOT MEASUREMENTS -->
-            <div style="margin-bottom:14px;">
-              <h3 style="display:flex;align-items:center;font-size:10px;font-weight:900;color:#0f172a;margin:0 0 8px;text-transform:uppercase;"><span class="pdf-section-kicker">01</span> Plot Measurements</h3>
-              <table class="survey-table" style="width: 100%; border-collapse: collapse; font-size: 10px; border: 1.5px solid #000000; text-align: left;">
+            <div style="margin-bottom:24px;">
+              <h3 style="text-align:center;font-size:13px;font-weight:bold;margin:0 0 10px;color:#000000;">1. PLOT MEASUREMENTS</h3>
+              <table style="width:100%;border-collapse:collapse;border:1.5px solid #000000;font-size:12px;">
                 <thead>
-                  <tr style="background-color: #f1f5f9; border-bottom: 1.5px solid #000000; color: #000000; font-weight: bold;">
-                    <th style="padding: 6px 8px; border: 1.5px solid #000000; text-align: center; width: 40%;">Side</th>
-                    <th style="padding: 6px 8px; border: 1.5px solid #000000; text-align: center; width: 60%;">Length (m)</th>
+                  <tr style="background:#ffffff;border-bottom:1.5px solid #000000;">
+                    <th style="padding:8px 12px;border:1.5px solid #000000;text-align:center;width:40%;font-weight:bold;">Side</th>
+                    <th style="padding:8px 12px;border:1.5px solid #000000;text-align:center;width:60%;font-weight:bold;">Length (m)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr style="border-bottom: 1px solid #000000;">
-                    <td style="padding: 6px 8px; font-weight: bold; border: 1px solid #000000; text-align: center;">North</td>
-                    <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${cleanVal(record.boundary_w_val)}</td>
+                  <tr style="border-bottom:1px solid #000000;">
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">North</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${cleanVal(record.boundary_w_val)}</td>
                   </tr>
-                  <tr style="border-bottom: 1px solid #000000;">
-                    <td style="padding: 6px 8px; font-weight: bold; border: 1px solid #000000; text-align: center;">East</td>
-                    <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${cleanVal(record.boundary_b_val)}</td>
+                  <tr style="border-bottom:1px solid #000000;">
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">East</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${cleanVal(record.boundary_b_val)}</td>
                   </tr>
-                  <tr style="border-bottom: 1px solid #000000;">
-                    <td style="padding: 6px 8px; font-weight: bold; border: 1px solid #000000; text-align: center;">West</td>
-                    <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${cleanVal(record.boundary_g_val)}</td>
+                  <tr style="border-bottom:1px solid #000000;">
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">West</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${cleanVal(record.boundary_g_val)}</td>
                   </tr>
-                  <tr style="border-bottom: 1px solid #000000;">
-                    <td style="padding: 6px 8px; font-weight: bold; border: 1px solid #000000; text-align: center;">South</td>
-                    <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${cleanVal(record.boundary_k_val)}</td>
+                  <tr style="border-bottom:1px solid #000000;">
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">South</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${cleanVal(record.boundary_k_val)}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
             <!-- Table 2: NEIGHBOURING DIRECTIONS -->
-            <div style="margin-bottom:12px;">
-              <h3 style="display:flex;align-items:center;font-size:10px;font-weight:900;color:#0f172a;margin:0 0 8px;text-transform:uppercase;"><span class="pdf-section-kicker">02</span> Neighbouring Directions</h3>
-              <table class="survey-table" style="width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #000000; text-align: left;">
+            <div style="margin-bottom:20px;">
+              <h3 style="text-align:center;font-size:13px;font-weight:bold;margin:0 0 10px;color:#000000;">2. NEIGHBOURING DIRECTIONS</h3>
+              <table style="width:100%;border-collapse:collapse;border:1.5px solid #000000;font-size:12px;">
                 <thead>
-                  <tr style="background-color: #f1f5f9; border-bottom: 1.5px solid #000000; color: #000000; font-weight: bold;">
-                    <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center; width: 40%;">Direction</th>
-                    <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center; width: 60%;">What is next to the land?</th>
+                  <tr style="background:#ffffff;border-bottom:1.5px solid #000000;">
+                    <th style="padding:8px 12px;border:1.5px solid #000000;text-align:center;width:40%;font-weight:bold;">Direction</th>
+                    <th style="padding:8px 12px;border:1.5px solid #000000;text-align:center;width:60%;font-weight:bold;">What is next to the land?</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr style="border-bottom: 1px solid #000000;">
-                    <td style="padding: 6px 8px; font-weight: bold; border: 1px solid #000000; text-align: center;">North</td>
-                    <td style="padding: 6px 8px; border: 1px solid #000000;">${record.boundary_w_neighbor || '-'}</td>
+                  <tr style="border-bottom:1px solid #000000;">
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">North</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${record.boundary_w_neighbor || '-'}</td>
                   </tr>
-                  <tr style="border-bottom: 1px solid #000000;">
-                    <td style="padding: 6px 8px; font-weight: bold; border: 1px solid #000000; text-align: center;">East</td>
-                    <td style="padding: 6px 8px; border: 1px solid #000000;">${record.boundary_b_neighbor || '-'}</td>
+                  <tr style="border-bottom:1px solid #000000;">
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">East</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${record.boundary_b_neighbor || '-'}</td>
                   </tr>
-                  <tr style="border-bottom: 1px solid #000000;">
-                    <td style="padding: 6px 8px; font-weight: bold; border: 1px solid #000000; text-align: center;">West</td>
-                    <td style="padding: 6px 8px; border: 1px solid #000000;">${record.boundary_g_neighbor || '-'}</td>
+                  <tr style="border-bottom:1px solid #000000;">
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">West</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${record.boundary_g_neighbor || '-'}</td>
                   </tr>
-                  <tr style="border-bottom: 1px solid #000000;">
-                    <td style="padding: 6px 8px; font-weight: bold; border: 1px solid #000000; text-align: center;">South</td>
-                    <td style="padding: 6px 8px; border: 1px solid #000000;">${record.boundary_k_neighbor || '-'}</td>
+                  <tr style="border-bottom:1px solid #000000;">
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">South</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${record.boundary_k_neighbor || '-'}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </div>
 
-          ${footerHTML(1)}
+          ${footerHTML}
         </div>
+        <div class="html2pdf__page-break" style="page-break-after: always; height: 0;"></div>
 
-        <!-- Page 2: Technical Sketch Drawing -->
-        <div style="min-height:980px;padding:22px 28px 18px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;background:#ffffff;color:#0f172a;page-break-inside:avoid;page-break-after:always;">
-          <div>
+        <!-- Page 2: Technical Drawing Sketch -->
+        <div style="width:750px;min-height:1040px;padding:32px 38px 28px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;background:#ffffff;color:#000000;position:relative;">
+          ${watermarkHTML}
+          <div style="position:relative;z-index:1;">
             ${headerHTML}
             
-            <div style="display:flex;align-items:flex-end;justify-content:space-between;margin:18px 0 14px;">
-              <div>
-                <div style="font-size:8px;font-weight:900;letter-spacing:1.2px;color:#2563eb;">TECHNICAL DRAWING • SURVEY 02</div>
-                <h2 style="font-size:21px;font-weight:900;color:#0f172a;margin:4px 0 0;letter-spacing:-.35px;">Parcel Sketch &amp; Dimensions</h2>
+            <div style="font-size:12px;line-height:1.7;color:#000000;margin:16px 0 14px;">
+              <p style="margin-bottom:16px;">This document forms part of the official land registration process and shall be permanently filed with the corresponding parcel records for future reference and legal use.</p>
+              
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;font-size:12px;font-weight:bold;">
+                <span>Surveyor Name: Eng. Salah Ali Mohamed</span>
+                <span>Signature: ________________</span>
               </div>
-              <div style="border:1px solid #bfdbfe;border-radius:9px;background:#eff6ff;padding:7px 10px;font-size:8px;font-weight:900;color:#1d4ed8;">REF SRV-${record.serial_no}</div>
+
+              <p style="margin-bottom:6px;">A detailed site sketch illustrating the approximate shape of the land parcel including all measured sides and their respective lengths, as well as any adjacent features noted during the survey.</p>
+              <p style="font-style:italic;margin-bottom:14px;">This sketch forms part of the official record.</p>
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
-              <div style="padding:9px 10px;border:1px solid #dbe3ef;border-radius:10px;background:#f8fafc;"><div style="font-size:7px;font-weight:900;color:#64748b;">AREA</div><div style="margin-top:3px;font-size:11px;font-weight:900;color:#1d4ed8;">${areaClean} m²</div></div>
-              <div style="padding:9px 10px;border:1px solid #dbe3ef;border-radius:10px;background:#f8fafc;"><div style="font-size:7px;font-weight:900;color:#64748b;">VERTICES</div><div style="margin-top:3px;font-size:11px;font-weight:900;color:#0f172a;">${vertexCount || '-'}</div></div>
-              <div style="padding:9px 10px;border:1px solid #dbe3ef;border-radius:10px;background:#f8fafc;"><div style="font-size:7px;font-weight:900;color:#64748b;">NORTH SIDE</div><div style="margin-top:3px;font-size:11px;font-weight:900;color:#0f172a;">${cleanVal(record.boundary_w_val)} m</div></div>
-              <div style="padding:9px 10px;border:1px solid #dbe3ef;border-radius:10px;background:#f8fafc;"><div style="font-size:7px;font-weight:900;color:#64748b;">SOUTH SIDE</div><div style="margin-top:3px;font-size:11px;font-weight:900;color:#0f172a;">${cleanVal(record.boundary_k_val)} m</div></div>
-            </div>
-
-            <div style="border:1px solid #dbe3ef;border-radius:14px;overflow:hidden;background:#ffffff;padding:12px;box-sizing:border-box;box-shadow:0 8px 24px rgba(15,23,42,.04);">
-              ${sketchImage ? `<img src="${sketchImage}" style="display:block;width:100%;height:500px;object-fit:contain;background:#ffffff;" />` : `<div style="height:500px;display:flex;align-items:center;justify-content:center;color:#94a3b8;background:#f8fafc;font-size:11px;">Sketch image not available</div>`}
-            </div>
-
-            <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:12px;margin-top:14px;">
-              <div style="border:1px solid #dbe3ef;border-radius:11px;padding:11px 12px;background:#f8fafc;">
-                <div style="font-size:7px;font-weight:900;color:#2563eb;letter-spacing:.7px;">TECHNICAL NOTE</div>
-                <div style="margin-top:4px;font-size:8.5px;line-height:1.55;color:#475569;">The parcel outline and measured sides shown above form part of the official survey record. Dimensions are stated in metres.</div>
-              </div>
-              <div style="border:1px solid #dbe3ef;border-radius:11px;padding:11px 12px;background:#ffffff;">
-                <div style="font-size:7px;font-weight:900;color:#64748b;">SURVEYOR</div>
-                <div style="margin-top:5px;font-size:9px;font-weight:900;color:#0f172a;">Eng. Salah Ali Mohamed</div>
-                <div style="margin-top:13px;border-top:1px solid #94a3b8;padding-top:4px;font-size:7px;color:#64748b;">Signature / Stamp</div>
-              </div>
+            <div style="border:1.5px solid #000000;padding:12px;background:#ffffff;box-sizing:border-box;margin-bottom:16px;display:flex;align-items:center;justify-content:center;height:520px;">
+              ${sketchImage ? `<img src="${sketchImage}" style="max-width:100%;max-height:490px;object-fit:contain;background:#ffffff;" />` : `<div style="color:#64748b;font-size:12px;">Sketch image not available</div>`}
             </div>
           </div>
 
-          ${footerHTML(2)}
+          ${footerHTML}
         </div>
+        <div class="html2pdf__page-break" style="page-break-after: always; height: 0;"></div>
 
-        <!-- Page 3: Satellite View Map -->
-        <div style="min-height:980px;padding:22px 28px 18px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;background:#ffffff;color:#0f172a;page-break-inside:avoid;">
-          <div>
+        <!-- Page 3: Satellite Location Map -->
+        <div style="width:750px;min-height:1040px;padding:32px 38px 28px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;background:#ffffff;color:#000000;position:relative;">
+          <div style="position:relative;z-index:1;">
             ${headerHTML}
             
-            <div style="display:flex;align-items:flex-end;justify-content:space-between;margin:18px 0 14px;">
-              <div>
-                <div style="font-size:8px;font-weight:900;letter-spacing:1.2px;color:#2563eb;">GEOSPATIAL REFERENCE • SURVEY 03</div>
-                <h2 style="font-size:21px;font-weight:900;color:#0f172a;margin:4px 0 0;letter-spacing:-.35px;">Satellite Location Reference</h2>
-              </div>
-              <div style="font-size:8px;color:#64748b;text-align:right;line-height:1.45;">Parcel ${record.serial_no}<br/>${record.neighborhood}, Baidoa</div>
+            <div style="border:1.5px solid #000000;padding:10px 14px;text-align:center;font-size:14px;font-weight:bold;margin:20px 0 16px;color:#000000;">
+              GPS Ir Latitude ( <span style="color:#0000ff;">${latVal}</span> &nbsp;&nbsp; <span style="color:#0000ff;">${lngVal}</span> ) Longitude
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr .8fr;gap:8px;margin-bottom:14px;">
-              <div style="padding:10px 12px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;"><div style="font-size:7px;font-weight:900;color:#2563eb;">LATITUDE</div><div style="margin-top:3px;font-size:11px;font-weight:900;color:#0f172a;">${latVal}</div></div>
-              <div style="padding:10px 12px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;"><div style="font-size:7px;font-weight:900;color:#2563eb;">LONGITUDE</div><div style="margin-top:3px;font-size:11px;font-weight:900;color:#0f172a;">${lngVal}</div></div>
-              <div style="padding:10px 12px;border:1px solid #dbe3ef;border-radius:10px;background:#f8fafc;"><div style="font-size:7px;font-weight:900;color:#64748b;">DATUM</div><div style="margin-top:3px;font-size:11px;font-weight:900;color:#0f172a;">WGS 84</div></div>
-            </div>
-
-            <div style="border:1px solid #dbe3ef;border-radius:14px;overflow:hidden;background:#ffffff;padding:7px;box-sizing:border-box;box-shadow:0 8px 24px rgba(15,23,42,.06);">
-              ${satImage ? `<img src="${satImage}" style="display:block;width:100%;height:500px;object-fit:cover;border-radius:9px;background:#e2e8f0;" />` : `<div style="height:500px;display:flex;align-items:center;justify-content:center;color:#94a3b8;background:#f8fafc;font-size:11px;">Map image not available</div>`}
-            </div>
-
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:8px 10px;border:1px solid #dbe3ef;border-radius:9px;background:#f8fafc;">
-              <div style="display:flex;align-items:center;gap:7px;font-size:8px;font-weight:800;color:#334155;"><span style="display:inline-block;width:20px;height:3px;background:#dc2626;border-radius:3px;"></span> Surveyed parcel boundary</div>
-              <div style="font-size:7.5px;color:#64748b;">Satellite imagery is a location reference and not a substitute for field verification.</div>
-            </div>
-
-            <div style="display:grid;grid-template-columns:1.45fr 1fr;gap:12px;margin-top:12px;">
-              <div style="padding:11px 12px;border:1px solid #dbe3ef;border-radius:11px;background:#ffffff;">
-                <div style="font-size:7px;font-weight:900;color:#2563eb;letter-spacing:.7px;">CERTIFICATION</div>
-                <div style="margin-top:4px;font-size:8.5px;line-height:1.5;color:#475569;">This geospatial reference corresponds to the parcel described in Survey Record SRV-${record.serial_no} and is filed for municipal land administration use.</div>
-              </div>
-              <div style="padding:11px 12px;border:1px solid #dbe3ef;border-radius:11px;background:#f8fafc;">
-                <div style="font-size:7px;font-weight:900;color:#64748b;">AUTHORIZED APPROVAL</div>
-                <div style="margin-top:20px;border-top:1px solid #94a3b8;padding-top:4px;font-size:7px;color:#64748b;">Name, signature and official stamp</div>
-              </div>
+            <div style="border:1.5px solid #000000;padding:8px;background:#ffffff;box-sizing:border-box;margin-bottom:16px;display:flex;align-items:center;justify-content:center;height:570px;">
+              ${satImage ? `<img src="${satImage}" style="width:100%;height:550px;display:block;background:#e2e8f0;" />` : `<div style="color:#64748b;font-size:12px;">Satellite map image not available</div>`}
             </div>
           </div>
 
-          ${footerHTML(3)}
+          ${footerHTML}
         </div>
       `;
+
+      offscreenHost.appendChild(printContainer);
+      document.body.appendChild(offscreenHost);
+
+      const images = Array.from(printContainer.querySelectorAll('img'));
+      await Promise.all(
+        images.map((img) => {
+          if (img.complete) return Promise.resolve();
+          return new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+        })
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       await html2pdf().set(options).from(printContainer).save();
       showAlert('Guul', 'PDF-ka waa la soo dejiyay.', 'success');
@@ -926,6 +941,9 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       console.error('Error generating PDF:', err);
       showAlert('Cillad', 'Ma suuragalin in PDF-ka la soo dejiyo.', 'error');
     } finally {
+      if (offscreenHost && offscreenHost.parentNode) {
+        offscreenHost.parentNode.removeChild(offscreenHost);
+      }
       if (styleEl.parentNode) {
         styleEl.parentNode.removeChild(styleEl);
       }

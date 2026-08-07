@@ -11,6 +11,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   logout: () => Promise<void>;
+  refetchProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   loading: true,
   logout: async () => {},
+  refetchProfile: async () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -72,13 +74,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Auth routing protection
   useEffect(() => {
     if (!loading) {
-      const isPublicPath = pathname === '/login';
+      const isVerifyPath = pathname.startsWith('/verify/');
+      const isPublicPath = pathname === '/login' || isVerifyPath;
       const isInitialRoute = !initialRouteHandledRef.current;
       initialRouteHandledRef.current = true;
 
       if (!user && !isPublicPath) {
         router.replace('/login');
-      } else if (user && (isPublicPath || (isInitialRoute && pathname !== '/dashboard'))) {
+      } else if (user && !isVerifyPath && (pathname === '/login' || (isInitialRoute && pathname !== '/dashboard'))) {
         router.replace('/dashboard');
       }
     }
@@ -91,8 +94,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   };
 
+  const refetchProfile = async () => {
+    if (!user) return;
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    if (!error) setProfile(data as Profile);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, logout }}>
+    <AuthContext.Provider value={{ user, profile, loading, logout, refetchProfile }}>
       {children}
     </AuthContext.Provider>
   );

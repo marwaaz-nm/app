@@ -2,9 +2,11 @@
 
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useSettings } from '@/context/SettingsContext';
 import { ShieldAlert, Shield, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
+  const { settings } = useSettings();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -38,7 +40,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4 text-slate-800">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4 text-slate-800">
       <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white p-8 shadow-xl border border-slate-100">
         <div className="text-center mb-8">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-50 text-teal-600 border border-teal-100 shadow-sm">
@@ -112,6 +114,9 @@ export default function LoginPage() {
           </button>
         </form>
       </div>
+      <p className="mt-6 text-center text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+        {settings.org_name_so} &middot; {settings.org_name_en}
+      </p>
     </div>
   );
 }

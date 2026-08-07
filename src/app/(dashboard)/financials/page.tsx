@@ -54,6 +54,18 @@ export default function FinancialsPage() {
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
   const [updatingCredit, setUpdatingCredit] = useState(false);
 
+  // Pay Debt Modal State (Partial or Full Payment)
+  const [showPayDebtModal, setShowPayDebtModal] = useState(false);
+  const [payDebtRef, setPayDebtRef] = useState<any | null>(null);
+  const [payDebtCreditReceipt, setPayDebtCreditReceipt] = useState<any | null>(null);
+  const [payDebtTotalCredit, setPayDebtTotalCredit] = useState(0);
+  const [payDebtPaidSoFar, setPayDebtPaidSoFar] = useState(0);
+  const [payDebtAmount, setPayDebtAmount] = useState('');
+  const [payDebtMode, setPayDebtMode] = useState<'EVC Plus' | 'eDahab' | 'Jeeb' | 'Cash'>('EVC Plus');
+  const [payDebtDate, setPayDebtDate] = useState('');
+  const [payDebtDetails, setPayDebtDetails] = useState('');
+  const [savingDebtPayment, setSavingDebtPayment] = useState(false);
+
   // Bulk Payment Selection State
   const [selectedRefIds, setSelectedRefIds] = useState<number[]>([]);
   const [bulkAmounts, setBulkAmounts] = useState<Record<number, string>>({});
@@ -79,6 +91,7 @@ export default function FinancialsPage() {
           issue_date,
           receipts (
             id,
+            reference_id,
             receipt_no,
             amount,
             status,
@@ -233,12 +246,28 @@ export default function FinancialsPage() {
   const handleUpdateCreditToPaid = async (receiptId: number) => {
     setUpdatingCredit(true);
     try {
-      const { error } = await supabase
-        .from('receipts')
-        .update({ status: 'Paid', payment_date: new Date().toISOString().split('T')[0] })
-        .eq('id', receiptId);
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
-      if (error) throw error;
+      if (token) {
+        const res = await fetch('/api/financials/update-status', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ receipt_id: receiptId, status: 'Paid' })
+        });
+        const resData = await res.json();
+        if (!res.ok) throw new Error(resData.error || 'Failed to update receipt status.');
+      } else {
+        const { error } = await supabase
+          .from('receipts')
+          .update({ status: 'Paid', payment_date: new Date().toISOString().split('T')[0] })
+          .eq('id', receiptId);
+
+        if (error) throw error;
+      }
 
       showAlert('Guul', 'Resiidhka waxaa loo bedelay Paid (Waa la bixiyey)!', 'success');
       setSelectedReceipt(null);
@@ -248,6 +277,132 @@ export default function FinancialsPage() {
       showAlert('Cillad', err.message || 'Cillad ayaa dhacday.', 'error');
     } finally {
       setUpdatingCredit(false);
+    }
+  };
+
+  // Open Pay Debt Modal for a Reference
+  const openPayDebtDialog = (ref: any) => {
+    const receipts = ref.receipts || [];
+    const creditReceipt = receipts.find((r: any) => r.status === 'Credit');
+    const creditSum = creditReceipt ? parseFloat(creditReceipt.amount.toString()) : 0;
+    const paidSum = receipts
+      .filter((r: any) => r.status === 'Paid')
+      .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
+
+    setPayDebtRef(ref);
+    setPayDebtCreditReceipt(creditReceipt || null);
+    setPayDebtTotalCredit(creditSum);
+    setPayDebtPaidSoFar(paidSum);
+    setPayDebtAmount(creditSum > 0 ? creditSum.toString() : '');
+    setPayDebtMode('EVC Plus');
+    setPayDebtDate(new Date().toISOString().split('T')[0]);
+    setPayDebtDetails(`Bixinta deynta: ${ref.ref_number || ''}`);
+    setShowPayDebtModal(true);
+  };
+
+  // Save Debt Payment (Full or Partial)
+  const handleSaveDebtPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payDebtRef || !payDebtCreditReceipt) return;
+
+    const payAmt = parseFloat(payDebtAmount);
+    if (isNaN(payAmt) || payAmt <= 0) {
+      showAlert('Cillad', 'Fadlan geli lacag sax ah.', 'error');
+      return;
+    }
+
+    if (payAmt > payDebtTotalCredit + 0.001) {
+      showAlert('Cillad', `Lacagta la bixinayo ($${payAmt.toFixed(2)}) kama badan karto deynta lagu leeyahay ($${payDebtTotalCredit.toFixed(2)}).`, 'error');
+      return;
+    }
+
+    setSavingDebtPayment(true);
+
+    try {
+      const remainingCredit = payDebtTotalCredit - payAmt;
+      const today = payDebtDate || new Date().toISOString().split('T')[0];
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (token) {
+        const res = await fetch('/api/financials/pay-debt', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            reference_id: payDebtRef.id,
+            credit_receipt_id: payDebtCreditReceipt.id,
+            pay_amount: payAmt,
+            total_credit: payDebtTotalCredit,
+            payment_mode: payDebtMode,
+            payment_date: today,
+            details: payDebtDetails
+          })
+        });
+
+        const resData = await res.json();
+        if (!res.ok) throw new Error(resData.error || 'Cillad ayaa ka dhacday bixinta deynta.');
+      } else {
+        if (remainingCredit <= 0.001) {
+          const { error: updateError } = await supabase
+            .from('receipts')
+            .update({
+              status: 'Paid',
+              amount: payAmt,
+              payment_mode: payDebtMode,
+              payment_date: today,
+              details: payDebtDetails || `Bixinta buuxda ee deynta (${payDebtRef.ref_number})`
+            })
+            .eq('id', payDebtCreditReceipt.id);
+
+          if (updateError) throw updateError;
+        } else {
+          const { error: updateError } = await supabase
+            .from('receipts')
+            .update({
+              amount: remainingCredit,
+              details: `Deyn harsan (${payDebtRef.ref_number})`
+            })
+            .eq('id', payDebtCreditReceipt.id);
+
+          if (updateError) throw updateError;
+
+          const randomNum = Math.floor(1000 + Math.random() * 9000);
+          const newReceiptNo = `REC-${randomNum}`;
+
+          const { error: insertError } = await supabase
+            .from('receipts')
+            .insert({
+              receipt_no: newReceiptNo,
+              reference_id: payDebtRef.id,
+              amount: payAmt,
+              status: 'Paid',
+              payment_mode: payDebtMode,
+              payment_date: today,
+              details: payDebtDetails || `Bixinta qeyb ka mid ah deynta (${payDebtRef.ref_number})`
+            });
+
+          if (insertError) throw insertError;
+        }
+      }
+
+      if (remainingCredit <= 0.001) {
+        showAlert('Guul', `Deyntii oo dhan ($${payDebtTotalCredit.toFixed(2)}) waa la wada bixiyey!`, 'success');
+      } else {
+        showAlert('Guul', `Lacagta $${payAmt.toFixed(2)} waa la bixiyey. Deynta oo harsan waa $${remainingCredit.toFixed(2)}.`, 'success');
+      }
+
+      setShowPayDebtModal(false);
+      setSelectedReceipt(null);
+      fetchData();
+    } catch (err: any) {
+      console.error('Error saving debt payment:', err);
+      showAlert('Cillad', err.message || 'Cillad ayaa dhacday.', 'error');
+    } finally {
+      setSavingDebtPayment(false);
     }
   };
 
@@ -304,8 +459,14 @@ export default function FinancialsPage() {
   };
 
   // Render receipt details popup
-  const openReceiptDetails = (receipt: any, refNum: string) => {
-    setSelectedReceipt({ ...receipt, ref_number: refNum });
+  const openReceiptDetails = (receipt: any, ref: any) => {
+    const refNum = typeof ref === 'string' ? ref : ref?.ref_number;
+    const refId = typeof ref === 'object' ? ref?.id : receipt?.reference_id;
+    setSelectedReceipt({
+      ...receipt,
+      reference_id: refId || receipt?.reference_id,
+      ref_number: refNum
+    });
   };
 
   return (
@@ -487,17 +648,26 @@ export default function FinancialsPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {referencesWithReceipts.map((ref) => {
-                    const receipt = ref.receipts && ref.receipts[0];
-                    const status = receipt ? receipt.status : 'Unpaid';
+                    const receipts = ref.receipts || [];
+                    const paidAmount = receipts
+                      .filter((r: any) => r.status === 'Paid')
+                      .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
+                    const creditAmount = receipts
+                      .filter((r: any) => r.status === 'Credit')
+                      .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
+                    
+                    const hasCredit = creditAmount > 0;
+                    const isPaid = !hasCredit && paidAmount > 0;
+                    const activeReceipt = receipts.find((r: any) => r.status === 'Credit') || receipts[0];
 
                     return (
                       <tr
                         key={ref.id}
-                        onClick={() => receipt && openReceiptDetails(receipt, ref.ref_number)}
-                        className={`hover:bg-slate-50/80 transition-all ${receipt ? 'cursor-pointer' : ''}`}
+                        onClick={() => activeReceipt && openReceiptDetails(activeReceipt, ref.ref_number)}
+                        className={`hover:bg-slate-50/80 transition-all ${activeReceipt ? 'cursor-pointer' : ''}`}
                       >
                         <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
-                          {status !== 'Paid' && (
+                          {!isPaid && (
                             <input
                               type="checkbox"
                               checked={selectedRefIds.includes(ref.id)}
@@ -522,18 +692,31 @@ export default function FinancialsPage() {
                           {ref.issue_date ? new Date(ref.issue_date).toLocaleDateString('so-SO') : '-'}
                         </td>
                         <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
-                          {status === 'Paid' ? (
-                            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-100 px-3.5 py-1.5 rounded-full font-extrabold uppercase text-[10px] cursor-pointer" onClick={() => openReceiptDetails(receipt, ref.ref_number)}>
-                              <CheckCircle2 className="h-3 w-3" /> Paid
+                          {isPaid ? (
+                            <span
+                              className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-100 px-3.5 py-1.5 rounded-full font-extrabold uppercase text-[10px] cursor-pointer"
+                              onClick={() => openReceiptDetails(activeReceipt, ref.ref_number)}
+                            >
+                              <CheckCircle2 className="h-3 w-3" /> Paid (${paidAmount.toFixed(2)})
                             </span>
-                          ) : status === 'Credit' ? (
+                          ) : hasCredit ? (
                             <div className="flex items-center justify-center gap-2">
-                              <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-600 border border-amber-100 px-3.5 py-1.5 rounded-full font-extrabold uppercase text-[10px] cursor-pointer" onClick={() => openReceiptDetails(receipt, ref.ref_number)}>
-                                <AlertCircle className="h-3 w-3" /> Credit
-                              </span>
+                              <div className="flex flex-col items-end">
+                                <span
+                                  className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200/60 px-3 py-1 rounded-full font-extrabold uppercase text-[10px] cursor-pointer"
+                                  onClick={() => openReceiptDetails(activeReceipt, ref.ref_number)}
+                                >
+                                  <AlertCircle className="h-3 w-3" /> Deyn: ${creditAmount.toFixed(2)}
+                                </span>
+                                {paidAmount > 0 && (
+                                  <span className="text-[9px] text-emerald-600 font-bold mt-0.5">
+                                    (Bixiyey: ${paidAmount.toFixed(2)})
+                                  </span>
+                                )}
+                              </div>
                               <button
-                                onClick={() => openReceiptDetails(receipt, ref.ref_number)}
-                                className="bg-amber-600 hover:bg-amber-550 text-white font-bold text-[10px] py-1.5 px-3.5 rounded-xl shadow-sm cursor-pointer transition-colors"
+                                onClick={() => openPayDebtDialog(ref)}
+                                className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] py-1.5 px-3 rounded-xl shadow-sm cursor-pointer transition-all active:scale-95 flex items-center gap-1"
                               >
                                 Pay Debt
                               </button>
@@ -563,20 +746,29 @@ export default function FinancialsPage() {
               </div>
             ) : (
               referencesWithReceipts.map((ref) => {
-                const receipt = ref.receipts && ref.receipts[0];
-                const status = receipt ? receipt.status : 'Unpaid';
+                const receipts = ref.receipts || [];
+                const paidAmount = receipts
+                  .filter((r: any) => r.status === 'Paid')
+                  .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
+                const creditAmount = receipts
+                  .filter((r: any) => r.status === 'Credit')
+                  .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
+                
+                const hasCredit = creditAmount > 0;
+                const isPaid = !hasCredit && paidAmount > 0;
+                const activeReceipt = receipts.find((r: any) => r.status === 'Credit') || receipts[0];
 
                 return (
                   <div
                     key={ref.id}
-                    onClick={() => receipt && openReceiptDetails(receipt, ref.ref_number)}
+                    onClick={() => activeReceipt && openReceiptDetails(activeReceipt, ref.ref_number)}
                     className={`p-4 bg-white border border-slate-200/60 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3 transition-all ${
-                      receipt ? 'cursor-pointer active:scale-[0.99]' : ''
+                      activeReceipt ? 'cursor-pointer active:scale-[0.99]' : ''
                     }`}
                   >
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        {status !== 'Paid' && (
+                        {!isPaid && (
                           <input
                             type="checkbox"
                             checked={selectedRefIds.includes(ref.id)}
@@ -593,17 +785,17 @@ export default function FinancialsPage() {
                         <span className="font-black text-xs text-teal-650">{ref.ref_number}</span>
                       </div>
                       <div onClick={(e) => e.stopPropagation()}>
-                        {status === 'Paid' ? (
-                          <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-100 px-2.5 py-1 rounded-full font-black uppercase text-[9px] cursor-pointer" onClick={() => openReceiptDetails(receipt, ref.ref_number)}>
-                            <CheckCircle2 className="h-2.5 w-2.5" /> Paid
+                        {isPaid ? (
+                          <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-100 px-2.5 py-1 rounded-full font-black uppercase text-[9px] cursor-pointer" onClick={() => openReceiptDetails(activeReceipt, ref.ref_number)}>
+                            <CheckCircle2 className="h-2.5 w-2.5" /> Paid (${paidAmount.toFixed(2)})
                           </span>
-                        ) : status === 'Credit' ? (
+                        ) : hasCredit ? (
                           <div className="flex items-center gap-1.5">
-                            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-600 border border-amber-100 px-2 py-0.5 rounded-full font-black uppercase text-[9px] cursor-pointer" onClick={() => openReceiptDetails(receipt, ref.ref_number)}>
-                              <AlertCircle className="h-2.5 w-2.5" /> Credit
+                            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full font-black uppercase text-[9px] cursor-pointer" onClick={() => openReceiptDetails(activeReceipt, ref.ref_number)}>
+                              <AlertCircle className="h-2.5 w-2.5" /> Deyn: ${creditAmount.toFixed(2)}
                             </span>
                             <button
-                              onClick={() => openReceiptDetails(receipt, ref.ref_number)}
+                              onClick={() => openPayDebtDialog(ref)}
                               className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[9px] py-0.5 px-2 rounded-xl shadow-sm cursor-pointer transition-colors"
                             >
                               Pay Debt
@@ -926,131 +1118,295 @@ export default function FinancialsPage() {
       )}
       {/* View Receipt Details Modal */}
       {selectedReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-md bg-white border border-slate-100 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md overflow-y-auto">
+          <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
             
-            {/* Header / Top decoration */}
-            <div className="relative pt-8 pb-4 px-6 text-center">
+            {/* Header Accent Bar & Close Button */}
+            <div className={`relative pt-7 pb-4 px-6 text-center border-b ${
+              selectedReceipt.status === 'Credit' 
+                ? 'bg-gradient-to-b from-amber-500/10 via-amber-500/5 to-transparent border-amber-100/80' 
+                : 'bg-gradient-to-b from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-100/80'
+            }`}>
               <button
                 onClick={() => setSelectedReceipt(null)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-2 rounded-full hover:bg-slate-50 transition-colors cursor-pointer"
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-2 rounded-full hover:bg-slate-100/80 transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
 
-              {/* Status Icon */}
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full shadow-inner mb-4 transition-all">
+              {/* Status Icon with Glowing Effect */}
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl shadow-sm mb-3 transition-transform hover:scale-105">
                 {selectedReceipt.status === 'Credit' ? (
-                  <div className="bg-amber-50 text-amber-600 p-3.5 rounded-full border border-amber-100/50">
-                    <AlertCircle className="h-7 w-7" />
+                  <div className="bg-gradient-to-br from-amber-400 to-amber-600 text-white p-3.5 rounded-2xl shadow-lg shadow-amber-500/30">
+                    <AlertCircle className="h-8 w-8" />
                   </div>
                 ) : (
-                  <div className="bg-emerald-50 text-emerald-600 p-3.5 rounded-full border border-emerald-100/50">
-                    <CheckCircle2 className="h-7 w-7" />
+                  <div className="bg-gradient-to-br from-emerald-400 to-emerald-600 text-white p-3.5 rounded-2xl shadow-lg shadow-emerald-500/30">
+                    <CheckCircle2 className="h-8 w-8" />
                   </div>
                 )}
               </div>
 
-              <h3 className="text-xl font-black text-slate-800">Xogta Resiidhka</h3>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">Xogta Resiidhka</h3>
+              <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                Tixraac: <span className="text-teal-600 font-extrabold">{selectedReceipt.ref_number || 'N/A'}</span>
+              </p>
               
-              <div className="mt-2.5">
+              <div className="mt-3 flex justify-center">
                 {selectedReceipt.status === 'Credit' ? (
-                  <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-100 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider">
+                  <span className="inline-flex items-center gap-1.5 bg-amber-100/80 text-amber-800 border border-amber-300/80 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-xs">
+                    <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
                     Deyn / Credit
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider">
+                  <span className="inline-flex items-center gap-1.5 bg-emerald-100/80 text-emerald-800 border border-emerald-300/80 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-xs">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
                     Waa la Bixiyey / Paid
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Receipt Card Structure */}
-            <div className="px-6 pb-6 pt-2">
-              <div className="bg-slate-50/50 border border-slate-100 rounded-3xl p-5 shadow-sm space-y-4">
+            {/* Receipt Digital Card Body */}
+            <div className="px-6 py-5 space-y-4">
+              {/* Receipt Ticket Structure */}
+              <div className="bg-slate-50 border border-slate-200/90 rounded-3xl p-5 shadow-xs relative overflow-hidden">
                 
+                {/* Visual Top Pattern */}
+                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-teal-500 via-amber-500 to-emerald-500 opacity-30"></div>
+
                 {/* Amount Row */}
-                <div className="text-center py-4 border-b border-dashed border-slate-200">
+                <div className="text-center py-3 border-b border-dashed border-slate-300">
                   <span className="block text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">
-                    Wadarta Lacagta (Amount)
+                    Wadarta Lacagta (Amount USD)
                   </span>
                   <div className={`text-4xl font-black tracking-tight ${
-                    selectedReceipt.status === 'Credit' ? 'text-amber-600' : 'text-emerald-650'
+                    selectedReceipt.status === 'Credit' ? 'text-amber-600' : 'text-emerald-600'
                   }`}>
                     ${parseFloat(selectedReceipt.amount.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </div>
                 </div>
 
-                {/* Details Grid */}
-                <div className="space-y-3.5 pt-2 text-xs">
+                {/* Receipt Fields Grid */}
+                <div className="space-y-3 pt-4 text-xs">
                   <div className="flex justify-between items-center gap-4">
-                    <span className="text-slate-400 font-extrabold uppercase tracking-wide">Receipt No</span>
-                    <span className="font-black text-slate-800 bg-white border border-slate-150/60 px-3 py-1.5 rounded-xl shadow-xs">
+                    <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Receipt No</span>
+                    <span className="font-mono font-black text-slate-800 bg-white border border-slate-200 px-3 py-1 rounded-xl shadow-2xs">
                       {selectedReceipt.receipt_no}
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center gap-4">
-                    <span className="text-slate-400 font-extrabold uppercase tracking-wide">Sumad (Ref)</span>
-                    <span className="font-black text-teal-650 bg-white border border-slate-150/60 px-3 py-1.5 rounded-xl shadow-xs">
-                      {selectedReceipt.ref_number}
+                    <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Sumad (Ref)</span>
+                    <span className="font-mono font-black text-teal-650 bg-teal-50/80 border border-teal-200/70 px-3 py-1 rounded-xl shadow-2xs">
+                      {selectedReceipt.ref_number || 'N/A'}
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center gap-4">
-                    <span className="text-slate-400 font-extrabold uppercase tracking-wide">Payment Date</span>
-                    <span className="font-bold text-slate-700">
+                    <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Payment Date</span>
+                    <span className="font-bold text-slate-700 bg-white border border-slate-200 px-3 py-1 rounded-xl shadow-2xs">
                       {selectedReceipt.payment_date ? new Date(selectedReceipt.payment_date).toLocaleDateString('so-SO') : '-'}
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center gap-4">
-                    <span className="text-slate-400 font-extrabold uppercase tracking-wide">Paid Via</span>
-                    <span className="inline-flex px-3 py-1 rounded-full bg-white border border-slate-150 text-slate-650 font-black uppercase text-[10px] shadow-xs">
-                      {selectedReceipt.payment_mode}
+                    <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Paid Via</span>
+                    <span className="inline-flex px-3 py-1 rounded-xl bg-slate-900 text-white font-black uppercase text-[10px] shadow-xs">
+                      {selectedReceipt.payment_mode || 'Cash'}
                     </span>
                   </div>
 
-                  <div className="border-t border-slate-100 my-2 pt-3">
-                    <span className="block text-[9px] uppercase tracking-wide text-slate-400 font-extrabold mb-1">
+                  <div className="border-t border-slate-200/80 pt-3 mt-2">
+                    <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-extrabold mb-1.5">
                       Faahfaahinta (Details)
                     </span>
-                    <p className="font-bold text-slate-700 bg-white border border-slate-150/60 p-3.5 rounded-2xl shadow-xs leading-relaxed text-left">
-                      {selectedReceipt.details}
-                    </p>
+                    <div className="font-bold text-slate-700 bg-white border border-slate-200 p-3.5 rounded-2xl text-xs leading-relaxed text-left shadow-2xs">
+                      {selectedReceipt.details || 'Bixinta lacagta'}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Footer Actions */}
-            <div className="p-6 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row gap-3">
+            <div className="p-4 sm:px-6 sm:py-4.5 border-t border-slate-150 bg-slate-50/80 flex flex-col sm:flex-row gap-2.5">
               <button
                 onClick={() => window.print()}
-                className="flex items-center justify-center gap-2 rounded-2xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs px-4 py-3.5 w-full cursor-pointer shadow-sm border border-slate-200 transition-all active:scale-95"
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-2xs border border-slate-200 transition-all active:scale-95"
               >
-                <Printer className="h-4 w-4 text-slate-500" />
+                <Printer className="h-3.5 w-3.5 text-slate-500" />
                 <span>PRINT RECEIPT</span>
               </button>
 
               {selectedReceipt.status === 'Credit' && (
                 <button
-                  onClick={() => handleUpdateCreditToPaid(selectedReceipt.id)}
+                  onClick={() => {
+                    const currentSelected = selectedReceipt;
+                    setSelectedReceipt(null);
+                    const parentRef = referencesWithReceipts.find(
+                      r => r.id === currentSelected.reference_id || r.ref_number === currentSelected.ref_number
+                    );
+                    if (parentRef) {
+                      openPayDebtDialog(parentRef);
+                    } else {
+                      openPayDebtDialog({
+                        id: currentSelected.reference_id,
+                        ref_number: currentSelected.ref_number,
+                        subject: currentSelected.details || 'Bixinta deynta',
+                        receipts: [currentSelected]
+                      });
+                    }
+                  }}
                   disabled={updatingCredit}
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs px-4 py-3.5 w-full cursor-pointer shadow-md transition-all active:scale-95 disabled:from-slate-250 disabled:to-slate-250 disabled:text-slate-400"
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-sm shadow-amber-500/20 transition-all hover:-translate-y-0.5 active:scale-95 disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-400"
                 >
-                  {updatingCredit ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      <span>MARK AS PAID</span>
-                    </>
-                  )}
+                  <CreditCard className="h-3.5 w-3.5" />
+                  <span>BIXI DEYNTA (PAY DEBT)</span>
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pay Debt Modal (Partial or Full Payment) */}
+      {showPayDebtModal && payDebtRef && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Header */}
+            <div className="flex justify-between items-center px-6 py-4 bg-amber-50 border-b border-amber-200/60">
+              <div className="flex items-center gap-2.5">
+                <div className="bg-amber-500 text-white p-2 rounded-xl shadow-xs">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-base">
+                    Bixinta Deynta (Pay Debt)
+                  </h3>
+                  <p className="text-[11px] font-semibold text-slate-500">
+                    Sumad: <span className="text-teal-600 font-extrabold">{payDebtRef.ref_number}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPayDebtModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-white/60 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Summary Box */}
+            <div className="px-6 pt-5 pb-2">
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 grid grid-cols-2 gap-4 text-center">
+                <div>
+                  <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Deynta Lagu Leeyahay</span>
+                  <span className="text-xl font-black text-amber-600">
+                    ${payDebtTotalCredit.toFixed(2)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Waa La Bixiyey Hada</span>
+                  <span className="text-xl font-black text-emerald-600">
+                    ${payDebtPaidSoFar.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveDebtPayment} className="p-6 space-y-4 pt-2">
+              <div>
+                <label className="block text-xs font-extrabold text-slate-700 mb-1.5 uppercase">
+                  Lacagta Hada La Bixinayo (Amount to Pay USD)
+                </label>
+                <input
+                  type="number"
+                  required
+                  step="0.01"
+                  max={payDebtTotalCredit}
+                  value={payDebtAmount}
+                  onChange={(e) => setPayDebtAmount(e.target.value)}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  className="w-full rounded-2xl bg-white border-2 border-amber-300 focus:border-amber-500 px-4 py-3.5 text-lg font-black text-slate-900 shadow-xs focus:outline-none"
+                  placeholder="0.00"
+                />
+                
+                {/* Dynamic Payment Status Alert */}
+                {(() => {
+                  const val = parseFloat(payDebtAmount) || 0;
+                  const remaining = payDebtTotalCredit - val;
+                  if (val > 0 && remaining <= 0.001) {
+                    return (
+                      <div className="mt-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-xs font-bold flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                        <span>Deynta oo dhan waa la wada bixinayaa (Full Payment: ${val.toFixed(2)})</span>
+                      </div>
+                    );
+                  } else if (val > 0 && remaining > 0) {
+                    return (
+                      <div className="mt-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-800 text-xs font-bold flex items-center justify-between">
+                        <span>⚠ Qeyb ka mid ah deynta ayaa la bixinayaa</span>
+                        <span className="bg-amber-200/60 px-2.5 py-1 rounded-lg text-amber-900 font-extrabold">
+                          Deyn Harsan: ${remaining.toFixed(2)}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Payment Mode</label>
+                  <select
+                    value={payDebtMode}
+                    onChange={(e) => setPayDebtMode(e.target.value as any)}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-900 font-bold focus:outline-none cursor-pointer"
+                  >
+                    <option value="EVC Plus">EVC Plus</option>
+                    <option value="eDahab">eDahab</option>
+                    <option value="Jeeb">Jeeb</option>
+                    <option value="Cash">Cash</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={payDebtDate}
+                    onChange={(e) => setPayDebtDate(e.target.value)}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-900 font-bold focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Faahfaahin (Details)</label>
+                <input
+                  type="text"
+                  value={payDebtDetails}
+                  onChange={(e) => setPayDebtDetails(e.target.value)}
+                  className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-900 focus:outline-none"
+                  placeholder="Tusaale: Bixinta deynta qeyb ahaan"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingDebtPayment}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:from-slate-200 disabled:to-slate-200 disabled:text-slate-400 px-4 py-3 font-extrabold text-xs text-white shadow-sm cursor-pointer transition-all active:scale-95"
+              >
+                {savingDebtPayment ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <span>KEYDI BIXINTA DEYNTA</span>
+                )}
+              </button>
+            </form>
           </div>
         </div>
       )}

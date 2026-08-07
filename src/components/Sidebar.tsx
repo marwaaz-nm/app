@@ -13,9 +13,11 @@ import {
   Lock,
   LogOut,
   MapPinned,
+  Settings,
   Wallet,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useSettings } from '@/context/SettingsContext';
 
 const primaryNavigation = [
   { href: '/dashboard', label: 'Dashboard', mobileLabel: 'Home', icon: ChartNoAxesCombined, alwaysVisible: true },
@@ -25,6 +27,7 @@ const primaryNavigation = [
   { href: '/transfers', label: 'Wareejin Dhul', mobileLabel: 'Wareejin', icon: ArrowLeftRight },
   { href: '/financials', label: 'Financials', mobileLabel: 'Xisaab', icon: Wallet },
   { href: '/reports', label: 'Reports & Export', mobileLabel: 'Reports', icon: BarChart3 },
+  { href: '/settings', label: 'Settings', mobileLabel: 'Settings', icon: Settings, alwaysVisible: true },
 ];
 
 const adminNavigation = {
@@ -37,6 +40,7 @@ const adminNavigation = {
 export default function Sidebar() {
   const pathname = usePathname();
   const { profile, logout } = useAuth();
+  const { settings } = useSettings();
   const isAdmin = profile?.role === 'Admin';
 
   const permittedNavigation = isAdmin
@@ -65,21 +69,27 @@ export default function Sidebar() {
 
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div className="flex items-center gap-2.5 px-5 pb-5 pt-5">
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-teal-600 text-white shadow-[0_8px_22px_rgba(37,99,235,0.22)]">
-              <MapPinned className="h-5 w-5" strokeWidth={2.2} />
-              <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-[3px] border-white bg-amber-400" />
+            <div
+              className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[14px] shadow-[0_8px_22px_rgba(37,99,235,0.22)] ${
+                settings.logo_url ? 'border border-slate-200 bg-white p-1' : 'bg-teal-600 text-white'
+              }`}
+            >
+              {settings.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={settings.logo_url} alt={settings.org_name_en} className="h-full w-full object-contain" />
+              ) : (
+                <>
+                  <MapPinned className="h-5 w-5" strokeWidth={2.2} />
+                  <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-[3px] border-white bg-amber-400" />
+                </>
+              )}
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[17px] font-extrabold tracking-[-0.03em]">
-                  GeoSurvey
-                </span>
-                <span className="rounded-md bg-teal-50 px-1.5 py-0.5 text-[8px] font-black tracking-[0.16em] text-teal-700">
-                  PRO
-                </span>
-              </div>
-              <p className="mt-0.5 text-[9px] font-semibold tracking-[0.08em] text-slate-400">
-                LAND INTELLIGENCE
+              <span className="block truncate text-[15px] font-extrabold leading-tight tracking-[-0.02em] text-slate-900">
+                {settings.org_name_so}
+              </span>
+              <p className="mt-0.5 truncate text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                {settings.org_name_en}
               </p>
             </div>
           </div>

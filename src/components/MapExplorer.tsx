@@ -181,40 +181,40 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
   return (
     <div className="relative w-full h-full flex flex-col text-slate-800">
       {/* Parcel label control */}
-      <div className="pointer-events-none absolute right-4 top-4 z-10">
+      <div className="pointer-events-none absolute right-4 top-4 md:right-6 md:top-6 z-[1000]">
         <button
           type="button"
           onClick={handleToggleLabels}
           aria-pressed={showLabels}
-          aria-label={showLabels ? 'Hide parcel owner names' : 'Show parcel owner names'}
-          className="pointer-events-auto group flex items-center gap-2.5 rounded-2xl border border-slate-200/90 bg-white/95 p-2 pr-3 text-left shadow-[0_10px_30px_rgba(15,23,42,0.16)] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-[0_14px_34px_rgba(15,23,42,0.2)] active:translate-y-0"
+          aria-label={showLabels ? 'Qari magacyada milkiilayaasha' : 'Muuji magacyada milkiilayaasha'}
+          className="pointer-events-auto group flex items-center gap-3 rounded-2xl border border-slate-200/90 bg-white/95 px-3 py-2 text-left shadow-xl shadow-slate-900/10 backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-2xl active:translate-y-0 cursor-pointer"
         >
           <span
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
-              showLabels ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all shadow-xs ${
+              showLabels ? 'bg-teal-600 text-white shadow-teal-600/20' : 'bg-slate-100 text-slate-500'
             }`}
           >
-            {showLabels ? <Eye className="h-[17px] w-[17px]" /> : <EyeOff className="h-[17px] w-[17px]" />}
+            {showLabels ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
           </span>
 
-          <span className="hidden min-w-[74px] sm:block">
-            <span className="block text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
-              Parcel labels
+          <div className="flex flex-col pr-1">
+            <span className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+              Magacyada Dhulka
             </span>
-            <span className="mt-0.5 block text-[11px] font-extrabold text-slate-800">
-              {showLabels ? 'Names visible' : 'Names hidden'}
+            <span className="block text-xs font-black text-slate-800">
+              {showLabels ? 'Muuji Magacyada' : 'Qari Magacyada'}
             </span>
-          </span>
+          </div>
 
           <span
-            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-              showLabels ? 'bg-teal-600' : 'bg-slate-200'
+            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+              showLabels ? 'bg-teal-600' : 'bg-slate-300'
             }`}
             aria-hidden="true"
           >
             <span
-              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-                showLabels ? 'translate-x-[18px]' : 'translate-x-0.5'
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform ${
+                showLabels ? 'translate-x-4' : 'translate-x-0.5'
               }`}
             />
           </span>
