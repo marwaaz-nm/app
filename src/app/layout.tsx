@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { ModalProvider } from "@/context/ModalContext";
 import { SettingsProvider } from "@/context/SettingsContext";
+import FaviconUpdater from "@/components/FaviconUpdater";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta-sans",
@@ -29,6 +30,7 @@ export default function RootLayout({
     >
       <body className={`${plusJakartaSans.className} min-h-full flex flex-col bg-slate-50 text-slate-900`}>
         <SettingsProvider>
+          <FaviconUpdater />
           <AuthProvider>
             <ModalProvider>
               {children}

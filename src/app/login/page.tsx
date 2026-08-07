@@ -43,12 +43,24 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4 text-slate-800">
       <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white p-8 shadow-xl border border-slate-100">
         <div className="text-center mb-8">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-50 text-teal-600 border border-teal-100 shadow-sm">
-            <Shield className="h-8 w-8" />
+          <div
+            className={`mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl shadow-sm ${
+              settings.logo_url ? 'border border-slate-200 bg-white p-2' : 'border border-teal-100 bg-teal-50 text-teal-600'
+            }`}
+          >
+            {settings.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={settings.logo_url} alt={settings.org_name_en} className="h-full w-full object-contain" />
+            ) : (
+              <Shield className="h-8 w-8" />
+            )}
           </div>
-          <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-850">
-            GeoSurvey <span className="text-teal-600 font-bold">Pro</span>
+          <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-850">
+            {settings.org_name_so}
           </h2>
+          <p className="mt-0.5 text-xs font-semibold text-slate-400">
+            {settings.org_name_en}
+          </p>
           <p className="mt-2 text-xs text-slate-500 font-semibold">
             Fadlan geli aqoonsigaaga si aad u gasho
           </p>
