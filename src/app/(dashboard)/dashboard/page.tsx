@@ -83,7 +83,7 @@ export default function DashboardPage() {
   const isAdmin = profile?.role === 'Admin';
   const permittedMenus = profile?.permitted_menus;
   const hasAccess = (path: string) =>
-    isAdmin || !Array.isArray(permittedMenus) || permittedMenus.includes(path);
+    isAdmin || (Array.isArray(permittedMenus) && permittedMenus.includes(path));
 
   const canViewSurveys = hasAccess('/records') || hasAccess('/explorer');
   const canViewReferences = hasAccess('/references');
@@ -343,7 +343,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <section className={`grid gap-3 sm:grid-cols-2 ${statCards.length > 4 ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}>
+        <section className={`grid grid-cols-2 gap-3 ${statCards.length > 4 ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}>
           {loading
             ? Array.from({ length: 4 }).map((_, index) => (
                 <div key={index} className="h-[132px] animate-pulse rounded-2xl border border-slate-200 bg-white p-4">
@@ -516,6 +516,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        <div className="h-24 md:hidden" aria-hidden="true" />
       </div>
     </div>
   );

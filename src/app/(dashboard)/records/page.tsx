@@ -1,27 +1,27 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Survey } from '@/types';
 import DetailsModal from '@/components/DetailsModal';
 import SurveyManagementModal from '@/components/SurveyManagementModal';
-import { 
-  Plus, 
-  Search, 
-  ChevronRight, 
-  Calendar, 
-  Info, 
-  Loader2, 
+import { useMobileSearch } from '@/context/MobileSearchContext';
+import { dateGroupKey, groupItems } from '@/lib/listGrouping';
+import {
+  Plus,
+  Search,
+  ChevronRight,
+  Calendar,
+  Info,
+  Loader2,
   Sliders,
-  Layers,
   Settings2,
-  X
 } from 'lucide-react';
 
 export default function RecordsPage() {
   const [records, setRecords] = useState<Survey[]>([]);
-  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
   const [filteredRecords, setFilteredRecords] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -41,6 +41,14 @@ export default function RecordsPage() {
   
   const [selectedRecord, setSelectedRecord] = useState<Survey | null>(null);
   const [managedRecord, setManagedRecord] = useState<Survey | null>(null);
+
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'owner_az'>('newest');
+  const [groupBy, setGroupBy] = useState<'none' | 'date' | 'status'>('none');
+  const [groupAggregate, setGroupAggregate] = useState<'none' | 'count'>('count');
+
+  useEffect(() => {
+    setSearchAvailable(true);
+  }, [setSearchAvailable]);
 
   const statusClass = (status: Survey['status']) => ({
     Draft: 'bg-slate-100 text-slate-600',
@@ -122,41 +130,37 @@ export default function RecordsPage() {
     setFilteredRecords(result);
   }, [search, filterXaafada, filterLaanta, startDate, endDate, searchW, searchB, searchK, searchG, records]);
 
+  const sortedRecords = useMemo(() => {
+    const sorted = [...filteredRecords];
+    sorted.sort((a, b) => {
+      if (sortBy === 'owner_az') return a.owner_name.localeCompare(b.owner_name);
+      const diff = new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      return sortBy === 'oldest' ? -diff : diff;
+    });
+    return sorted;
+  }, [filteredRecords, sortBy]);
+
+  const groupedRecords = useMemo(() => {
+    if (groupBy === 'none') return null;
+    return groupItems(sortedRecords, (r) =>
+      groupBy === 'date' ? dateGroupKey(r.created_at).key : (r.status || 'Draft'),
+    ).map((group) => {
+      const baseLabel = groupBy === 'date' ? dateGroupKey(group.items[0].created_at).label : (group.items[0].status || 'Draft');
+      const label = groupAggregate === 'count' ? `${baseLabel} · ${group.items.length}` : baseLabel;
+      return { ...group, label };
+    });
+  }, [sortedRecords, groupBy, groupAggregate]);
+
   return (
     <div className="p-4 md:p-8 w-full space-y-3.5 md:space-y-6 text-slate-800">
-      {/* Header section */}
-      <div className="flex flex-row justify-between items-center gap-4 bg-white p-3 md:p-6 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm w-full">
-        <div className="flex items-center gap-3">
-          <div className="bg-teal-50 text-teal-600 p-2 rounded-xl border border-teal-100 shrink-0">
-            <Layers className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="text-base md:text-xl font-black text-slate-800 leading-tight">
-              Diiwaanka Sahanka Dhulka
-            </h2>
-            <p className="hidden sm:block text-[10px] md:text-xs text-slate-500 font-semibold mt-0.5">
-              Liiska hantida, cabiraada dhulka, iyo macluumaadka milkiilayaasha.
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Mobile search toggle button */}
-          <button
-            onClick={() => setShowMobileSearch(!showMobileSearch)}
-            className="md:hidden flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 border border-slate-200 text-slate-650 hover:text-slate-800 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer"
-          >
-            {showMobileSearch ? <X className="h-4.5 w-4.5" /> : <Search className="h-4.5 w-4.5" />}
-          </button>
-
-          <Link
-            href="/records/new"
-            className="hidden md:flex items-center gap-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-600 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-lg shadow-teal-600/15 hover:shadow-teal-600/25 cursor-pointer transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95 shrink-0 select-none"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Ku Dar Sahan Cusub</span>
-          </Link>
-        </div>
+      <div className="hidden md:flex justify-end">
+        <Link
+          href="/records/new"
+          className="flex items-center gap-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-600 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-lg shadow-teal-600/15 hover:shadow-teal-600/25 cursor-pointer transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95 shrink-0 select-none"
+        >
+          <Plus className="h-4 w-4" />
+          <span>Ku Dar Sahan Cusub</span>
+        </Link>
       </div>
 
       {/* Filter and Search Card */}
@@ -174,7 +178,7 @@ export default function RecordsPage() {
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {/* Neighborhood Filter */}
             <select
               value={filterXaafada}
@@ -216,7 +220,41 @@ export default function RecordsPage() {
               <Sliders className="h-4 w-4" />
               <span className="hidden sm:inline">Advanced</span>
             </button>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="bg-slate-50/60 border border-slate-200/80 rounded-xl md:rounded-2xl px-3 md:px-4 py-2.5 md:py-3.5 text-xs text-slate-700 focus:outline-none cursor-pointer shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
+            >
+              <option value="newest">Sort: Newest first</option>
+              <option value="oldest">Sort: Oldest first</option>
+              <option value="owner_az">Sort: Owner (A–Z)</option>
+            </select>
+
           </div>
+        </div>
+
+        <div className="flex gap-2">
+          <select
+            value={groupBy}
+            onChange={(e) => setGroupBy(e.target.value as typeof groupBy)}
+            className="flex-1 min-w-0 bg-slate-50/60 border border-slate-200/80 rounded-xl md:rounded-2xl px-3 md:px-4 py-2.5 md:py-3.5 text-xs text-slate-700 focus:outline-none cursor-pointer shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
+          >
+            <option value="none">No group</option>
+            <option value="date">Group: Date</option>
+            <option value="status">Group: Status</option>
+          </select>
+
+          {groupBy !== 'none' && (
+            <select
+              value={groupAggregate}
+              onChange={(e) => setGroupAggregate(e.target.value as typeof groupAggregate)}
+              className="flex-1 min-w-0 bg-slate-50/60 border border-slate-200/80 rounded-xl md:rounded-2xl px-3 md:px-4 py-2.5 md:py-3.5 text-xs text-slate-700 focus:outline-none cursor-pointer shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
+            >
+              <option value="none">Aggregate: None</option>
+              <option value="count">Aggregate: Count</option>
+            </select>
+          )}
         </div>
 
         {/* Collapsible Advanced Filters */}
@@ -287,7 +325,7 @@ export default function RecordsPage() {
             <p className="text-xs text-slate-500 font-semibold">Soo raryaa liiska records-ka...</p>
           </div>
         </div>
-      ) : filteredRecords.length === 0 ? (
+      ) : sortedRecords.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 border border-dashed border-slate-200 rounded-3xl bg-white">
           <Info className="h-8 w-8 text-slate-400 mb-2" />
           <p className="text-slate-500 font-semibold text-sm">Wax sahano ah oo la helay ma jiraan.</p>
@@ -311,81 +349,109 @@ export default function RecordsPage() {
                     <th className="px-6 py-4 text-right">Maamul</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {filteredRecords.map((record) => (
-                    <tr
-                      key={record.id}
-                      onClick={() => setSelectedRecord(record)}
-                      className="hover:bg-teal-500/5 transition-all cursor-pointer group"
-                    >
-                      <td className="px-6 py-4 font-black text-slate-400 group-hover:text-teal-600 transition-colors">
-                        #{record.serial_no}
-                      </td>
-                      <td className="px-6 py-4 font-extrabold text-slate-800 text-sm">
-                        {record.owner_name}
-                      </td>
-                      <td className="px-6 py-4 text-slate-500">
-                        <span className="flex items-center gap-1.5">
-                          <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                          {record.created_at ? new Date(record.created_at).toLocaleDateString('so-SO') : '-'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-200/60 text-slate-600 text-[10px] font-extrabold">
-                          {record.neighborhood}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-slate-500 max-w-[200px] truncate">
-                        {record.boundary_w_val ? 
-                          `W:${record.boundary_w_val} | B:${record.boundary_b_val} | K:${record.boundary_k_val} | G:${record.boundary_g_val}`
-                          : record.built_details || '-'}
-                      </td>
-                      <td className="px-6 py-4">
-                        <code className="text-teal-600 font-mono font-bold select-all bg-slate-50 border border-slate-200/60 px-2.5 py-1 rounded-lg">
-                          {record.gps_location || '0.0, 0.0'}
-                        </code>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[9px] font-black ${statusClass(record.status)}`}>{record.status || 'Draft'}</span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button onClick={(event) => { event.stopPropagation(); setManagedRecord(record); }} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
-                          <Settings2 className="h-3.5 w-3.5" /> Maamul
-                        </button>
-                      </td>
-                    </tr>
+                <tbody className="divide-y divide-slate-100/60 bg-white">
+                  {(groupedRecords ?? [{ key: 'all', label: '', items: sortedRecords }]).map((group) => (
+                    <React.Fragment key={group.key}>
+                      {groupBy !== 'none' && (
+                        <tr>
+                          <td colSpan={8} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                            {group.label}
+                          </td>
+                        </tr>
+                      )}
+                      {group.items.map((record) => (
+                        <tr
+                          key={record.id}
+                          onClick={() => setSelectedRecord(record)}
+                          className="hover:bg-teal-500/5 transition-all cursor-pointer group"
+                        >
+                          <td className="px-6 py-4 font-black text-slate-400 group-hover:text-teal-600 transition-colors">
+                            #{record.serial_no}
+                          </td>
+                          <td className="px-6 py-4 font-extrabold text-slate-800 text-sm">
+                            {record.owner_name}
+                          </td>
+                          <td className="px-6 py-4 text-slate-500">
+                            <span className="flex items-center gap-1.5">
+                              <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                              {record.created_at ? new Date(record.created_at).toLocaleDateString('so-SO') : '-'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-200/60 text-slate-600 text-[10px] font-extrabold">
+                              {record.neighborhood}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-slate-500 max-w-[200px] truncate">
+                            {record.boundary_w_val ?
+                              `W:${record.boundary_w_val} | B:${record.boundary_b_val} | K:${record.boundary_k_val} | G:${record.boundary_g_val}`
+                              : record.built_details || '-'}
+                          </td>
+                          <td className="px-6 py-4">
+                            <code className="text-teal-600 font-mono font-bold select-all bg-slate-50 border border-slate-200/60 px-2.5 py-1 rounded-lg">
+                              {record.gps_location || '0.0, 0.0'}
+                            </code>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-[9px] font-black ${statusClass(record.status)}`}>{record.status || 'Draft'}</span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button onClick={(event) => { event.stopPropagation(); setManagedRecord(record); }} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
+                              <Settings2 className="h-3.5 w-3.5" /> Maamul
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* MOBILE CARDS VIEW */}
-          <div className="grid grid-cols-1 gap-4 md:hidden pb-12">
-            {filteredRecords.map((record) => (
-              <div
-                key={record.id}
-                onClick={() => setSelectedRecord(record)}
-                className="flex items-center justify-between p-4 bg-white border border-slate-200/60 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-slate-350 hover:shadow-md transition-all duration-300 group cursor-pointer"
-              >
-                <div className="flex items-center gap-4 overflow-hidden min-w-0">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 font-black text-xs text-slate-450 border border-slate-200/60">
-                    #{record.serial_no}
+          {/* MOBILE LIST VIEW */}
+          <div className="md:hidden mb-12">
+            <div className="grid grid-cols-[52px_1fr_auto_40px] items-center gap-3 border-b border-slate-200 px-1 py-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+              <span>No.</span>
+              <span>Milkiile</span>
+              <span>Status</span>
+              <span className="text-center">Action</span>
+            </div>
+            {(groupedRecords ?? [{ key: 'all', label: '', items: sortedRecords }]).map((group) => (
+              <div key={group.key}>
+                {groupBy !== 'none' && (
+                  <div className="px-1 pb-1.5 pt-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
+                    {group.label}
                   </div>
-                  <div className="overflow-hidden">
-                    <h4 className="font-extrabold text-sm text-slate-800 truncate group-hover:text-teal-600 transition-colors">
-                      {record.owner_name}
-                    </h4>
-                    <p className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
-                      <Calendar className="h-3 w-3 shrink-0" />
-                      <span>{record.created_at ? new Date(record.created_at).toLocaleDateString('so-SO') : '-'}</span>
-                      <span className="mx-1">•</span>
-                      <span className="font-extrabold text-slate-600">{record.neighborhood}</span>
-                    </p>
-                    <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[8px] font-black ${statusClass(record.status)}`}>{record.status || 'Draft'}</span>
-                  </div>
+                )}
+                <div className="divide-y divide-slate-100/60">
+                  {group.items.map((record) => (
+                    <div
+                      key={record.id}
+                      onClick={() => setSelectedRecord(record)}
+                      className="grid grid-cols-[52px_1fr_auto_40px] items-center gap-3 px-1 py-3.5 cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-50"
+                    >
+                      <span className="truncate text-xs font-black text-slate-500">#{record.serial_no}</span>
+                      <div className="min-w-0">
+                        <h4 className="truncate text-xs font-extrabold text-slate-800">{record.owner_name}</h4>
+                        <p className="mt-0.5 flex items-center gap-1 truncate text-[9px] text-slate-500">
+                          <Calendar className="h-3 w-3 shrink-0" />
+                          <span>{record.created_at ? new Date(record.created_at).toLocaleDateString('so-SO') : '-'}</span>
+                          <span>•</span>
+                          <span className="font-bold text-slate-600">{record.neighborhood}</span>
+                        </p>
+                      </div>
+                      <span className={`inline-flex items-center justify-self-end whitespace-nowrap rounded-full px-2 py-0.5 text-[8px] font-black ${statusClass(record.status)}`}>{record.status || 'Draft'}</span>
+                      <button
+                        onClick={(event) => { event.stopPropagation(); setManagedRecord(record); }}
+                        className="flex h-8 w-8 items-center justify-center justify-self-center rounded-lg border border-slate-200 text-slate-500 hover:bg-blue-50 hover:text-blue-700"
+                        aria-label="Maamul survey"
+                      >
+                        <Settings2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <button onClick={(event) => { event.stopPropagation(); setManagedRecord(record); }} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-blue-50 hover:text-blue-700" aria-label="Maamul survey"><Settings2 className="h-4 w-4" /></button>
               </div>
             ))}
           </div>
@@ -411,7 +477,7 @@ export default function RecordsPage() {
       {/* Floating Action Button (FAB) for mobile */}
       <Link
         href="/records/new"
-        className="fixed bottom-20 right-6 z-40 md:hidden flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 hover:bg-teal-500 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
+        className="fixed bottom-[calc(6rem_+_env(safe-area-inset-bottom))] right-6 z-40 md:hidden flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 hover:bg-teal-500 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
         aria-label="Ku Dar Sahan Cusub"
       >
         <Plus className="h-7 w-7" />

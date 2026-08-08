@@ -50,7 +50,7 @@ export default function Sidebar() {
           item.alwaysVisible ||
           ((Array.isArray(profile?.permitted_menus)
             ? profile.permitted_menus.includes(item.href)
-            : true) && (item.href !== '/reports' || profile?.permitted_actions?.includes('report.view'))),
+            : false) && (item.href !== '/reports' || profile?.permitted_actions?.includes('report.view'))),
       );
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
@@ -171,7 +171,7 @@ export default function Sidebar() {
       </aside>
 
       <nav
-        className="fixed bottom-3 left-3 right-3 z-50 grid h-[68px] overflow-x-auto rounded-[22px] border border-slate-200 bg-white/95 px-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.15)] backdrop-blur-xl md:hidden"
+        className="fixed bottom-[calc(0.75rem_+_env(safe-area-inset-bottom))] left-3 right-3 z-50 grid h-[68px] overflow-x-auto rounded-[22px] border border-slate-200 bg-white/95 px-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.15)] backdrop-blur-xl md:hidden"
         style={{ gridTemplateColumns: `repeat(${permittedNavigation.length}, minmax(68px, 1fr))` }}
         aria-label="Mobile navigation"
       >

@@ -305,11 +305,11 @@ export default function NewRecordPage() {
         </div>
 
         {/* Boundary Card */}
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
-          <div className="flex flex-col gap-4 border-b border-slate-100 bg-gradient-to-r from-white via-blue-50/50 to-white p-5 sm:flex-row sm:items-center sm:justify-between md:px-6">
+        <div className="overflow-visible rounded-none border-0 bg-transparent shadow-none md:overflow-hidden md:rounded-3xl md:border md:border-slate-200 md:bg-white md:shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-col gap-4 border-b border-slate-100 bg-transparent pb-3 sm:flex-row sm:items-center sm:justify-between md:bg-gradient-to-r md:from-white md:via-blue-50/50 md:to-white md:p-5 md:px-6">
             <div className="flex items-center gap-3.5">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)]">
-                <Compass className="h-5 w-5" />
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)] md:h-11 md:w-11 md:rounded-2xl">
+                <Compass className="h-4 w-4 md:h-5 md:w-5" />
               </span>
               <div>
                 <div className="flex items-center gap-2">
@@ -334,7 +334,7 @@ export default function NewRecordPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 p-4 sm:p-5 md:grid-cols-2 md:gap-4 md:p-6">
+          <div className="grid grid-cols-1 gap-3 p-0 pt-4 sm:p-0 md:grid-cols-2 md:gap-4 md:p-6">
             {boundaryDirections.map((direction) => {
               const DirectionIcon = direction.icon;
               return (
@@ -406,11 +406,11 @@ export default function NewRecordPage() {
         </div>
 
         {/* Map & Coordinates */}
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
-          <div className="flex flex-col gap-4 border-b border-slate-100 bg-gradient-to-r from-white via-blue-50/50 to-white p-5 sm:flex-row sm:items-center sm:justify-between md:px-6">
+        <div className="overflow-visible rounded-none border-0 bg-transparent shadow-none md:overflow-hidden md:rounded-3xl md:border md:border-slate-200 md:bg-white md:shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-col gap-4 border-b border-slate-100 bg-transparent pb-3 sm:flex-row sm:items-center sm:justify-between md:bg-gradient-to-r md:from-white md:via-blue-50/50 md:to-white md:p-5 md:px-6">
             <div className="flex items-center gap-3.5">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)]">
-                <MapPinned className="h-5 w-5" />
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)] md:h-11 md:w-11 md:rounded-2xl">
+                <MapPinned className="h-4 w-4 md:h-5 md:w-5" />
               </span>
               <div>
                 <div className="flex items-center gap-2">
@@ -429,7 +429,7 @@ export default function NewRecordPage() {
             </span>
           </div>
 
-          <div className="p-4 sm:p-5 md:p-6">
+          <div className="p-0 pt-4 sm:p-0 md:p-6">
             <MiniMap
               gpsValue={gpsLocation}
               onGpsChange={setGpsLocation}

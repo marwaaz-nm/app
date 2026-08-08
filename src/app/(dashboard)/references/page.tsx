@@ -1,17 +1,18 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { supabase } from '@/lib/supabase';
 import { Reference, Survey } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
 import { useSettings } from '@/context/SettingsContext';
+import { useMobileSearch } from '@/context/MobileSearchContext';
+import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import DetailsModal from '@/components/DetailsModal';
 import {
   Plus,
   Search,
-  Files,
   Calendar,
   CheckCircle2,
   Clock,
@@ -31,8 +32,8 @@ export default function ReferencesPage() {
   const { user } = useAuth();
   const { showAlert, showConfirm } = useModal();
   const { settings } = useSettings();
-  const [showMobileSearch, setShowMobileSearch] = useState(false);
-  
+  const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
+
   const [references, setReferences] = useState<Reference[]>([]);
   const [filteredReferences, setFilteredReferences] = useState<Reference[]>([]);
   const [surveys, setSurveys] = useState<{ id: number; serial_no: number; owner_name: string }[]>([]);
@@ -42,9 +43,16 @@ export default function ReferencesPage() {
   // Search/Filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'ref_az'>('newest');
+  const [groupBy, setGroupBy] = useState<'none' | 'date' | 'status'>('none');
+  const [groupAggregate, setGroupAggregate] = useState<'none' | 'count'>('count');
 
   // Form states
   const [showAddForm, setShowAddForm] = useState(false);
+
+  useEffect(() => {
+    setSearchAvailable(!showAddForm);
+  }, [showAddForm, setSearchAvailable]);
   const [refNumber, setRefNumber] = useState('');
   const [issueDate, setIssueDate] = useState('');
   const [subject, setSubject] = useState('');
@@ -160,6 +168,27 @@ export default function ReferencesPage() {
 
     setFilteredRecords(result);
   }, [searchQuery, statusFilter, references]);
+
+  const sortedReferences = useMemo(() => {
+    const sorted = [...filteredReferences];
+    sorted.sort((a, b) => {
+      if (sortBy === 'ref_az') return a.ref_number.localeCompare(b.ref_number);
+      const diff = new Date(b.issue_date || 0).getTime() - new Date(a.issue_date || 0).getTime();
+      return sortBy === 'oldest' ? -diff : diff;
+    });
+    return sorted;
+  }, [filteredReferences, sortBy]);
+
+  const groupedReferences = useMemo(() => {
+    if (groupBy === 'none') return null;
+    return groupItems(sortedReferences, (r) =>
+      groupBy === 'date' ? dateGroupKey(r.issue_date).key : r.status,
+    ).map((group) => {
+      const baseLabel = groupBy === 'date' ? dateGroupKey(group.items[0].issue_date).label : group.items[0].status;
+      const label = groupAggregate === 'count' ? `${baseLabel} · ${group.items.length}` : baseLabel;
+      return { ...group, label };
+    });
+  }, [sortedReferences, groupBy, groupAggregate]);
 
   // Set default issue date and suggested ref number when opening form
   const handleOpenAddForm = () => {
@@ -288,39 +317,14 @@ export default function ReferencesPage() {
     <div className={`p-4 md:p-8 mx-auto space-y-3.5 md:space-y-6 text-slate-800 transition-all duration-300 ${showAddForm ? 'form-card' : 'w-full'}`}>
       
       {!showAddForm && (
-        /* Header card */
-        <div className="flex flex-row justify-between items-center gap-4 bg-white p-3 md:p-6 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm w-full">
-          <div className="flex items-center gap-3">
-            <div className="bg-teal-50 text-teal-600 p-2 rounded-xl border border-teal-100 shrink-0">
-              <Files className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-base md:text-xl font-black text-slate-800 leading-tight">
-                Reference Records
-              </h2>
-              <p className="hidden sm:block text-[10px] md:text-xs text-slate-500 font-semibold mt-0.5">
-                Maamulka tixraacyada, heshiisyada iyo dukumiintiyada.
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Mobile search toggle button */}
-            <button
-              onClick={() => setShowMobileSearch(!showMobileSearch)}
-              className="md:hidden flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 border border-slate-200 text-slate-650 hover:text-slate-800 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer"
-            >
-              {showMobileSearch ? <X className="h-4.5 w-4.5" /> : <Search className="h-4.5 w-4.5" />}
-            </button>
-
-            <button
-              onClick={handleOpenAddForm}
-              className="hidden md:flex items-center gap-2 bg-teal-600 hover:bg-teal-705 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-md cursor-pointer transition-all active:scale-95 shrink-0"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add New Ref</span>
-            </button>
-          </div>
+        <div className="hidden md:flex justify-end">
+          <button
+            onClick={handleOpenAddForm}
+            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-705 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-md cursor-pointer transition-all active:scale-95 shrink-0"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Add New Ref</span>
+          </button>
         </div>
       )}
 
@@ -452,7 +456,7 @@ export default function ReferencesPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className={`${showMobileSearch ? 'flex' : 'hidden md:flex'} bg-white border border-slate-100 rounded-2xl md:rounded-3xl p-3 flex flex-row gap-2 shadow-sm w-full items-center`}>
+          <div className={`${showMobileSearch ? 'flex' : 'hidden md:flex'} flex-col gap-2 md:flex-row md:items-center bg-white border border-slate-100 rounded-2xl md:rounded-3xl p-3 shadow-sm w-full`}>
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input
@@ -464,23 +468,59 @@ export default function ReferencesPage() {
               />
             </div>
 
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer max-w-[120px] md:max-w-none shrink-0"
-            >
-              <option value="">Status (All)...</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Completed">Completed</option>
-              <option value="Picked Up">Picked Up</option>
-            </select>
+            <div className="flex flex-wrap gap-2">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
+              >
+                <option value="">Status (All)...</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="Picked Up">Picked Up</option>
+              </select>
+
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
+              >
+                <option value="newest">Sort: Newest first</option>
+                <option value="oldest">Sort: Oldest first</option>
+                <option value="ref_az">Sort: Ref No. (A–Z)</option>
+              </select>
+
+            </div>
+
+            <div className="flex gap-2">
+              <select
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value as typeof groupBy)}
+                className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="none">No group</option>
+                <option value="date">Group: Date</option>
+                <option value="status">Group: Status</option>
+              </select>
+
+              {groupBy !== 'none' && (
+                <select
+                  value={groupAggregate}
+                  onChange={(e) => setGroupAggregate(e.target.value as typeof groupAggregate)}
+                  className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="none">Aggregate: None</option>
+                  <option value="count">Aggregate: Count</option>
+                </select>
+              )}
+            </div>
           </div>
 
           {loading ? (
             <div className="flex h-64 items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
             </div>
-          ) : filteredReferences.length === 0 ? (
+          ) : sortedReferences.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-12 border border-dashed border-slate-200 rounded-3xl bg-white">
               <HelpCircle className="h-8 w-8 text-slate-400 mb-2" />
               <p className="text-slate-500 font-semibold text-sm">Wax reference ah oo la helay ma jiraan.</p>
@@ -499,63 +539,89 @@ export default function ReferencesPage() {
                       <th className="px-6 py-4 text-center">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {filteredReferences.map(r => (
-                      <tr
-                        key={r.id}
-                        onClick={() => setSelectedRef(r)}
-                        className="hover:bg-slate-50/80 transition-all cursor-pointer group"
-                      >
-                        <td className="px-6 py-4 font-black text-teal-600 group-hover:text-teal-600">
-                          {r.ref_number}
-                        </td>
-                        <td className="px-6 py-4 text-slate-700 font-semibold">
-                          {r.surveys ? `#${r.surveys.serial_no} — ${r.surveys.owner_name}` : 'N/A'}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-655 text-[10px] font-extrabold">
-                            {r.subject}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 border rounded-full text-[10px] font-extrabold tracking-wide uppercase ${getStatusBadgeClass(r.status)}`}>
-                            {r.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <button className="bg-slate-50 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 text-slate-600 text-[10px] font-extrabold py-1.5 px-4 rounded-xl cursor-pointer transition-colors shadow-sm">
-                            View
-                          </button>
-                        </td>
-                      </tr>
+                  <tbody className="divide-y divide-slate-100/60 bg-white">
+                    {(groupedReferences ?? [{ key: 'all', label: '', items: sortedReferences }]).map((group) => (
+                      <React.Fragment key={group.key}>
+                        {groupBy !== 'none' && (
+                          <tr>
+                            <td colSpan={5} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                              {group.label}
+                            </td>
+                          </tr>
+                        )}
+                        {group.items.map(r => (
+                          <tr
+                            key={r.id}
+                            onClick={() => setSelectedRef(r)}
+                            className="hover:bg-slate-50/80 transition-all cursor-pointer group"
+                          >
+                            <td className="px-6 py-4 font-black text-teal-600 group-hover:text-teal-600">
+                              {r.ref_number}
+                            </td>
+                            <td className="px-6 py-4 text-slate-700 font-semibold">
+                              {r.surveys ? `#${r.surveys.serial_no} — ${r.surveys.owner_name}` : 'N/A'}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-655 text-[10px] font-extrabold">
+                                {r.subject}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 border rounded-full text-[10px] font-extrabold tracking-wide uppercase ${getStatusBadgeClass(r.status)}`}>
+                                {r.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <button className="bg-slate-50 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 text-slate-600 text-[10px] font-extrabold py-1.5 px-4 rounded-xl cursor-pointer transition-colors shadow-sm">
+                                View
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
               </div>
 
-              {/* MOBILE CARDS */}
-              <div className="grid grid-cols-1 gap-4 md:hidden pb-12">
-                {filteredReferences.map(r => (
-                  <div
-                    key={r.id}
-                    onClick={() => setSelectedRef(r)}
-                    className="flex items-center justify-between p-4 bg-white border border-slate-200/80 rounded-2xl shadow-sm hover:border-slate-300 transition-all group"
-                  >
-                    <div className="overflow-hidden min-w-0 pr-4">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="font-black text-sm text-teal-600">{r.ref_number}</span>
-                        <span className={`inline-flex px-2 py-0.5 rounded-full border text-[9px] font-extrabold uppercase ${getStatusBadgeClass(r.status)}`}>
-                          {r.status}
-                        </span>
+              {/* MOBILE LIST */}
+              <div className="md:hidden mb-12">
+                <div className="grid grid-cols-[64px_1fr_auto_20px] items-center gap-3 border-b border-slate-200 px-1 py-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+                  <span>Ref No.</span>
+                  <span>Title</span>
+                  <span>Status</span>
+                  <span />
+                </div>
+                {(groupedReferences ?? [{ key: 'all', label: '', items: sortedReferences }]).map((group) => (
+                  <div key={group.key}>
+                    {groupBy !== 'none' && (
+                      <div className="px-1 pb-1.5 pt-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
+                        {group.label}
                       </div>
-                      <h4 className="font-extrabold text-xs text-slate-800 truncate">{r.subject}</h4>
-                      {r.surveys && (
-                        <p className="text-[10px] text-slate-500 mt-1 truncate font-semibold">
-                          Sahan: #{r.surveys.serial_no} — {r.surveys.owner_name}
-                        </p>
-                      )}
+                    )}
+                    <div className="divide-y divide-slate-100/60">
+                      {group.items.map(r => (
+                    <div
+                      key={r.id}
+                      onClick={() => setSelectedRef(r)}
+                      className="grid grid-cols-[64px_1fr_auto_20px] items-center gap-3 px-1 py-3.5 cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-50"
+                    >
+                      <span className="truncate text-xs font-black text-teal-600">{r.ref_number}</span>
+                      <div className="min-w-0">
+                        <h4 className="truncate text-xs font-extrabold text-slate-800">{r.subject}</h4>
+                        {r.surveys && (
+                          <p className="mt-0.5 truncate text-[9px] font-semibold text-slate-500">
+                            Sahan #{r.surveys.serial_no} — {r.surveys.owner_name}
+                          </p>
+                        )}
+                      </div>
+                      <span className={`inline-flex items-center justify-self-end whitespace-nowrap px-2 py-0.5 rounded-full border text-[8px] font-extrabold uppercase ${getStatusBadgeClass(r.status)}`}>
+                        {r.status}
+                      </span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
                     </div>
-                    <ChevronRight className="h-5 w-5 text-slate-400 shrink-0 group-hover:text-teal-600 transition-colors" />
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -776,7 +842,7 @@ export default function ReferencesPage() {
       {!showAddForm && (
         <button
           onClick={handleOpenAddForm}
-          className="fixed bottom-20 right-6 z-40 md:hidden flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 hover:bg-teal-500 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
+          className="fixed bottom-[calc(6rem_+_env(safe-area-inset-bottom))] right-6 z-40 md:hidden flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 hover:bg-teal-500 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
           aria-label="Add New Ref"
         >
           <Plus className="h-7 w-7" />

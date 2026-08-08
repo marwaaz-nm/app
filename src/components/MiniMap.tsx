@@ -9,6 +9,52 @@ import { useModal } from '@/context/ModalContext';
 if (typeof window !== 'undefined') {
   (window as any).L = L;
   require('leaflet-draw');
+
+  // leaflet-draw's touch handler for polygon/polyline vertices reads the touch's
+  // start and end position from the same `touchstart` event, so it always measures
+  // zero movement and drops a vertex the instant a finger touches the map — before
+  // a drag/pan gesture can happen. This makes it impossible to pan while drawing on
+  // mobile. Patch it to track the real touchend position, matching how it already
+  // behaves with a mouse (only add a vertex if the finger barely moved).
+  const PolylineDrawProto = (L as any).Draw?.Polyline?.prototype;
+  if (PolylineDrawProto && !PolylineDrawProto.__touchPanPatched) {
+    PolylineDrawProto.__touchPanPatched = true;
+    PolylineDrawProto._onTouch = function (e: any) {
+      const originalEvent = e.originalEvent as TouchEvent;
+      const touch = originalEvent.touches && originalEvent.touches[0];
+      if (!touch || this._clickHandled || this._touchHandled || this._disableMarkers) {
+        this._clickHandled = null;
+        return;
+      }
+
+      this._disableNewMarkers();
+      this._touchHandled = true;
+      this._startPoint.call(this, touch.clientX, touch.clientY);
+
+      const map = this._map;
+      const cleanup = () => {
+        document.removeEventListener('touchend', onTouchEnd);
+        document.removeEventListener('touchcancel', onTouchCancel);
+      };
+      const onTouchEnd = (endEvent: TouchEvent) => {
+        cleanup();
+        const endTouch = endEvent.changedTouches[0] || touch;
+        const latlng = map.mouseEventToLatLng({ clientX: endTouch.clientX, clientY: endTouch.clientY } as unknown as MouseEvent);
+        this._endPoint.call(this, endTouch.clientX, endTouch.clientY, { latlng });
+        this._touchHandled = null;
+      };
+      const onTouchCancel = () => {
+        cleanup();
+        this._touchHandled = null;
+        this._mouseDownOrigin = null;
+        this._enableNewMarkers();
+      };
+
+      document.addEventListener('touchend', onTouchEnd, { once: true });
+      document.addEventListener('touchcancel', onTouchCancel, { once: true });
+      this._clickHandled = null;
+    };
+  }
 }
 
 interface MiniMapProps {
@@ -58,7 +104,6 @@ export default function MiniMap({
   const sketchMapRef = useRef<L.Map | null>(null);
   const drawnItemsRef = useRef<L.FeatureGroup | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
-  const accuracyCircleRef = useRef<L.Circle | null>(null);
   const measurementLayerRef = useRef<L.LayerGroup | null>(null);
 
   const [isExpanded, setIsExpanded] = useState(false);
@@ -66,56 +111,22 @@ export default function MiniMap({
   const [locating, setLocating] = useState(false);
   const [isAtCurrentLocation, setIsAtCurrentLocation] = useState(false);
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
+  // Keep the map collapsed until a location exists (GPS pressed or coordinates typed),
+  // so the heavy satellite map doesn't take up space before it's needed. Once revealed,
+  // it stays mounted even if the coordinates field is cleared afterwards.
+  const [mapUnlocked, setMapUnlocked] = useState(false);
 
   const isDrawingRef = useRef(false);
 
-  // Sync marker when gpsValue is set (either from manual input, live location, click, or initial load)
   useEffect(() => {
-    if (!mapRef.current || !gpsValue) {
-      if (markerRef.current) {
-        markerRef.current.remove();
-        markerRef.current = null;
-      }
-      return;
-    }
+    if (gpsValue.trim() && !mapUnlocked) setMapUnlocked(true);
+  }, [gpsValue, mapUnlocked]);
 
-    const parts = gpsValue.split(',').map(p => p.trim());
-    if (parts.length !== 2) return;
-
-    const lat = parseFloat(parts[0]);
-    const lng = parseFloat(parts[1]);
-
-    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
-
-    const markerIcon = createGpsMarkerIcon(isAtCurrentLocation);
-
-    if (markerRef.current) {
-      const currentPos = markerRef.current.getLatLng();
-      if (currentPos.lat !== lat || currentPos.lng !== lng) {
-        markerRef.current.setLatLng([lat, lng]);
-      }
-      markerRef.current.setIcon(markerIcon);
-    } else {
-      const marker = L.marker([lat, lng], { draggable: true, icon: markerIcon }).addTo(mapRef.current);
-      marker.on('dragstart', () => {
-        setIsAtCurrentLocation(false);
-        setLocationAccuracy(null);
-        if (accuracyCircleRef.current) {
-          accuracyCircleRef.current.remove();
-          accuracyCircleRef.current = null;
-        }
-      });
-      marker.on('dragend', (event) => {
-        const markerPos = event.target.getLatLng();
-        onGpsChange(`${markerPos.lat.toFixed(6)}, ${markerPos.lng.toFixed(6)}`);
-      });
-      markerRef.current = marker;
-    }
-  }, [gpsValue, isAtCurrentLocation, onGpsChange]);
-
-  // Initialize Drawing Map
+  // Initialize Drawing Map (declared before the marker-sync effect below so that,
+  // once mapUnlocked flips true and the container mounts, the map exists in the same
+  // commit before the marker-sync effect runs and tries to use it).
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
+    if (!mapUnlocked || !mapContainerRef.current || mapRef.current) return;
 
     // Satellite tiles
     const satLayer = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
@@ -253,10 +264,6 @@ export default function MiniMap({
       const { lat, lng } = e.latlng;
       setIsAtCurrentLocation(false);
       setLocationAccuracy(null);
-      if (accuracyCircleRef.current) {
-        accuracyCircleRef.current.remove();
-        accuracyCircleRef.current = null;
-      }
       onGpsChange(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
       map.panTo([lat, lng]);
     });
@@ -278,10 +285,6 @@ export default function MiniMap({
       const center = layer.getBounds().getCenter();
       setIsAtCurrentLocation(false);
       setLocationAccuracy(null);
-      if (accuracyCircleRef.current) {
-        accuracyCircleRef.current.remove();
-        accuracyCircleRef.current = null;
-      }
       onGpsChange(`${center.lat.toFixed(6)}, ${center.lng.toFixed(6)}`);
 
       // Draw Sketch
@@ -303,7 +306,47 @@ export default function MiniMap({
         mapRef.current = null;
       }
     };
-  }, []);
+  }, [mapUnlocked]);
+
+  // Sync marker when gpsValue is set (either from manual input, live location, click, or initial load)
+  useEffect(() => {
+    if (!mapRef.current || !gpsValue) {
+      if (markerRef.current) {
+        markerRef.current.remove();
+        markerRef.current = null;
+      }
+      return;
+    }
+
+    const parts = gpsValue.split(',').map(p => p.trim());
+    if (parts.length !== 2) return;
+
+    const lat = parseFloat(parts[0]);
+    const lng = parseFloat(parts[1]);
+
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+
+    const markerIcon = createGpsMarkerIcon(isAtCurrentLocation);
+
+    if (markerRef.current) {
+      const currentPos = markerRef.current.getLatLng();
+      if (currentPos.lat !== lat || currentPos.lng !== lng) {
+        markerRef.current.setLatLng([lat, lng]);
+      }
+      markerRef.current.setIcon(markerIcon);
+    } else {
+      const marker = L.marker([lat, lng], { draggable: true, icon: markerIcon }).addTo(mapRef.current);
+      marker.on('dragstart', () => {
+        setIsAtCurrentLocation(false);
+        setLocationAccuracy(null);
+      });
+      marker.on('dragend', (event) => {
+        const markerPos = event.target.getLatLng();
+        onGpsChange(`${markerPos.lat.toFixed(6)}, ${markerPos.lng.toFixed(6)}`);
+      });
+      markerRef.current = marker;
+    }
+  }, [gpsValue, isAtCurrentLocation, onGpsChange, mapUnlocked]);
 
   // Sync isExpanded state with Map invalidateSize
   useEffect(() => {
@@ -536,22 +579,9 @@ export default function MiniMap({
         onGpsChange(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
         
         if (mapRef.current) {
-          if (accuracyCircleRef.current) {
-            accuracyCircleRef.current.remove();
-          }
-          accuracyCircleRef.current = L.circle([latitude, longitude], {
-            radius: Math.max(accuracy, 1),
-            color: '#2563eb',
-            weight: 1.5,
-            opacity: 0.8,
-            fillColor: '#3b82f6',
-            fillOpacity: 0.12,
-            interactive: false,
-          }).addTo(mapRef.current);
-          accuracyCircleRef.current.bringToBack();
-
-          const targetZoom = accuracy <= 20 ? 20 : accuracy <= 50 ? 19 : 18;
-          mapRef.current.flyTo([latitude, longitude], targetZoom, { duration: 1.1 });
+          // Just settle on the resolved point (the marker itself shows the live-location
+          // pulse) rather than drawing a separate accuracy circle across the map.
+          mapRef.current.flyTo([latitude, longitude], Math.max(mapRef.current.getZoom(), 19), { duration: 1.1 });
         }
         setLocating(false);
       },
@@ -567,10 +597,6 @@ export default function MiniMap({
   const handleGpsInputChange = (value: string) => {
     setIsAtCurrentLocation(false);
     setLocationAccuracy(null);
-    if (accuracyCircleRef.current) {
-      accuracyCircleRef.current.remove();
-      accuracyCircleRef.current = null;
-    }
 
     onGpsChange(value);
     const parts = value.split(',').map((part) => part.trim());
@@ -649,39 +675,50 @@ export default function MiniMap({
           </div>
         </div>
         
-        <div 
-          className={`relative z-0 overflow-hidden rounded-3xl border border-slate-200 bg-slate-100 shadow-[0_8px_28px_rgba(15,23,42,0.08)] transition-all duration-300 ${
-            isExpanded 
-              ? 'fixed inset-0 z-40 pb-20 md:left-[252px] md:pb-0'
-              : 'h-[460px] w-full'
-          }`}
-        >
-          <div ref={mapContainerRef} className="w-full h-full" />
-          
-          {/* Map controls */}
-          <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={getLiveLocation}
-              disabled={locating}
-              className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-teal-600 px-3.5 text-[10px] font-extrabold text-white shadow-[0_8px_22px_rgba(37,99,235,0.3)] transition-all hover:-translate-y-0.5 hover:bg-teal-500 disabled:cursor-wait disabled:bg-slate-400"
-              aria-label="Go to my current location"
-            >
-              {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
-              <span className="hidden sm:inline">{locating ? 'Locating...' : 'My Location'}</span>
-            </button>
-            <button
-              type="button"
-              onClick={toggleFullScreen}
-              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-700 shadow-md backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-slate-50"
-              aria-label={isExpanded ? 'Exit full screen map' : 'Open full screen map'}
-              title={isExpanded ? 'Exit full screen' : 'Full screen'}
-            >
-              <Fullscreen className="h-[18px] w-[18px]" />
-            </button>
-          </div>
+        {mapUnlocked ? (
+          <div
+            className={`relative z-0 overflow-hidden rounded-3xl border border-slate-200 bg-slate-100 shadow-[0_8px_28px_rgba(15,23,42,0.08)] transition-all duration-300 ${
+              isExpanded
+                ? 'fixed inset-0 z-40 pb-20 md:left-[252px] md:pb-0'
+                : 'h-[460px] w-full'
+            }`}
+          >
+            <div ref={mapContainerRef} className="w-full h-full" />
 
-        </div>
+            {/* Map controls */}
+            <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={getLiveLocation}
+                disabled={locating}
+                className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-teal-600 px-3.5 text-[10px] font-extrabold text-white shadow-[0_8px_22px_rgba(37,99,235,0.3)] transition-all hover:-translate-y-0.5 hover:bg-teal-500 disabled:cursor-wait disabled:bg-slate-400"
+                aria-label="Go to my current location"
+              >
+                {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
+                <span className="hidden sm:inline">{locating ? 'Locating...' : 'My Location'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={toggleFullScreen}
+                className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-700 shadow-md backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-slate-50"
+                aria-label={isExpanded ? 'Exit full screen map' : 'Open full screen map'}
+                title={isExpanded ? 'Exit full screen' : 'Full screen'}
+              >
+                <Fullscreen className="h-[18px] w-[18px]" />
+              </button>
+            </div>
+
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-slate-300 bg-slate-50/70 px-6 py-10 text-center">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-slate-300 shadow-sm">
+              <MapPin className="h-5 w-5" />
+            </span>
+            <p className="max-w-xs text-xs font-bold text-slate-500">
+              Maabku wuxuu soo muuqan doonaa marka aad geliso GPS coordinates ama aad riixdo &quot;Exact Location&quot;.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Technical Sketch Preview Card */}

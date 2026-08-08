@@ -1,21 +1,23 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Reference, Receipt, Expense } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
-import { 
-  Wallet, 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
-  Plus, 
-  Printer, 
-  X, 
-  CheckCircle2, 
-  Loader2, 
-  FileText, 
+import { useMobileSearch } from '@/context/MobileSearchContext';
+import { dateGroupKey, groupItems } from '@/lib/listGrouping';
+import {
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  Plus,
+  Printer,
+  Search,
+  X,
+  CheckCircle2,
+  Loader2,
+  FileText,
   CreditCard,
   AlertCircle,
   Calendar
@@ -24,7 +26,12 @@ import {
 export default function FinancialsPage() {
   const { profile } = useAuth();
   const { showAlert, showConfirm } = useModal();
-  
+  const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
+
+  useEffect(() => {
+    setSearchAvailable(true);
+  }, [setSearchAvailable]);
+
   const [loading, setLoading] = useState(true);
   const [savingReceipt, setSavingReceipt] = useState(false);
   const [savingExpense, setSavingExpense] = useState(false);
@@ -40,6 +47,18 @@ export default function FinancialsPage() {
 
   // Tabs
   const [activeTab, setActiveTab] = useState<'payments' | 'expenses'>('payments');
+
+  // Search / sort / group controls
+  const [receiptSearchQuery, setReceiptSearchQuery] = useState('');
+  const [receiptStatusFilter, setReceiptStatusFilter] = useState<'' | 'Paid' | 'Credit' | 'Unpaid'>('');
+  const [receiptSortBy, setReceiptSortBy] = useState<'newest' | 'oldest'>('newest');
+  const [receiptGroupBy, setReceiptGroupBy] = useState<'none' | 'date'>('none');
+  const [receiptGroupAggregate, setReceiptGroupAggregate] = useState<'none' | 'count' | 'sum'>('count');
+
+  const [expenseSearchQuery, setExpenseSearchQuery] = useState('');
+  const [expenseSortBy, setExpenseSortBy] = useState<'newest' | 'oldest' | 'amount_high'>('newest');
+  const [expenseGroupBy, setExpenseGroupBy] = useState<'none' | 'date'>('none');
+  const [expenseGroupAggregate, setExpenseGroupAggregate] = useState<'none' | 'count' | 'sum'>('count');
 
   // Pay Modal State
   const [showPayModal, setShowPayModal] = useState(false);
@@ -138,6 +157,92 @@ export default function FinancialsPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const filteredReferencesWithReceipts = useMemo(() => {
+    let result = [...referencesWithReceipts];
+
+    if (receiptSearchQuery.trim() !== '') {
+      const q = receiptSearchQuery.toLowerCase();
+      result = result.filter((r) => r.ref_number.toLowerCase().includes(q) || r.subject.toLowerCase().includes(q));
+    }
+
+    if (receiptStatusFilter) {
+      result = result.filter((r) => {
+        const receipts = r.receipts || [];
+        const paidAmount = receipts.filter((x: any) => x.status === 'Paid').reduce((s: number, x: any) => s + parseFloat(x.amount.toString()), 0);
+        const creditAmount = receipts.filter((x: any) => x.status === 'Credit').reduce((s: number, x: any) => s + parseFloat(x.amount.toString()), 0);
+        const hasCredit = creditAmount > 0;
+        const isPaid = !hasCredit && paidAmount > 0;
+        if (receiptStatusFilter === 'Paid') return isPaid;
+        if (receiptStatusFilter === 'Credit') return hasCredit;
+        return !isPaid && !hasCredit;
+      });
+    }
+
+    return result;
+  }, [referencesWithReceipts, receiptSearchQuery, receiptStatusFilter]);
+
+  const sortedReferencesWithReceipts = useMemo(() => {
+    const sorted = [...filteredReferencesWithReceipts];
+    sorted.sort((a, b) => {
+      const diff = new Date(b.issue_date || 0).getTime() - new Date(a.issue_date || 0).getTime();
+      return receiptSortBy === 'oldest' ? -diff : diff;
+    });
+    return sorted;
+  }, [filteredReferencesWithReceipts, receiptSortBy]);
+
+  const groupedReferencesWithReceipts = useMemo(() => {
+    if (receiptGroupBy === 'none') return null;
+    return groupItems(sortedReferencesWithReceipts, (r) => dateGroupKey(r.issue_date).key).map((group) => {
+      const baseLabel = dateGroupKey(group.items[0].issue_date).label;
+      let label = baseLabel;
+      if (receiptGroupAggregate === 'count') {
+        label = `${baseLabel} · ${group.items.length}`;
+      } else if (receiptGroupAggregate === 'sum') {
+        const sum = group.items.reduce((total, r) => {
+          const receipts = r.receipts || [];
+          return total + receipts.reduce((s: number, x: any) => s + parseFloat(x.amount.toString()), 0);
+        }, 0);
+        label = `${baseLabel} · $${sum.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+      }
+      return { ...group, label };
+    });
+  }, [sortedReferencesWithReceipts, receiptGroupBy, receiptGroupAggregate]);
+
+  const filteredExpenses = useMemo(() => {
+    if (expenseSearchQuery.trim() === '') return expenses;
+    const q = expenseSearchQuery.toLowerCase();
+    return expenses.filter((e) => e.description.toLowerCase().includes(q));
+  }, [expenses, expenseSearchQuery]);
+
+  const sortedExpenses = useMemo(() => {
+    const sorted = [...filteredExpenses];
+    sorted.sort((a, b) => {
+      if (expenseSortBy === 'amount_high') return parseFloat(b.total.toString()) - parseFloat(a.total.toString());
+      const diff = new Date(b.expense_date || 0).getTime() - new Date(a.expense_date || 0).getTime();
+      return expenseSortBy === 'oldest' ? -diff : diff;
+    });
+    return sorted;
+  }, [filteredExpenses, expenseSortBy]);
+
+  const groupedExpenses = useMemo(() => {
+    if (expenseGroupBy === 'none') return null;
+    return groupItems(sortedExpenses, (e) => dateGroupKey(e.expense_date).key).map((group) => {
+      const baseLabel = dateGroupKey(group.items[0].expense_date).label;
+      const sum = group.items.reduce((total, e) => total + parseFloat(e.total.toString()), 0);
+      const label =
+        expenseGroupAggregate === 'count' ? `${baseLabel} · ${group.items.length}` :
+        expenseGroupAggregate === 'sum' ? `${baseLabel} · $${sum.toLocaleString('en-US', { minimumFractionDigits: 2 })}` :
+        baseLabel;
+      return { ...group, label };
+    });
+  }, [sortedExpenses, expenseGroupBy, expenseGroupAggregate]);
+
+  // Stable row numbers independent of the current sort/group order (newest fetched = highest number).
+  const expenseSerial = useMemo(
+    () => new Map(expenses.map((e, idx) => [e.id, expenses.length - idx])),
+    [expenses],
+  );
 
   // Pay Dialog triggers
   const openPayDialog = (refId: number, refNum: string, subject: string) => {
@@ -472,23 +577,6 @@ export default function FinancialsPage() {
   return (
     <div className="p-4 md:p-8 w-full space-y-3.5 md:space-y-6 text-slate-800">
       
-      {/* Financials Header */}
-      <div className="flex flex-row justify-between items-center gap-4 bg-white p-3 md:p-6 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm w-full">
-        <div className="flex items-center gap-3">
-          <div className="bg-teal-50 text-teal-600 p-2 rounded-xl border border-teal-100 shrink-0">
-            <Wallet className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="text-base md:text-xl font-black text-slate-800 leading-tight">
-              Financial Management
-            </h2>
-            <p className="hidden sm:block text-[10px] md:text-xs text-slate-500 font-semibold mt-0.5">
-              Xisaabaadka dakhliga iyo kharashyada xafiiska sahanka.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Stats Summary Cards */}
       {/* Desktop Version */}
       <div className="hidden md:grid grid-cols-4 gap-6">
@@ -600,6 +688,113 @@ export default function FinancialsPage() {
         </button>
       </div>
 
+      {/* Search / Sort / Group toolbar */}
+      <div className={`${showMobileSearch ? 'flex' : 'hidden md:flex'} flex-col gap-2 md:flex-row md:items-center bg-white border border-slate-100 rounded-2xl md:rounded-3xl p-3 shadow-sm w-full`}>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          {activeTab === 'payments' ? (
+            <input
+              type="text"
+              value={receiptSearchQuery}
+              onChange={(e) => setReceiptSearchQuery(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-9 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              placeholder="Raadi Sumad / Ujeedo..."
+            />
+          ) : (
+            <input
+              type="text"
+              value={expenseSearchQuery}
+              onChange={(e) => setExpenseSearchQuery(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-9 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              placeholder="Raadi Description..."
+            />
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {activeTab === 'payments' ? (
+            <>
+              <select
+                value={receiptStatusFilter}
+                onChange={(e) => setReceiptStatusFilter(e.target.value as typeof receiptStatusFilter)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
+              >
+                <option value="">Status (All)...</option>
+                <option value="Paid">Paid</option>
+                <option value="Credit">Credit</option>
+                <option value="Unpaid">Unpaid</option>
+              </select>
+              <select
+                value={receiptSortBy}
+                onChange={(e) => setReceiptSortBy(e.target.value as typeof receiptSortBy)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
+              >
+                <option value="newest">Sort: Newest first</option>
+                <option value="oldest">Sort: Oldest first</option>
+              </select>
+            </>
+          ) : (
+            <select
+              value={expenseSortBy}
+              onChange={(e) => setExpenseSortBy(e.target.value as typeof expenseSortBy)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
+            >
+              <option value="newest">Sort: Newest first</option>
+              <option value="oldest">Sort: Oldest first</option>
+              <option value="amount_high">Sort: Amount (high–low)</option>
+            </select>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          {activeTab === 'payments' ? (
+            <>
+              <select
+                value={receiptGroupBy}
+                onChange={(e) => setReceiptGroupBy(e.target.value as typeof receiptGroupBy)}
+                className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="none">No group</option>
+                <option value="date">Group: Date</option>
+              </select>
+              {receiptGroupBy !== 'none' && (
+                <select
+                  value={receiptGroupAggregate}
+                  onChange={(e) => setReceiptGroupAggregate(e.target.value as typeof receiptGroupAggregate)}
+                  className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="none">Aggregate: None</option>
+                  <option value="count">Aggregate: Count</option>
+                  <option value="sum">Aggregate: Sum</option>
+                </select>
+              )}
+            </>
+          ) : (
+            <>
+              <select
+                value={expenseGroupBy}
+                onChange={(e) => setExpenseGroupBy(e.target.value as typeof expenseGroupBy)}
+                className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="none">No group</option>
+                <option value="date">Group: Date</option>
+              </select>
+              {expenseGroupBy !== 'none' && (
+                <select
+                  value={expenseGroupAggregate}
+                  onChange={(e) => setExpenseGroupAggregate(e.target.value as typeof expenseGroupAggregate)}
+                  className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="none">Aggregate: None</option>
+                  <option value="count">Aggregate: Count</option>
+                  <option value="sum">Aggregate: Sum</option>
+                </select>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
       {/* Table & Dashboard view */}
       {loading ? (
         <div className="flex h-64 items-center justify-center">
@@ -618,15 +813,15 @@ export default function FinancialsPage() {
                       <input
                         type="checkbox"
                         checked={
-                          referencesWithReceipts.length > 0 &&
-                          referencesWithReceipts.filter(r => {
+                          sortedReferencesWithReceipts.length > 0 &&
+                          sortedReferencesWithReceipts.filter(r => {
                             const latestRec = r.receipts && r.receipts[0];
                             return !latestRec || latestRec.status !== 'Paid';
                           }).every(r => selectedRefIds.includes(r.id))
                         }
                         onChange={(e) => {
                           if (e.target.checked) {
-                            const unpaidIds = referencesWithReceipts
+                            const unpaidIds = sortedReferencesWithReceipts
                               .filter(r => {
                                 const latestRec = r.receipts && r.receipts[0];
                                 return !latestRec || latestRec.status !== 'Paid';
@@ -646,106 +841,131 @@ export default function FinancialsPage() {
                     <th className="px-6 py-4 text-center">Status / Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {referencesWithReceipts.map((ref) => {
-                    const receipts = ref.receipts || [];
-                    const paidAmount = receipts
-                      .filter((r: any) => r.status === 'Paid')
-                      .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
-                    const creditAmount = receipts
-                      .filter((r: any) => r.status === 'Credit')
-                      .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
-                    
-                    const hasCredit = creditAmount > 0;
-                    const isPaid = !hasCredit && paidAmount > 0;
-                    const activeReceipt = receipts.find((r: any) => r.status === 'Credit') || receipts[0];
+                <tbody className="divide-y divide-slate-100/60 bg-white">
+                  {(groupedReferencesWithReceipts ?? [{ key: 'all', label: '', items: sortedReferencesWithReceipts }]).map((group) => (
+                    <React.Fragment key={group.key}>
+                      {receiptGroupBy !== 'none' && (
+                        <tr>
+                          <td colSpan={5} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                            {group.label}
+                          </td>
+                        </tr>
+                      )}
+                      {group.items.map((ref) => {
+                        const receipts = ref.receipts || [];
+                        const paidAmount = receipts
+                          .filter((r: any) => r.status === 'Paid')
+                          .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
+                        const creditAmount = receipts
+                          .filter((r: any) => r.status === 'Credit')
+                          .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
 
-                    return (
-                      <tr
-                        key={ref.id}
-                        onClick={() => activeReceipt && openReceiptDetails(activeReceipt, ref.ref_number)}
-                        className={`hover:bg-slate-50/80 transition-all ${activeReceipt ? 'cursor-pointer' : ''}`}
-                      >
-                        <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
-                          {!isPaid && (
-                            <input
-                              type="checkbox"
-                              checked={selectedRefIds.includes(ref.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedRefIds(prev => [...prev, ref.id]);
-                                } else {
-                                  setSelectedRefIds(prev => prev.filter(id => id !== ref.id));
-                                }
-                              }}
-                              className="rounded border-slate-300 text-teal-650 focus:ring-teal-500 cursor-pointer h-4 w-4"
-                            />
-                          )}
-                        </td>
-                        <td className="px-6 py-4 font-black text-teal-600">
-                          {ref.ref_number}
-                        </td>
-                        <td className="px-6 py-4 font-bold text-slate-800">
-                          {ref.subject}
-                        </td>
-                        <td className="px-6 py-4 text-slate-500">
-                          {ref.issue_date ? new Date(ref.issue_date).toLocaleDateString('so-SO') : '-'}
-                        </td>
-                        <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
-                          {isPaid ? (
-                            <span
-                              className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-100 px-3.5 py-1.5 rounded-full font-extrabold uppercase text-[10px] cursor-pointer"
-                              onClick={() => openReceiptDetails(activeReceipt, ref.ref_number)}
-                            >
-                              <CheckCircle2 className="h-3 w-3" /> Paid (${paidAmount.toFixed(2)})
-                            </span>
-                          ) : hasCredit ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <div className="flex flex-col items-end">
+                        const hasCredit = creditAmount > 0;
+                        const isPaid = !hasCredit && paidAmount > 0;
+                        const activeReceipt = receipts.find((r: any) => r.status === 'Credit') || receipts[0];
+
+                        return (
+                          <tr
+                            key={ref.id}
+                            onClick={() => activeReceipt && openReceiptDetails(activeReceipt, ref.ref_number)}
+                            className={`hover:bg-slate-50/80 transition-all ${activeReceipt ? 'cursor-pointer' : ''}`}
+                          >
+                            <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                              {!isPaid && (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedRefIds.includes(ref.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedRefIds(prev => [...prev, ref.id]);
+                                    } else {
+                                      setSelectedRefIds(prev => prev.filter(id => id !== ref.id));
+                                    }
+                                  }}
+                                  className="rounded border-slate-300 text-teal-650 focus:ring-teal-500 cursor-pointer h-4 w-4"
+                                />
+                              )}
+                            </td>
+                            <td className="px-6 py-4 font-black text-teal-600">
+                              {ref.ref_number}
+                            </td>
+                            <td className="px-6 py-4 font-bold text-slate-800">
+                              {ref.subject}
+                            </td>
+                            <td className="px-6 py-4 text-slate-500">
+                              {ref.issue_date ? new Date(ref.issue_date).toLocaleDateString('so-SO') : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                              {isPaid ? (
                                 <span
-                                  className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200/60 px-3 py-1 rounded-full font-extrabold uppercase text-[10px] cursor-pointer"
+                                  className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-100 px-3.5 py-1.5 rounded-full font-extrabold uppercase text-[10px] cursor-pointer"
                                   onClick={() => openReceiptDetails(activeReceipt, ref.ref_number)}
                                 >
-                                  <AlertCircle className="h-3 w-3" /> Deyn: ${creditAmount.toFixed(2)}
+                                  <CheckCircle2 className="h-3 w-3" /> Paid (${paidAmount.toFixed(2)})
                                 </span>
-                                {paidAmount > 0 && (
-                                  <span className="text-[9px] text-emerald-600 font-bold mt-0.5">
-                                    (Bixiyey: ${paidAmount.toFixed(2)})
-                                  </span>
-                                )}
-                              </div>
-                              <button
-                                onClick={() => openPayDebtDialog(ref)}
-                                className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] py-1.5 px-3 rounded-xl shadow-sm cursor-pointer transition-all active:scale-95 flex items-center gap-1"
-                              >
-                                Pay Debt
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => openPayDialog(ref.id, ref.ref_number, ref.subject)}
-                              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] py-1.5 px-4 rounded-xl shadow-sm cursor-pointer transition-colors"
-                            >
-                              Pay Now
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                              ) : hasCredit ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  <div className="flex flex-col items-end">
+                                    <span
+                                      className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200/60 px-3 py-1 rounded-full font-extrabold uppercase text-[10px] cursor-pointer"
+                                      onClick={() => openReceiptDetails(activeReceipt, ref.ref_number)}
+                                    >
+                                      <AlertCircle className="h-3 w-3" /> Deyn: ${creditAmount.toFixed(2)}
+                                    </span>
+                                    {paidAmount > 0 && (
+                                      <span className="text-[9px] text-emerald-600 font-bold mt-0.5">
+                                        (Bixiyey: ${paidAmount.toFixed(2)})
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => openPayDebtDialog(ref)}
+                                    className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] py-1.5 px-3 rounded-xl shadow-sm cursor-pointer transition-all active:scale-95 flex items-center gap-1"
+                                  >
+                                    Pay Debt
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => openPayDialog(ref.id, ref.ref_number, ref.subject)}
+                                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] py-1.5 px-4 rounded-xl shadow-sm cursor-pointer transition-colors"
+                                >
+                                  Pay Now
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* Mobile Card List View */}
-          <div className="md:hidden flex flex-col gap-4">
-            {referencesWithReceipts.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 italic bg-white border border-slate-200/60 rounded-2xl">
+          {/* Mobile List View */}
+          <div className="md:hidden">
+            {sortedReferencesWithReceipts.length > 0 && (
+              <div className="border-b border-slate-200 px-1 py-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+                Tixraacyo &amp; Lacag Bixinno
+              </div>
+            )}
+            {sortedReferencesWithReceipts.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 italic">
                 Tixraacyo lama hayo.
               </div>
             ) : (
-              referencesWithReceipts.map((ref) => {
+              <>
+              {(groupedReferencesWithReceipts ?? [{ key: 'all', label: '', items: sortedReferencesWithReceipts }]).map((group) => (
+              <div key={group.key}>
+                {receiptGroupBy !== 'none' && (
+                  <div className="px-4 pb-1.5 pt-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
+                    {group.label}
+                  </div>
+                )}
+                <div className="divide-y divide-slate-100/60">
+              {group.items.map((ref) => {
                 const receipts = ref.receipts || [];
                 const paidAmount = receipts
                   .filter((r: any) => r.status === 'Paid')
@@ -762,8 +982,8 @@ export default function FinancialsPage() {
                   <div
                     key={ref.id}
                     onClick={() => activeReceipt && openReceiptDetails(activeReceipt, ref.ref_number)}
-                    className={`p-4 bg-white border border-slate-200/60 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3 transition-all ${
-                      activeReceipt ? 'cursor-pointer active:scale-[0.99]' : ''
+                    className={`px-1 py-4 flex flex-col gap-3 transition-colors hover:bg-slate-50/80 ${
+                      activeReceipt ? 'cursor-pointer active:bg-slate-50' : ''
                     }`}
                   >
                     <div className="flex justify-between items-center">
@@ -812,20 +1032,20 @@ export default function FinancialsPage() {
                       </div>
                     </div>
 
-                    <div className="text-xs">
-                      <span className="block text-[9px] uppercase tracking-wide text-slate-400 font-extrabold">Ujeedo (Subject)</span>
-                      <span className="font-extrabold text-slate-800">{ref.subject}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-[10px] text-slate-500 border-t border-slate-100 pt-2">
-                      <span className="flex items-center gap-1 font-semibold">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="min-w-0 truncate font-extrabold text-slate-800">{ref.subject}</span>
+                      <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold text-slate-500">
                         <Calendar className="h-3 w-3" />
                         {ref.issue_date ? new Date(ref.issue_date).toLocaleDateString('so-SO') : '-'}
                       </span>
                     </div>
                   </div>
                 );
-              })
+              })}
+                </div>
+              </div>
+              ))}
+              </>
             )}
           </div>
         </>
@@ -857,40 +1077,51 @@ export default function FinancialsPage() {
                     <th className="px-6 py-4">Created By</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {expenses.length === 0 ? (
+                <tbody className="divide-y divide-slate-100/60 bg-white">
+                  {sortedExpenses.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-6 py-12 text-center text-slate-400 italic">
                         Kharashyo lama hayo.
                       </td>
                     </tr>
                   ) : (
-                    expenses.map((e, idx) => (
-                      <tr key={e.id} className="hover:bg-slate-50/80 transition-all">
-                        <td className="px-6 py-4 font-black text-slate-400">
-                          #{expenses.length - idx}
-                        </td>
-                        <td className="px-6 py-4 font-bold text-slate-800">
-                          {e.description}
-                        </td>
-                        <td className="px-6 py-4 text-slate-500">
-                          {e.expense_date ? new Date(e.expense_date).toLocaleDateString('so-SO') : '-'}
-                        </td>
-                        <td className="px-6 py-4 text-center font-bold text-slate-700">
-                          {e.qty}
-                        </td>
-                        <td className="px-6 py-4 font-bold text-slate-700">
-                          ${parseFloat(e.amount.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-6 py-4 font-black text-rose-600 text-sm">
-                          ${parseFloat(e.total.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="inline-flex px-2.5 py-0.5 rounded-full bg-slate-50 border border-slate-150 text-slate-500 text-[10px] font-extrabold">
-                            {e.created_by || 'Admin'}
-                          </span>
-                        </td>
-                      </tr>
+                    (groupedExpenses ?? [{ key: 'all', label: '', items: sortedExpenses }]).map((group) => (
+                      <React.Fragment key={group.key}>
+                        {expenseGroupBy !== 'none' && (
+                          <tr>
+                            <td colSpan={7} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                              {group.label}
+                            </td>
+                          </tr>
+                        )}
+                        {group.items.map((e) => (
+                          <tr key={e.id} className="hover:bg-slate-50/80 transition-all">
+                            <td className="px-6 py-4 font-black text-slate-400">
+                              #{expenseSerial.get(e.id)}
+                            </td>
+                            <td className="px-6 py-4 font-bold text-slate-800">
+                              {e.description}
+                            </td>
+                            <td className="px-6 py-4 text-slate-500">
+                              {e.expense_date ? new Date(e.expense_date).toLocaleDateString('so-SO') : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-center font-bold text-slate-700">
+                              {e.qty}
+                            </td>
+                            <td className="px-6 py-4 font-bold text-slate-700">
+                              ${parseFloat(e.amount.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-6 py-4 font-black text-rose-600 text-sm">
+                              ${parseFloat(e.total.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="inline-flex px-2.5 py-0.5 rounded-full bg-slate-50 border border-slate-150 text-slate-500 text-[10px] font-extrabold">
+                                {e.created_by || 'Admin'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
                     ))
                   )}
                 </tbody>
@@ -898,50 +1129,45 @@ export default function FinancialsPage() {
             </div>
           </div>
 
-          {/* Mobile Card List View */}
-          <div className="md:hidden flex flex-col gap-4">
-            {expenses.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 italic bg-white border border-slate-200/60 rounded-2xl">
+          {/* Mobile List View */}
+          <div className="md:hidden">
+            {sortedExpenses.length > 0 && (
+              <div className="grid grid-cols-[36px_1fr_auto] items-center gap-3 border-b border-slate-200 px-1 py-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+                <span>#</span>
+                <span>Description</span>
+                <span>Total</span>
+              </div>
+            )}
+            {sortedExpenses.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 italic">
                 Kharashyo lama hayo.
               </div>
             ) : (
-              expenses.map((e, idx) => (
-                <div
-                  key={e.id}
-                  className="p-4 bg-white border border-slate-200/60 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-black text-xs text-slate-400">#{expenses.length - idx}</span>
-                    <span className="font-black text-xs text-rose-600">
-                      ${parseFloat(e.total.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-
-                  <div className="text-xs">
-                    <span className="block text-[9px] uppercase tracking-wide text-slate-400 font-extrabold">Description</span>
-                    <span className="font-extrabold text-slate-800">{e.description}</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs border-t border-slate-100 pt-2.5">
-                    <div>
-                      <span className="block text-[9px] uppercase tracking-wide text-slate-400 font-extrabold">Qty & Amount</span>
-                      <span className="font-extrabold text-slate-700 block">
-                        {e.qty} × ${parseFloat(e.amount.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </span>
+              (groupedExpenses ?? [{ key: 'all', label: '', items: sortedExpenses }]).map((group) => (
+                <div key={group.key}>
+                  {expenseGroupBy !== 'none' && (
+                    <div className="px-1 pb-1.5 pt-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
+                      {group.label}
                     </div>
-                    <div>
-                      <span className="block text-[9px] uppercase tracking-wide text-slate-400 font-extrabold">Created By</span>
-                      <span className="inline-flex px-2 py-0.5 rounded-full bg-slate-50 border border-slate-150 text-slate-500 text-[9px] font-extrabold">
-                        {e.created_by || 'Admin'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center text-[10px] text-slate-500 border-t border-slate-100 pt-2">
-                    <span className="flex items-center gap-1 font-semibold">
-                      <Calendar className="h-3 w-3" />
-                      {e.expense_date ? new Date(e.expense_date).toLocaleDateString('so-SO') : '-'}
-                    </span>
+                  )}
+                  <div className="divide-y divide-slate-100/60">
+                    {group.items.map((e) => (
+                      <div key={e.id} className="grid grid-cols-[36px_1fr_auto] items-center gap-3 px-1 py-3.5">
+                        <span className="truncate text-xs font-black text-slate-400">#{expenseSerial.get(e.id)}</span>
+                        <div className="min-w-0">
+                          <h4 className="truncate text-xs font-extrabold text-slate-800">{e.description}</h4>
+                          <p className="mt-0.5 flex items-center gap-1 truncate text-[9px] text-slate-500">
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            <span>{e.expense_date ? new Date(e.expense_date).toLocaleDateString('so-SO') : '-'}</span>
+                            <span>•</span>
+                            <span>{e.qty} × ${parseFloat(e.amount.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                          </p>
+                        </div>
+                        <span className="justify-self-end whitespace-nowrap text-xs font-black text-rose-600">
+                          ${parseFloat(e.total.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))

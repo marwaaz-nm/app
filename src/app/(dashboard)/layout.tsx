@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import Sidebar from '@/components/Sidebar';
 import WorkspaceHeader from '@/components/WorkspaceHeader';
+import { MobileSearchProvider } from '@/context/MobileSearchContext';
 import { usePathname, useRouter } from 'next/navigation';
 
 export default function DashboardLayout({
@@ -21,8 +22,9 @@ export default function DashboardLayout({
       const standardRoutes = ['/references', '/explorer', '/records', '/transfers', '/financials', '/reports'];
       const currentBaseRoute = standardRoutes.find(route => pathname.startsWith(route));
       
-      if (currentBaseRoute && profile.permitted_menus && Array.isArray(profile.permitted_menus)) {
-        const missingMenu = !profile.permitted_menus.includes(currentBaseRoute);
+      if (currentBaseRoute) {
+        const permittedMenus = Array.isArray(profile.permitted_menus) ? profile.permitted_menus : [];
+        const missingMenu = !permittedMenus.includes(currentBaseRoute);
         const missingReportAction = currentBaseRoute === '/reports' && !profile.permitted_actions?.includes('report.view');
         if (missingMenu || missingReportAction) {
           router.push('/dashboard');
@@ -50,17 +52,21 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-900">
+    <div className="flex h-dvh w-screen overflow-hidden bg-slate-50 text-slate-900">
       {/* Navigation Shell */}
       <Sidebar />
 
-      {/* Main Content panel */}
-      <main className="flex-1 flex flex-col min-w-0 h-full relative overflow-y-auto pb-24 md:pb-0 bg-slate-50">
-        <WorkspaceHeader />
-        <div className="w-full min-h-full">
-          {children}
+      {/* Content column: header stays fixed in place, only the middle area scrolls */}
+      <MobileSearchProvider>
+        <div className="flex-1 flex flex-col min-w-0 h-full relative bg-slate-50">
+          <WorkspaceHeader />
+          <main className="flex-1 min-h-0 overflow-y-auto pb-[calc(6rem_+_env(safe-area-inset-bottom))] md:pb-0 bg-slate-50">
+            <div className="w-full min-h-full">
+              {children}
+            </div>
+          </main>
         </div>
-      </main>
+      </MobileSearchProvider>
     </div>
   );
 }

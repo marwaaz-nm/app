@@ -142,6 +142,15 @@ body {
   font-weight: 800 !important;
 }
 
+/* On touch screens the draw tooltip follows the last tap and sits right where the
+   next point needs to be placed, blocking it. The draw toolbar (Finish / Delete last
+   point / Cancel) already gives the same guidance, so just hide it below md. */
+@media (max-width: 767px) {
+  .leaflet-draw-tooltip {
+    display: none !important;
+  }
+}
+
 .modal-area-box {
   background: rgba(255, 255, 255, 0.95) !important;
   border: 1.5px solid #0f172a !important;

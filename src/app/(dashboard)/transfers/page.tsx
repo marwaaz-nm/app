@@ -1,21 +1,22 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Transfer, Survey } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
-import { 
-  Plus, 
-  Search, 
-  ArrowLeftRight, 
-  Calendar, 
-  DollarSign, 
-  User, 
-  Phone, 
-  X, 
-  Loader2, 
-  ChevronRight, 
+import { useMobileSearch } from '@/context/MobileSearchContext';
+import { dateGroupKey, groupItems } from '@/lib/listGrouping';
+import {
+  Plus,
+  Search,
+  Calendar,
+  DollarSign,
+  User,
+  Phone,
+  X,
+  Loader2,
+  ChevronRight,
   Info,
   Check
 } from 'lucide-react';
@@ -23,8 +24,8 @@ import {
 export default function TransfersPage() {
   const { user } = useAuth();
   const { showAlert, showConfirm } = useModal();
-  const [showMobileSearch, setShowMobileSearch] = useState(false);
-  
+  const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
+
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [filteredTransfers, setFilteredTransfers] = useState<Transfer[]>([]);
   const [surveys, setSurveys] = useState<{ id: number; serial_no: number; owner_name: string }[]>([]);
@@ -33,9 +34,17 @@ export default function TransfersPage() {
 
   // Search/Filter states
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'price_high'>('newest');
+  const [groupBy, setGroupBy] = useState<'none' | 'date'>('none');
+  const [groupAggregate, setGroupAggregate] = useState<'none' | 'count' | 'sum'>('count');
 
   // Form states
   const [showAddForm, setShowAddForm] = useState(false);
+
+  useEffect(() => {
+    setSearchAvailable(!showAddForm);
+  }, [showAddForm, setSearchAvailable]);
+
   const [sellers, setSellers] = useState<{ name: string; tel: string }[]>([{ name: '', tel: '' }]);
   const [buyers, setBuyers] = useState<{ name: string; tel: string }[]>([{ name: '', tel: '' }]);
   const [selectedSurveyId, setSelectedSurveyId] = useState<string>('');
@@ -102,6 +111,29 @@ export default function TransfersPage() {
     setFilteredTransfers(result);
   }, [searchQuery, transfers]);
 
+  const sortedTransfers = useMemo(() => {
+    const sorted = [...filteredTransfers];
+    sorted.sort((a, b) => {
+      if (sortBy === 'price_high') return parseFloat(b.price.toString()) - parseFloat(a.price.toString());
+      const diff = new Date(b.transfer_date || b.created_at || 0).getTime() - new Date(a.transfer_date || a.created_at || 0).getTime();
+      return sortBy === 'oldest' ? -diff : diff;
+    });
+    return sorted;
+  }, [filteredTransfers, sortBy]);
+
+  const groupedTransfers = useMemo(() => {
+    if (groupBy === 'none') return null;
+    return groupItems(sortedTransfers, (t) => dateGroupKey(t.transfer_date || t.created_at).key).map((group) => {
+      const baseLabel = dateGroupKey(group.items[0].transfer_date || group.items[0].created_at).label;
+      const sum = group.items.reduce((total, t) => total + parseFloat(t.price.toString()), 0);
+      const label =
+        groupAggregate === 'count' ? `${baseLabel} · ${group.items.length}` :
+        groupAggregate === 'sum' ? `${baseLabel} · $${sum.toLocaleString('en-US', { minimumFractionDigits: 2 })}` :
+        baseLabel;
+      return { ...group, label };
+    });
+  }, [sortedTransfers, groupBy, groupAggregate]);
+
   const handleOpenAddForm = () => {
     const today = new Date().toISOString().split('T')[0];
     setTransferDate(today);
@@ -164,39 +196,14 @@ export default function TransfersPage() {
     <div className={`p-4 md:p-8 mx-auto space-y-3.5 md:space-y-6 text-slate-800 transition-all duration-300 ${showAddForm ? 'form-card' : 'w-full'}`}>
       
       {!showAddForm && (
-        /* Header section */
-        <div className="flex flex-row justify-between items-center gap-4 bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm w-full">
-          <div className="flex items-center gap-3">
-            <div className="bg-teal-50 text-teal-600 p-2.5 rounded-xl border border-teal-100 shrink-0">
-              <ArrowLeftRight className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-base md:text-xl font-black text-slate-800 leading-tight">
-                Wareejinta Dhulka (Land Transfers)
-              </h2>
-              <p className="text-[10px] md:text-xs text-slate-500 font-semibold mt-0.5">
-                Diiwaangelinta iibka, thulalka, iyo kala wareejinta hantida.
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Mobile search toggle button */}
-            <button
-              onClick={() => setShowMobileSearch(!showMobileSearch)}
-              className="md:hidden flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 border border-slate-200 text-slate-650 hover:text-slate-800 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer"
-            >
-              {showMobileSearch ? <X className="h-4.5 w-4.5" /> : <Search className="h-4.5 w-4.5" />}
-            </button>
-
-            <button
-              onClick={handleOpenAddForm}
-              className="hidden md:flex items-center gap-2 bg-teal-600 hover:bg-teal-705 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-md cursor-pointer transition-all active:scale-95 shrink-0"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Wareejin Cusub</span>
-            </button>
-          </div>
+        <div className="hidden md:flex justify-end">
+          <button
+            onClick={handleOpenAddForm}
+            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-705 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-md cursor-pointer transition-all active:scale-95 shrink-0"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Wareejin Cusub</span>
+          </button>
         </div>
       )}
 
@@ -428,7 +435,7 @@ export default function TransfersPage() {
       ) : (
         /* Records list view */
         <div className="space-y-4">
-          <div className={`${showMobileSearch ? 'flex' : 'hidden md:flex'} bg-white border border-slate-100 rounded-2xl md:rounded-3xl p-3 flex flex-row gap-2 shadow-sm w-full items-center`}>
+          <div className={`${showMobileSearch ? 'flex' : 'hidden md:flex'} flex-col gap-2 md:flex-row md:items-center bg-white border border-slate-100 rounded-2xl md:rounded-3xl p-3 shadow-sm w-full`}>
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input
@@ -439,13 +446,49 @@ export default function TransfersPage() {
                 placeholder="Raadi Iibiyaha ama Iibsadaha..."
               />
             </div>
+
+            <div className="flex flex-wrap gap-2">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
+              >
+                <option value="newest">Sort: Newest first</option>
+                <option value="oldest">Sort: Oldest first</option>
+                <option value="price_high">Sort: Price (high–low)</option>
+              </select>
+
+            </div>
+
+            <div className="flex gap-2">
+              <select
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value as typeof groupBy)}
+                className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="none">No group</option>
+                <option value="date">Group: Date</option>
+              </select>
+
+              {groupBy !== 'none' && (
+                <select
+                  value={groupAggregate}
+                  onChange={(e) => setGroupAggregate(e.target.value as typeof groupAggregate)}
+                  className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="none">Aggregate: None</option>
+                  <option value="count">Aggregate: Count</option>
+                  <option value="sum">Aggregate: Sum</option>
+                </select>
+              )}
+            </div>
           </div>
 
           {loading ? (
             <div className="flex h-64 items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
             </div>
-          ) : filteredTransfers.length === 0 ? (
+          ) : sortedTransfers.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-12 border border-dashed border-slate-200 rounded-3xl bg-white">
               <Info className="h-8 w-8 text-slate-400 mb-2" />
               <p className="text-slate-500 font-semibold text-sm">Wax wareejino ah oo la helay ma jiraan.</p>
@@ -465,76 +508,88 @@ export default function TransfersPage() {
                       <th className="px-6 py-4">Taariikhda</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {filteredTransfers.map(t => (
-                      <tr
-                        key={t.id}
-                        className="hover:bg-slate-50/80 transition-all"
-                      >
-                        <td className="px-6 py-4 font-black text-slate-550">
-                          #{t.serial_no}
-                        </td>
-                        <td className="px-6 py-4 font-bold text-slate-800">
-                          <div>{t.seller_name}</div>
-                          <div className="text-[10px] text-slate-450 mt-0.5">{t.seller_tel}</div>
-                        </td>
-                        <td className="px-6 py-4 font-bold text-teal-600">
-                          <div>{t.buyer_name}</div>
-                          <div className="text-[10px] text-slate-450 mt-0.5">{t.buyer_tel}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-650 text-[10px] font-bold">
-                            {t.surveys ? `#${t.surveys.serial_no} — ${t.surveys.owner_name}` : 'N/A'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 font-black text-emerald-600 text-sm">
-                          ${parseFloat(t.price.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-6 py-4 text-slate-500">
-                          <span className="flex items-center gap-1.5">
-                            <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                            {t.transfer_date ? new Date(t.transfer_date).toLocaleDateString('so-SO') : '-'}
-                          </span>
-                        </td>
-                      </tr>
+                  <tbody className="divide-y divide-slate-100/60 bg-white">
+                    {(groupedTransfers ?? [{ key: 'all', label: '', items: sortedTransfers }]).map((group) => (
+                      <React.Fragment key={group.key}>
+                        {groupBy !== 'none' && (
+                          <tr>
+                            <td colSpan={6} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                              {group.label}
+                            </td>
+                          </tr>
+                        )}
+                        {group.items.map(t => (
+                          <tr
+                            key={t.id}
+                            className="hover:bg-slate-50/80 transition-all"
+                          >
+                            <td className="px-6 py-4 font-black text-slate-550">
+                              #{t.serial_no}
+                            </td>
+                            <td className="px-6 py-4 font-bold text-slate-800">
+                              <div>{t.seller_name}</div>
+                              <div className="text-[10px] text-slate-450 mt-0.5">{t.seller_tel}</div>
+                            </td>
+                            <td className="px-6 py-4 font-bold text-teal-600">
+                              <div>{t.buyer_name}</div>
+                              <div className="text-[10px] text-slate-450 mt-0.5">{t.buyer_tel}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-650 text-[10px] font-bold">
+                                {t.surveys ? `#${t.surveys.serial_no} — ${t.surveys.owner_name}` : 'N/A'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 font-black text-emerald-600 text-sm">
+                              ${parseFloat(t.price.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-6 py-4 text-slate-500">
+                              <span className="flex items-center gap-1.5">
+                                <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                                {t.transfer_date ? new Date(t.transfer_date).toLocaleDateString('so-SO') : '-'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
               </div>
 
-              {/* MOBILE CARDS */}
-              <div className="grid grid-cols-1 gap-4 md:hidden pb-12">
-                {filteredTransfers.map(t => (
-                  <div
-                    key={t.id}
-                    className="p-4 bg-white border border-slate-200/80 rounded-2xl shadow-sm space-y-3"
-                  >
-                    <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                      <span className="font-black text-xs text-slate-450">#{t.serial_no}</span>
-                      <span className="font-black text-xs text-emerald-600">
-                        ${parseFloat(t.price.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="block text-[9px] uppercase tracking-wide text-slate-400 font-bold">Iibiyaha (Seller)</span>
-                        <span className="font-extrabold text-slate-800 block truncate">{t.seller_name}</span>
-                        <span className="text-[10px] text-slate-450 mt-0.5 block">{t.seller_tel}</span>
+              {/* MOBILE LIST */}
+              <div className="md:hidden mb-12">
+                <div className="grid grid-cols-[44px_1fr_auto] items-center gap-3 border-b border-slate-200 px-1 py-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+                  <span>S/N</span>
+                  <span>Iibiye → Iibsade</span>
+                  <span>Qiimo</span>
+                </div>
+                {(groupedTransfers ?? [{ key: 'all', label: '', items: sortedTransfers }]).map((group) => (
+                  <div key={group.key}>
+                    {groupBy !== 'none' && (
+                      <div className="px-1 pb-1.5 pt-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
+                        {group.label}
                       </div>
-                      <div>
-                        <span className="block text-[9px] uppercase tracking-wide text-slate-400 font-bold">Iibsadaha (Buyer)</span>
-                        <span className="font-extrabold text-teal-600 block truncate">{t.buyer_name}</span>
-                        <span className="text-[10px] text-slate-450 mt-0.5 block">{t.buyer_tel}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center text-[10px] text-slate-500 border-t border-slate-100 pt-2">
-                      <span>Sahan: {t.surveys ? `#${t.surveys.serial_no}` : 'N/A'}</span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {t.transfer_date ? new Date(t.transfer_date).toLocaleDateString('so-SO') : '-'}
-                      </span>
+                    )}
+                    <div className="divide-y divide-slate-100/60">
+                      {group.items.map(t => (
+                        <div key={t.id} className="grid grid-cols-[44px_1fr_auto] items-center gap-3 px-1 py-3.5">
+                          <span className="truncate text-xs font-black text-slate-500">#{t.serial_no}</span>
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-extrabold text-slate-800">
+                              {t.seller_name} <span className="text-slate-300">→</span> <span className="text-teal-600">{t.buyer_name}</span>
+                            </p>
+                            <p className="mt-0.5 flex items-center gap-1 truncate text-[9px] text-slate-500">
+                              <Calendar className="h-3 w-3 shrink-0" />
+                              <span>{t.transfer_date ? new Date(t.transfer_date).toLocaleDateString('so-SO') : '-'}</span>
+                              <span>•</span>
+                              <span>{t.surveys ? `Sahan #${t.surveys.serial_no}` : 'N/A'}</span>
+                            </p>
+                          </div>
+                          <span className="justify-self-end whitespace-nowrap text-xs font-black text-emerald-600">
+                            ${parseFloat(t.price.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -548,7 +603,7 @@ export default function TransfersPage() {
       {!showAddForm && (
         <button
           onClick={handleOpenAddForm}
-          className="fixed bottom-20 right-6 z-40 md:hidden flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 hover:bg-teal-500 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
+          className="fixed bottom-[calc(6rem_+_env(safe-area-inset-bottom))] right-6 z-40 md:hidden flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 hover:bg-teal-500 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
           aria-label="Wareejin Cusub"
         >
           <Plus className="h-7 w-7" />
