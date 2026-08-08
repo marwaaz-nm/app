@@ -85,9 +85,28 @@ export default function ReferencesPage() {
     }
   };
 
+  const getOrEnsureVerificationToken = (ref: Reference): string => {
+    if (ref.verification_token) return ref.verification_token;
+
+    // Generate unguessable UUID token if missing in memory/DB
+    const newToken = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ref-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    ref.verification_token = newToken;
+
+    // Persist token to Supabase asynchronously so future queries also find it by token
+    supabase
+      .from('references')
+      .update({ verification_token: newToken })
+      .eq('id', ref.id)
+      .then(({ error }) => {
+        if (error) console.warn('Could not persist verification_token to DB:', error.message);
+      });
+
+    return newToken;
+  };
+
   const publicVerifyUrl = (ref: Reference) => {
-    const identifier = ref.verification_token || ref.id;
-    return typeof window !== 'undefined' ? `${window.location.origin}/verify/${identifier}` : '';
+    const token = getOrEnsureVerificationToken(ref);
+    return typeof window !== 'undefined' ? `${window.location.origin}/verify/${token}` : '';
   };
 
   useEffect(() => {
@@ -299,7 +318,10 @@ export default function ReferencesPage() {
         });
       }
 
+      const token = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ref-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
       const payload = {
+        verification_token: token,
         ref_number: finalRefNumber,
         subject,
         details: details || null,
@@ -309,9 +331,16 @@ export default function ReferencesPage() {
         status: 'In Progress'
       };
 
-      const { error } = await supabase
+      let { error } = await supabase
         .from('references')
         .insert([payload]);
+
+      // If schema error occurs because verification_token column is missing on DB, retry without it
+      if (error && (error.code === 'PGRST204' || error.message.includes('verification_token'))) {
+        const { verification_token, ...fallbackPayload } = payload;
+        const res = await supabase.from('references').insert([fallbackPayload]);
+        error = res.error;
+      }
 
       if (error) throw error;
 
