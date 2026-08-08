@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { parseAndVerifyToken } from '@/lib/verificationToken';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -47,30 +48,50 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       )
     `;
 
-    // 1. Try finding by secure verification_token first (UUID / unguessable token)
-    let { data: reference, error } = await supabaseAdmin
-      .from('references')
-      .select(selectFields)
-      .eq('verification_token', id)
-      .maybeSingle();
+    // 1. Try Cryptographically Signed Verification Token (e.g. "125-9a8b7c6d5e4f3a2b")
+    const signedRefId = parseAndVerifyToken(id);
+    if (signedRefId) {
+      const { data: reference, error } = await supabaseAdmin
+        .from('references')
+        .select(selectFields)
+        .eq('id', signedRefId)
+        .maybeSingle();
 
-    // 2. Fallback: If not found by verification_token and id is numeric (legacy QR codes)
-    if (!reference && /^\d+$/.test(id)) {
+      if (!error && reference) {
+        return NextResponse.json({ reference });
+      }
+    }
+
+    // 2. Try UUID verification_token column (if column exists on DB)
+    try {
+      const { data: reference, error } = await supabaseAdmin
+        .from('references')
+        .select(selectFields)
+        .eq('verification_token', id)
+        .maybeSingle();
+
+      if (!error && reference) {
+        return NextResponse.json({ reference });
+      }
+    } catch {
+      // Column verification_token may not exist on remote DB yet
+    }
+
+    // 3. Fallback: Numeric ID (legacy QR codes)
+    if (/^\d+$/.test(id)) {
       const refId = parseInt(id, 10);
-      const res = await supabaseAdmin
+      const { data: reference, error } = await supabaseAdmin
         .from('references')
         .select(selectFields)
         .eq('id', refId)
         .maybeSingle();
-      reference = res.data;
-      error = res.error;
+
+      if (!error && reference) {
+        return NextResponse.json({ reference });
+      }
     }
 
-    if (error || !reference) {
-      return NextResponse.json({ error: 'Reference not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({ reference });
+    return NextResponse.json({ error: 'Reference not found' }, { status: 404 });
   } catch (err) {
     console.error('Error fetching public reference:', err);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

@@ -10,6 +10,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import { formatReferenceNumber } from '@/lib/numbering';
+import { generateVerificationToken } from '@/lib/verificationToken';
 import DetailsModal from '@/components/DetailsModal';
 import {
   Plus,
@@ -85,27 +86,8 @@ export default function ReferencesPage() {
     }
   };
 
-  const getOrEnsureVerificationToken = (ref: Reference): string => {
-    if (ref.verification_token) return ref.verification_token;
-
-    // Generate unguessable UUID token if missing in memory/DB
-    const newToken = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ref-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    ref.verification_token = newToken;
-
-    // Persist token to Supabase asynchronously so future queries also find it by token
-    supabase
-      .from('references')
-      .update({ verification_token: newToken })
-      .eq('id', ref.id)
-      .then(({ error }) => {
-        if (error) console.warn('Could not persist verification_token to DB:', error.message);
-      });
-
-    return newToken;
-  };
-
   const publicVerifyUrl = (ref: Reference) => {
-    const token = getOrEnsureVerificationToken(ref);
+    const token = ref.verification_token || generateVerificationToken(ref.id);
     return typeof window !== 'undefined' ? `${window.location.origin}/verify/${token}` : '';
   };
 
