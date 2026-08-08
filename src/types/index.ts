@@ -2,7 +2,7 @@ export interface Profile {
   id: string;
   username: string;
   fullname: string;
-  role: 'Admin' | 'User';
+  role: 'Admin' | 'User' | 'SuperAdmin';
   permitted_menus?: string[];
   permitted_actions?: string[];
   created_at?: string;
@@ -76,6 +76,7 @@ export interface SurveyOverlap {
 
 export interface Reference {
   id: number;
+  verification_token?: string;
   ref_number: string;
   survey_id?: number | null;
   subject: string;

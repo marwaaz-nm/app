@@ -42,7 +42,7 @@ const verifyAdmin = async (req: NextRequest) => {
   }
 };
 
-const SETTINGS_FIELDS = 'org_name_so, org_name_en, logo_url, contact_email, contact_phone, contact_address, reference_subjects, land_types, ref_number_prefix, ref_number_next_seq, updated_at';
+const SETTINGS_FIELDS = 'org_name_so, org_name_en, logo_url, contact_email, contact_phone, contact_address, reference_subjects, land_types, ref_number_prefix, ref_number_next_seq, ref_number_format, ref_number_digits, survey_number_prefix, survey_number_next_seq, survey_number_format, survey_number_digits, receipt_number_prefix, receipt_number_next_seq, receipt_number_format, receipt_number_digits, expense_number_prefix, expense_number_next_seq, expense_number_format, expense_number_digits, updated_at';
 
 // GET: any authenticated user can read settings (needed for dropdown options, sidebar branding, etc.)
 export async function GET(req: NextRequest) {
@@ -74,7 +74,14 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const allowedKeys = ['org_name_so', 'org_name_en', 'logo_url', 'contact_email', 'contact_phone', 'contact_address', 'reference_subjects', 'land_types', 'ref_number_prefix', 'ref_number_next_seq'];
+    const allowedKeys = [
+      'org_name_so', 'org_name_en', 'logo_url', 'contact_email', 'contact_phone', 'contact_address',
+      'reference_subjects', 'land_types',
+      'ref_number_prefix', 'ref_number_next_seq', 'ref_number_format', 'ref_number_digits',
+      'survey_number_prefix', 'survey_number_next_seq', 'survey_number_format', 'survey_number_digits',
+      'receipt_number_prefix', 'receipt_number_next_seq', 'receipt_number_format', 'receipt_number_digits',
+      'expense_number_prefix', 'expense_number_next_seq', 'expense_number_format', 'expense_number_digits'
+    ];
     const updatePayload: Record<string, unknown> = {};
     for (const key of allowedKeys) {
       if (key in body) updatePayload[key] = body[key];

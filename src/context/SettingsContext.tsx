@@ -13,6 +13,20 @@ export interface AppSettings {
   land_types: string[];
   ref_number_prefix: string;
   ref_number_next_seq: number;
+  ref_number_format: string;
+  ref_number_digits: number;
+  survey_number_prefix: string;
+  survey_number_next_seq: number;
+  survey_number_format: string;
+  survey_number_digits: number;
+  receipt_number_prefix: string;
+  receipt_number_next_seq: number;
+  receipt_number_format: string;
+  receipt_number_digits: number;
+  expense_number_prefix: string;
+  expense_number_next_seq: number;
+  expense_number_format: string;
+  expense_number_digits: number;
 }
 
 // Used until /api/public/settings resolves (or if the app_settings migration
@@ -35,6 +49,20 @@ const DEFAULT_SETTINGS: AppSettings = {
   land_types: ['Dhul Banaan', 'Dhul dhisan'],
   ref_number_prefix: 'REF',
   ref_number_next_seq: 1,
+  ref_number_format: 'PREFIX-YYYY-SEQ',
+  ref_number_digits: 3,
+  survey_number_prefix: 'SURV',
+  survey_number_next_seq: 1,
+  survey_number_format: 'PREFIX-YYYY-SEQ',
+  survey_number_digits: 3,
+  receipt_number_prefix: 'REC',
+  receipt_number_next_seq: 1,
+  receipt_number_format: 'PREFIX-YYYY-SEQ',
+  receipt_number_digits: 3,
+  expense_number_prefix: 'EXP',
+  expense_number_next_seq: 1,
+  expense_number_format: 'PREFIX-YYYY-SEQ',
+  expense_number_digits: 3,
 };
 
 interface SettingsContextType {

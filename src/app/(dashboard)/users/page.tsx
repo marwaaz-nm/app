@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import {
   UserPlus,
   Trash2, 
+  Pencil,
   X, 
   Loader2, 
   UserX,
@@ -34,6 +35,7 @@ export default function UsersPage() {
 
   // Form states
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [fullname, setFullname] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -86,9 +88,14 @@ export default function UsersPage() {
       : [...current, action]);
   };
 
+  const isUserAdmin = (u?: Profile | null) => {
+    if (!u) return false;
+    return u.role === 'Admin' || u.role === 'SuperAdmin' || String(u.role).toLowerCase().includes('admin');
+  };
+
   // Guard: Make sure only Admins can access
   useEffect(() => {
-    if (profile && profile.role !== 'Admin') {
+    if (profile && !isUserAdmin(profile)) {
       router.push('/explorer');
     }
   }, [profile, router]);
@@ -114,7 +121,47 @@ export default function UsersPage() {
     fetchUsers();
   }, []);
 
-  const handleAddUser = async (e: React.FormEvent) => {
+  const handleOpenAddModal = () => {
+    setEditingUser(null);
+    setFullname('');
+    setUsername('');
+    setPassword('');
+    setRole('User');
+    setPermittedMenus([
+      '/references',
+      '/explorer',
+      '/records',
+      '/transfers',
+      '/financials',
+      '/reports'
+    ]);
+    setPermittedActions(['survey.create', 'survey.edit', 'survey.submit', 'reference.manage', 'transfer.create', 'finance.manage', 'report.view']);
+    setError(null);
+    setShowAddModal(true);
+  };
+
+  const handleOpenEditModal = (u: Profile) => {
+    setEditingUser(u);
+    setFullname(u.fullname || '');
+    setUsername(u.username || '');
+    setPassword('');
+    setRole(isUserAdmin(u) ? 'Admin' : 'User');
+
+    const userMenus = Array.isArray(u.permitted_menus) && u.permitted_menus.length > 0
+      ? u.permitted_menus
+      : ['/references', '/explorer', '/records', '/transfers', '/financials', '/reports'];
+    setPermittedMenus(userMenus);
+
+    const userActions = Array.isArray(u.permitted_actions) && u.permitted_actions.length > 0
+      ? u.permitted_actions
+      : ['survey.create', 'survey.edit', 'survey.submit', 'reference.manage', 'transfer.create', 'finance.manage', 'report.view'];
+    setPermittedActions(userActions);
+
+    setError(null);
+    setShowAddModal(true);
+  };
+
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
@@ -125,17 +172,18 @@ export default function UsersPage() {
 
       if (!token) throw new Error('Authentication token is missing. Please log in again.');
 
+      const isEdit = Boolean(editingUser);
       const payload = {
         fullname,
         username: username.trim().toLowerCase(),
-        password,
+        password: password ? password : undefined,
         role,
         permitted_menus: role === 'Admin' ? null : permittedMenus,
         permitted_actions: role === 'Admin' ? [] : permittedActions,
       };
 
       const res = await fetch('/api/users', {
-        method: 'POST',
+        method: isEdit ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -146,27 +194,15 @@ export default function UsersPage() {
       const result = await res.json();
 
       if (!res.ok) {
-        throw new Error(result.error || 'Failed to create user');
+        throw new Error(result.error || (isEdit ? 'Failed to update user' : 'Failed to create user'));
       }
 
-      showAlert('Guul', 'User-ka si guul leh ayaa loo daray!', 'success');
+      showAlert('Guul', isEdit ? 'User-ka si guul leh ayaa loo cusboonaysiiyay!' : 'User-ka si guul leh ayaa loo daray!', 'success');
       setShowAddModal(false);
-      setFullname('');
-      setUsername('');
-      setPassword('');
-      setRole('User');
-      setPermittedMenus([
-        '/references',
-        '/explorer',
-        '/records',
-        '/transfers',
-        '/financials',
-        '/reports'
-      ]);
-      setPermittedActions(['survey.create', 'survey.edit', 'survey.submit', 'reference.manage', 'transfer.create', 'finance.manage', 'report.view']);
+      setEditingUser(null);
       fetchUsers();
     } catch (err: any) {
-      console.error('Add user error:', err);
+      console.error('Save user error:', err);
       setError(err.message || 'Cillad ayaa dhacday.');
     } finally {
       setSaving(false);
@@ -218,7 +254,7 @@ export default function UsersPage() {
     }
   };
 
-  if (!profile || profile.role !== 'Admin') {
+  if (!profile || !isUserAdmin(profile)) {
     return null;
   }
 
@@ -227,7 +263,7 @@ export default function UsersPage() {
       
       <div className="hidden md:flex justify-end">
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={handleOpenAddModal}
           className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-md cursor-pointer transition-all active:scale-95 shrink-0"
         >
           <UserPlus className="h-4 w-4" />
@@ -255,64 +291,76 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100/60 bg-white">
-                {users.map(u => (
-                  <tr key={u.id} className="hover:bg-slate-50/80 transition-all">
-                    <td className="px-6 py-4 font-black text-teal-600">
-                      @{u.username}
-                    </td>
-                    <td className="px-6 py-4 font-bold text-slate-800">
-                      {u.fullname}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-extrabold border ${
-                        u.role === 'Admin' 
-                          ? 'bg-rose-50 text-rose-600 border-rose-100' 
-                          : 'bg-teal-50 text-teal-600 border-teal-100'
-                      }`}>
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      {u.role === 'Admin' ? (
-                        <span className="text-[10px] font-bold text-slate-450 italic">Dhammaan (All)</span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {(!u.permitted_menus || u.permitted_menus.length === 0) ? (
-                            <span className="text-[10px] font-bold text-rose-500 italic">Ma jiraan (None)</span>
-                          ) : (
-                            u.permitted_menus.map(menu => {
-                              const label = menu === '/references' ? 'References' :
-                                            menu === '/explorer' ? 'Explorer' :
-                                            menu === '/records' ? 'Records' :
-                                            menu === '/transfers' ? 'Transfers' :
-                                            menu === '/financials' ? 'Financials' :
-                                            menu === '/reports' ? 'Reports' : menu;
-                              return (
-                                <span key={menu} className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[9px] font-bold text-slate-600">
-                                  {label}
-                                </span>
-                              );
-                            })
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <button
-                        onClick={() => handleDeleteUser(u.username)}
-                        disabled={u.username.toLowerCase() === 'admin' || deletingUser === u.username}
-                        className="text-rose-600 hover:text-rose-700 disabled:text-slate-350 hover:bg-rose-50 p-2 rounded-xl border border-transparent hover:border-rose-100 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
-                        title={u.username.toLowerCase() === 'admin' ? "Admin user cannot be deleted" : "Delete user"}
-                      >
-                        {deletingUser === u.username ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                {users.map(u => {
+                  const admin = isUserAdmin(u);
+                  return (
+                    <tr key={u.id} className="hover:bg-slate-50/80 transition-all">
+                      <td className="px-6 py-4 font-black text-teal-600">
+                        @{u.username}
+                      </td>
+                      <td className="px-6 py-4 font-bold text-slate-800">
+                        {u.fullname}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-extrabold border ${
+                          admin 
+                            ? 'bg-rose-50 text-rose-600 border-rose-100' 
+                            : 'bg-teal-50 text-teal-600 border-teal-100'
+                        }`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {admin ? (
+                          <span className="text-[10px] font-bold text-slate-450 italic">Dhammaan (All)</span>
                         ) : (
-                          <Trash2 className="h-4 w-4" />
+                          <div className="flex flex-wrap gap-1">
+                            {(!u.permitted_menus || u.permitted_menus.length === 0) ? (
+                              <span className="text-[10px] font-bold text-rose-500 italic">Ma jiraan (None)</span>
+                            ) : (
+                              u.permitted_menus.map(menu => {
+                                const label = menu === '/references' ? 'References' :
+                                              menu === '/explorer' ? 'Explorer' :
+                                              menu === '/records' ? 'Records' :
+                                              menu === '/transfers' ? 'Transfers' :
+                                              menu === '/financials' ? 'Financials' :
+                                              menu === '/reports' ? 'Reports' : menu;
+                                return (
+                                  <span key={menu} className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[9px] font-bold text-slate-600">
+                                    {label}
+                                  </span>
+                                );
+                              })
+                            )}
+                          </div>
                         )}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => handleOpenEditModal(u)}
+                            className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 p-2 rounded-xl border border-transparent hover:border-teal-100 cursor-pointer transition-all"
+                            title="Edit user & permissions"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(u.username)}
+                            disabled={u.username.toLowerCase() === 'admin' || deletingUser === u.username}
+                            className="text-rose-600 hover:text-rose-700 disabled:text-slate-350 hover:bg-rose-50 p-2 rounded-xl border border-transparent hover:border-rose-100 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
+                            title={u.username.toLowerCase() === 'admin' ? "Admin user cannot be deleted" : "Delete user"}
+                          >
+                            {deletingUser === u.username ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -320,63 +368,79 @@ export default function UsersPage() {
 
         {/* Mobile List */}
         <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm md:hidden">
-          <div className="grid grid-cols-[1fr_auto_36px] items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+          <div className="grid grid-cols-[1fr_auto_70px] items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
             <span>User</span>
             <span>Role</span>
             <span className="text-center">Action</span>
           </div>
           <div className="divide-y divide-slate-100/60">
-            {users.map(u => (
-              <div key={u.id} className="grid grid-cols-[1fr_auto_36px] items-center gap-3 px-4 py-3.5">
-                <div className="min-w-0">
-                  <h4 className="truncate text-xs font-extrabold text-slate-800">{u.fullname}</h4>
-                  <p className="mt-0.5 truncate text-[9px] font-bold text-teal-600">@{u.username}</p>
+            {users.map(u => {
+              const admin = isUserAdmin(u);
+              return (
+                <div key={u.id} className="grid grid-cols-[1fr_auto_70px] items-center gap-2 px-4 py-3.5">
+                  <div className="min-w-0">
+                    <h4 className="truncate text-xs font-extrabold text-slate-800">{u.fullname}</h4>
+                    <p className="mt-0.5 truncate text-[9px] font-bold text-teal-600">@{u.username}</p>
+                  </div>
+                  <span className={`inline-flex items-center justify-self-end whitespace-nowrap px-2 py-0.5 rounded-full text-[8px] font-extrabold border ${
+                    admin
+                      ? 'bg-rose-50 text-rose-600 border-rose-100'
+                      : 'bg-teal-50 text-teal-600 border-teal-100'
+                  }`}>
+                    {u.role}
+                  </span>
+                  <div className="flex items-center justify-center gap-1 justify-self-center">
+                    <button
+                      onClick={() => handleOpenEditModal(u)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-teal-600 hover:bg-teal-50 transition-colors"
+                      aria-label="Edit user"
+                      title="Edit user"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(u.username)}
+                      disabled={u.username.toLowerCase() === 'admin' || deletingUser === u.username}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-rose-600 hover:bg-rose-50 disabled:text-slate-300 disabled:hover:bg-transparent transition-colors"
+                      aria-label="Delete user"
+                      title={u.username.toLowerCase() === 'admin' ? 'Admin user cannot be deleted' : 'Delete user'}
+                    >
+                      {deletingUser === u.username ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <span className={`inline-flex items-center justify-self-end whitespace-nowrap px-2 py-0.5 rounded-full text-[8px] font-extrabold border ${
-                  u.role === 'Admin'
-                    ? 'bg-rose-50 text-rose-600 border-rose-100'
-                    : 'bg-teal-50 text-teal-600 border-teal-100'
-                }`}>
-                  {u.role}
-                </span>
-                <button
-                  onClick={() => handleDeleteUser(u.username)}
-                  disabled={u.username.toLowerCase() === 'admin' || deletingUser === u.username}
-                  className="flex h-8 w-8 items-center justify-center justify-self-center rounded-lg text-rose-600 hover:bg-rose-50 disabled:text-slate-300 disabled:hover:bg-transparent transition-colors"
-                  aria-label="Delete user"
-                  title={u.username.toLowerCase() === 'admin' ? 'Admin user cannot be deleted' : 'Delete user'}
-                >
-                  {deletingUser === u.username ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
         </>
       )}
 
-      {/* Add User Modal */}
+      {/* Add / Edit User Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-md md:max-w-3xl bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center px-6 py-4 bg-slate-50 border-b border-slate-200">
               <h3 className="font-extrabold text-slate-800 flex items-center gap-2">
                 <UserPlus className="h-5 w-5 text-teal-600" />
-                Add New User Account
+                {editingUser ? `Edit User Account (@${editingUser.username})` : 'Add New User Account'}
               </h3>
               <button
-                onClick={() => setShowAddModal(false)}
-                className="text-slate-450 hover:text-slate-800 p-2 rounded-xl hover:bg-slate-105 transition-colors cursor-pointer"
+                onClick={() => {
+                  setShowAddModal(false);
+                  setEditingUser(null);
+                }}
+                className="text-slate-450 hover:text-slate-800 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddUser} className="p-6">
+            <form onSubmit={handleSaveUser} className="p-6">
               {error && (
                 <div className="mb-4 flex items-center gap-2.5 rounded-xl bg-rose-50 p-3.5 text-xs text-rose-600 border border-rose-100">
                   <UserX className="h-4 w-4 shrink-0" />
@@ -404,24 +468,27 @@ export default function UsersPage() {
                     <input
                       type="text"
                       required
+                      disabled={Boolean(editingUser)}
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none"
+                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
                       placeholder="e.g. maxamed"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Password</label>
+                    <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">
+                      Password {editingUser ? '(Ikhtiyaari / Leave empty to keep unchanged)' : ''}
+                    </label>
                     <div className="relative">
                       <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                       <input
                         type="password"
-                        required
+                        required={!editingUser}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="w-full rounded-xl bg-slate-50 border border-slate-200 pl-12 pr-4 py-3.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none"
-                        placeholder="••••••••"
+                        placeholder={editingUser ? 'Kutag furaha intiisii (Leave blank)' : '••••••••'}
                       />
                     </div>
                   </div>
@@ -492,9 +559,11 @@ export default function UsersPage() {
                       <div className="grid grid-cols-2 gap-2 rounded-3xl border border-slate-200/60 bg-slate-50/50 p-4">
                         {AVAILABLE_ACTIONS.map((action) => {
                           const checked = permittedActions.includes(action.id);
-                          return <button key={action.id} type="button" onClick={() => handleActionToggle(action.id)} className={`rounded-xl border px-3 py-2.5 text-left text-[10px] font-black transition-colors ${checked ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500'}`}>
-                            <span className={`mr-2 inline-flex h-4 w-4 items-center justify-center rounded text-[9px] ${checked ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{checked ? '✓' : '–'}</span>{action.label}
-                          </button>;
+                          return (
+                            <button key={action.id} type="button" onClick={() => handleActionToggle(action.id)} className={`rounded-xl border px-3 py-2.5 text-left text-[10px] font-black transition-colors ${checked ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500'}`}>
+                              <span className={`mr-2 inline-flex h-4 w-4 items-center justify-center rounded text-[9px] ${checked ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{checked ? '✓' : '–'}</span>{action.label}
+                            </button>
+                          );
                         })}
                       </div>
                     </div>
@@ -516,7 +585,7 @@ export default function UsersPage() {
                 ) : (
                   <>
                     <UserCheck2 className="h-4 w-4" />
-                    <span>Save User Account</span>
+                    <span>{editingUser ? 'Save Changes' : 'Save User Account'}</span>
                   </>
                 )}
               </button>
@@ -527,7 +596,7 @@ export default function UsersPage() {
 
       {/* Mobile Floating Action Button (FAB) */}
       <button
-        onClick={() => setShowAddModal(true)}
+        onClick={handleOpenAddModal}
         className="fixed bottom-[calc(6rem_+_env(safe-area-inset-bottom))] right-6 z-40 md:hidden flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-white shadow-xl hover:bg-teal-700 cursor-pointer active:scale-95 transition-all select-none"
       >
         <UserPlus className="h-6 w-6" />

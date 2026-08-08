@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { useModal } from '@/context/ModalContext';
+import { formatReferenceNumber } from '@/lib/numbering';
 import {
   Settings as SettingsIcon,
   UserCircle,
@@ -97,8 +98,28 @@ export default function SettingsPage() {
   // Dropdown options tab state
   const [referenceSubjects, setReferenceSubjects] = useState<string[]>([]);
   const [landTypes, setLandTypes] = useState<string[]>([]);
-  const [refPrefix, setRefPrefix] = useState('');
+
+  // Numbering settings states
+  const [refPrefix, setRefPrefix] = useState('REF');
   const [refNextSeq, setRefNextSeq] = useState(1);
+  const [refFormat, setRefFormat] = useState('PREFIX-YYYY-SEQ');
+  const [refDigits, setRefDigits] = useState(3);
+
+  const [surveyPrefix, setSurveyPrefix] = useState('SURV');
+  const [surveyNextSeq, setSurveyNextSeq] = useState(1);
+  const [surveyFormat, setSurveyFormat] = useState('PREFIX-YYYY-SEQ');
+  const [surveyDigits, setSurveyDigits] = useState(3);
+
+  const [receiptPrefix, setReceiptPrefix] = useState('REC');
+  const [receiptNextSeq, setReceiptNextSeq] = useState(1);
+  const [receiptFormat, setReceiptFormat] = useState('PREFIX-YYYY-SEQ');
+  const [receiptDigits, setReceiptDigits] = useState(3);
+
+  const [expensePrefix, setExpensePrefix] = useState('EXP');
+  const [expenseNextSeq, setExpenseNextSeq] = useState(1);
+  const [expenseFormat, setExpenseFormat] = useState('PREFIX-YYYY-SEQ');
+  const [expenseDigits, setExpenseDigits] = useState(3);
+
   const [savingOptions, setSavingOptions] = useState(false);
 
   // Logo upload state
@@ -117,8 +138,26 @@ export default function SettingsPage() {
     setContactAddress(settings.contact_address);
     setReferenceSubjects(settings.reference_subjects);
     setLandTypes(settings.land_types);
-    setRefPrefix(settings.ref_number_prefix);
-    setRefNextSeq(settings.ref_number_next_seq);
+
+    setRefPrefix(settings.ref_number_prefix || 'REF');
+    setRefNextSeq(settings.ref_number_next_seq || 1);
+    setRefFormat(settings.ref_number_format || 'PREFIX-YYYY-SEQ');
+    setRefDigits(settings.ref_number_digits || 3);
+
+    setSurveyPrefix(settings.survey_number_prefix || 'SURV');
+    setSurveyNextSeq(settings.survey_number_next_seq || 1);
+    setSurveyFormat(settings.survey_number_format || 'PREFIX-YYYY-SEQ');
+    setSurveyDigits(settings.survey_number_digits || 3);
+
+    setReceiptPrefix(settings.receipt_number_prefix || 'REC');
+    setReceiptNextSeq(settings.receipt_number_next_seq || 1);
+    setReceiptFormat(settings.receipt_number_format || 'PREFIX-YYYY-SEQ');
+    setReceiptDigits(settings.receipt_number_digits || 3);
+
+    setExpensePrefix(settings.expense_number_prefix || 'EXP');
+    setExpenseNextSeq(settings.expense_number_next_seq || 1);
+    setExpenseFormat(settings.expense_number_format || 'PREFIX-YYYY-SEQ');
+    setExpenseDigits(settings.expense_number_digits || 3);
   }, [settings]);
 
   const handleSaveName = async () => {
@@ -218,13 +257,31 @@ export default function SettingsPage() {
         body: JSON.stringify({
           reference_subjects: referenceSubjects,
           land_types: landTypes,
+
           ref_number_prefix: refPrefix.trim() || 'REF',
           ref_number_next_seq: refNextSeq,
+          ref_number_format: refFormat,
+          ref_number_digits: refDigits,
+
+          survey_number_prefix: surveyPrefix.trim() || 'SURV',
+          survey_number_next_seq: surveyNextSeq,
+          survey_number_format: surveyFormat,
+          survey_number_digits: surveyDigits,
+
+          receipt_number_prefix: receiptPrefix.trim() || 'REC',
+          receipt_number_next_seq: receiptNextSeq,
+          receipt_number_format: receiptFormat,
+          receipt_number_digits: receiptDigits,
+
+          expense_number_prefix: expensePrefix.trim() || 'EXP',
+          expense_number_next_seq: expenseNextSeq,
+          expense_number_format: expenseFormat,
+          expense_number_digits: expenseDigits,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Cillad ayaa dhacday.');
       await refetchSettings();
-      showAlert('Guul', 'Liisaska waa la cusboonaysiiyey!', 'success');
+      showAlert('Guul', 'Liisaska iyo Nidaamka Lambarrada waa la cusboonaysiiyey!', 'success');
     } catch (err: any) {
       showAlert('Cillad', err.message || 'Cillad ayaa dhacday.', 'error');
     } finally {
@@ -397,41 +454,84 @@ export default function SettingsPage() {
               <div className="h-px bg-slate-100" />
               <ChipListEditor label="Nooca Dhulka (Land Types)" items={landTypes} onChange={setLandTypes} />
               <div className="h-px bg-slate-100" />
-              <div className="space-y-3">
-                <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-500">
-                  Nidaamka Lambarrada Sumadaha (Reference Numbering)
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Prefix</label>
-                    <input
-                      value={refPrefix}
-                      onChange={(e) => setRefPrefix(e.target.value.toUpperCase())}
-                      placeholder="REF"
-                      className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Lambarka Xiga (Next Number)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={refNextSeq}
-                      onChange={(e) => setRefNextSeq(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                      className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                    />
-                  </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-slate-800">
+                    Nidaamka Lambarrada & Qaab-dhismeedka Sumadaha (Numbering & Format Settings)
+                  </h3>
+                  <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                    Halkan ka habee Prefix-ka, Pattern-ka (tusaale `SUMAD/00001/26` ama `REF-2026-001`), iyo lambarka xiga ee qayb kasta.
+                  </p>
                 </div>
-                <p className="text-[10px] font-medium text-slate-400">
-                  Tusaale: {(refPrefix || 'REF')}-{new Date().getFullYear()}-{String(refNextSeq || 1).padStart(3, '0')}
-                </p>
+
+                {/* 1. Official References */}
+                <NumberingCardBlock
+                  title="1. Official References (Sumadaha Tixraaca)"
+                  description="Nidaamka lambarrada dukumiintiyada tixraaca (References)"
+                  prefix={refPrefix}
+                  onPrefixChange={setRefPrefix}
+                  format={refFormat}
+                  onFormatChange={setRefFormat}
+                  digits={refDigits}
+                  onDigitsChange={setRefDigits}
+                  nextSeq={refNextSeq}
+                  onNextSeqChange={setRefNextSeq}
+                  defaultPrefix="REF"
+                />
+
+                {/* 2. Survey Records */}
+                <NumberingCardBlock
+                  title="2. Survey Records (Sahanka Dhulka)"
+                  description="Nidaamka lambarrada dukumiintiyada sahanka (Surveys)"
+                  prefix={surveyPrefix}
+                  onPrefixChange={setSurveyPrefix}
+                  format={surveyFormat}
+                  onFormatChange={setSurveyFormat}
+                  digits={surveyDigits}
+                  onDigitsChange={setSurveyDigits}
+                  nextSeq={surveyNextSeq}
+                  onNextSeqChange={setSurveyNextSeq}
+                  defaultPrefix="SURV"
+                />
+
+                {/* 3. Financial Receipts */}
+                <NumberingCardBlock
+                  title="3. Financial Receipts (Rasiidka Lacagaha)"
+                  description="Nidaamka lambarrada rasiidhada lacag bixinta (Receipts)"
+                  prefix={receiptPrefix}
+                  onPrefixChange={setReceiptPrefix}
+                  format={receiptFormat}
+                  onFormatChange={setReceiptFormat}
+                  digits={receiptDigits}
+                  onDigitsChange={setReceiptDigits}
+                  nextSeq={receiptNextSeq}
+                  onNextSeqChange={setReceiptNextSeq}
+                  defaultPrefix="REC"
+                />
+
+                {/* 4. Expense Records */}
+                <NumberingCardBlock
+                  title="4. Expense Records (Kharashka / Expenses)"
+                  description="Nidaamka lambarrada risiidhada kharashka (Expenses)"
+                  prefix={expensePrefix}
+                  onPrefixChange={setExpensePrefix}
+                  format={expenseFormat}
+                  onFormatChange={setExpenseFormat}
+                  digits={expenseDigits}
+                  onDigitsChange={setExpenseDigits}
+                  nextSeq={expenseNextSeq}
+                  onNextSeqChange={setExpenseNextSeq}
+                  defaultPrefix="EXP"
+                />
               </div>
+
               <button
                 onClick={handleSaveOptions}
                 disabled={savingOptions}
-                className="flex items-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:bg-slate-200 disabled:text-slate-400 px-5 py-2.5 text-xs font-bold text-white shadow-md cursor-pointer transition-all"
+                className="flex items-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:bg-slate-200 disabled:text-slate-400 px-5.5 py-3 text-xs font-bold text-white shadow-md cursor-pointer transition-all active:scale-95"
               >
-                {savingOptions ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Keydi Liisaska
+                {savingOptions ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Keydi Liisaska & Nidaamka Lambarrada
               </button>
             </>
           )}
@@ -440,3 +540,102 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+const NumberingCardBlock = ({
+  title,
+  description,
+  prefix,
+  onPrefixChange,
+  format,
+  onFormatChange,
+  digits,
+  onDigitsChange,
+  nextSeq,
+  onNextSeqChange,
+  defaultPrefix
+}: {
+  title: string;
+  description: string;
+  prefix: string;
+  onPrefixChange: (val: string) => void;
+  format: string;
+  onFormatChange: (val: string) => void;
+  digits: number;
+  onDigitsChange: (val: number) => void;
+  nextSeq: number;
+  onNextSeqChange: (val: number) => void;
+  defaultPrefix: string;
+}) => {
+  const preview = formatReferenceNumber({
+    prefix: prefix.trim() || defaultPrefix,
+    formatPattern: format,
+    seq: nextSeq,
+    digits: digits
+  });
+
+  return (
+    <div className="p-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-3">
+        <div>
+          <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">{title}</h4>
+          <p className="text-[10px] text-slate-500 font-semibold mt-0.5">{description}</p>
+        </div>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 border border-teal-100 text-[11px] font-black text-teal-700 shrink-0 shadow-xs">
+          <span className="text-[9px] text-teal-500 uppercase tracking-wide">Tusaale:</span>
+          <span>{preview}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Prefix</label>
+          <input
+            value={prefix}
+            onChange={(e) => onPrefixChange(e.target.value)}
+            placeholder={defaultPrefix}
+            className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 font-bold"
+          />
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Format Pattern</label>
+          <select
+            value={format}
+            onChange={(e) => onFormatChange(e.target.value)}
+            className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2.5 text-xs text-slate-900 focus:outline-none cursor-pointer font-bold"
+          >
+            <option value="PREFIX/SEQ/YY">PREFIX/SEQ/YY (e.g. SUMAD/00001/26)</option>
+            <option value="PREFIX-YYYY-SEQ">PREFIX-YYYY-SEQ (e.g. REF-2026-001)</option>
+            <option value="PREFIX/SEQ/YYYY">PREFIX/SEQ/YYYY (e.g. REF/0001/2026)</option>
+            <option value="PREFIX-SEQ">PREFIX-SEQ (e.g. REF-001)</option>
+            <option value="PREFIX/YYYY/SEQ">PREFIX/YYYY/SEQ (e.g. REF/2026/001)</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Digit Padding</label>
+          <select
+            value={digits}
+            onChange={(e) => onDigitsChange(parseInt(e.target.value, 10))}
+            className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2.5 text-xs text-slate-900 focus:outline-none cursor-pointer font-bold"
+          >
+            <option value={3}>3 Digits (001)</option>
+            <option value={4}>4 Digits (0001)</option>
+            <option value={5}>5 Digits (00001)</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Lambarka Xiga (Next Seq)</label>
+          <input
+            type="number"
+            min={1}
+            value={nextSeq}
+            onChange={(e) => onNextSeqChange(Math.max(1, parseInt(e.target.value, 10) || 1))}
+            className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 font-bold"
+          />
+        </div>
+      </div>
+    </div>
+  );
+};

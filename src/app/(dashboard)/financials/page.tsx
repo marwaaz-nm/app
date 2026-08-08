@@ -5,7 +5,9 @@ import { supabase } from '@/lib/supabase';
 import { Reference, Receipt, Expense } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
+import { useSettings } from '@/context/SettingsContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
+import { formatReferenceNumber } from '@/lib/numbering';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import {
   TrendingUp,
@@ -26,6 +28,7 @@ import {
 export default function FinancialsPage() {
   const { profile } = useAuth();
   const { showAlert, showConfirm } = useModal();
+  const { settings } = useSettings();
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
 
   useEffect(() => {
@@ -250,9 +253,14 @@ export default function FinancialsPage() {
     setPayRefNumber(refNum);
     setPayDetails(subject);
     
-    // Auto-generate Receipt No: REC-XXXX
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
-    setPayReceiptNo(`REC-${randomNum}`);
+    // Auto-generate Receipt No using Settings pattern
+    const generatedRecNo = formatReferenceNumber({
+      prefix: settings.receipt_number_prefix || 'REC',
+      formatPattern: settings.receipt_number_format || 'PREFIX-YYYY-SEQ',
+      seq: settings.receipt_number_next_seq || 1,
+      digits: settings.receipt_number_digits || 3,
+    });
+    setPayReceiptNo(generatedRecNo);
     
     // Set date to today
     setPayDate(new Date().toISOString().split('T')[0]);
@@ -281,9 +289,14 @@ export default function FinancialsPage() {
     setPayRefNumber(refNumsString);
     setPayDetails(subjectsString);
     
-    // Auto-generate Receipt No: REC-XXXX
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
-    setPayReceiptNo(`REC-${randomNum}`);
+    // Auto-generate Receipt No using Settings pattern
+    const generatedBulkRecNo = formatReferenceNumber({
+      prefix: settings.receipt_number_prefix || 'REC',
+      formatPattern: settings.receipt_number_format || 'PREFIX-YYYY-SEQ',
+      seq: settings.receipt_number_next_seq || 1,
+      digits: settings.receipt_number_digits || 3,
+    });
+    setPayReceiptNo(generatedBulkRecNo);
     
     // Set date to today
     setPayDate(new Date().toISOString().split('T')[0]);

@@ -41,7 +41,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { profile, logout } = useAuth();
   const { settings } = useSettings();
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || profile?.role === 'SuperAdmin';
 
   const permittedNavigation = isAdmin
     ? [...primaryNavigation, adminNavigation]

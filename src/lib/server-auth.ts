@@ -51,7 +51,7 @@ export async function requireViewer(req: NextRequest, action?: string): Promise<
 
   if (profileError || !profile) throw Object.assign(new Error('User profile was not found.'), { status: 403 });
 
-  const role = profile.role === 'Admin' ? 'Admin' : 'User';
+  const role = (profile.role === 'Admin' || profile.role === 'SuperAdmin') ? 'Admin' : 'User';
   const legacyActions = ['survey.create', 'survey.edit', 'survey.submit', 'reference.manage', 'transfer.create', 'finance.manage', 'report.view'];
   const permittedActions = Array.isArray(profile.permitted_actions) ? profile.permitted_actions : legacyActions;
   const permittedMenus = Array.isArray(profile.permitted_menus) ? profile.permitted_menus : null;

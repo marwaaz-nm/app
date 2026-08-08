@@ -9,6 +9,7 @@ import { useModal } from '@/context/ModalContext';
 import { useSettings } from '@/context/SettingsContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
+import { formatReferenceNumber } from '@/lib/numbering';
 import DetailsModal from '@/components/DetailsModal';
 import {
   Plus,
@@ -25,7 +26,8 @@ import {
   TrendingUp,
   QrCode,
   Copy,
-  Check
+  Check,
+  Download
 } from 'lucide-react';
 
 export default function ReferencesPage() {
@@ -63,6 +65,7 @@ export default function ReferencesPage() {
   const [selectedRef, setSelectedRef] = useState<Reference | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [qrCopied, setQrCopied] = useState(false);
 
   // Connected survey details modal
   const [viewingSurvey, setViewingSurvey] = useState<Survey | null>(null);
@@ -82,13 +85,16 @@ export default function ReferencesPage() {
     }
   };
 
-  const publicVerifyUrl = (refId: number) =>
-    typeof window !== 'undefined' ? `${window.location.origin}/verify/${refId}` : '';
+  const publicVerifyUrl = (ref: Reference) => {
+    const identifier = ref.verification_token || ref.id;
+    return typeof window !== 'undefined' ? `${window.location.origin}/verify/${identifier}` : '';
+  };
 
   useEffect(() => {
     if (!selectedRef) { setQrDataUrl(null); return; }
     setLinkCopied(false);
-    QRCode.toDataURL(publicVerifyUrl(selectedRef.id), { margin: 1, width: 220 })
+    setQrCopied(false);
+    QRCode.toDataURL(publicVerifyUrl(selectedRef), { margin: 1, width: 220 })
       .then(setQrDataUrl)
       .catch((err) => { console.error('Error generating QR code:', err); setQrDataUrl(null); });
   }, [selectedRef]);
@@ -96,11 +102,42 @@ export default function ReferencesPage() {
   const handleCopyLink = async () => {
     if (!selectedRef) return;
     try {
-      await navigator.clipboard.writeText(publicVerifyUrl(selectedRef.id));
+      await navigator.clipboard.writeText(publicVerifyUrl(selectedRef));
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
     } catch (err) {
       console.error('Error copying link:', err);
+    }
+  };
+
+  const handleDownloadQr = () => {
+    if (!qrDataUrl || !selectedRef) return;
+    const cleanRef = (selectedRef.ref_number || 'REF').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const link = document.createElement('a');
+    link.href = qrDataUrl;
+    link.download = `QR_${cleanRef}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleCopyQrImage = async () => {
+    if (!qrDataUrl) return;
+    try {
+      const response = await fetch(qrDataUrl);
+      const blob = await response.blob();
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([
+          new ClipboardItem({ [blob.type]: blob })
+        ]);
+        setQrCopied(true);
+        setTimeout(() => setQrCopied(false), 2000);
+      } else {
+        await handleCopyLink();
+      }
+    } catch (err) {
+      console.error('Error copying QR image:', err);
+      await handleCopyLink();
     }
   };
 
@@ -190,22 +227,15 @@ export default function ReferencesPage() {
     });
   }, [sortedReferences, groupBy, groupAggregate]);
 
-  // Set default issue date and suggested ref number when opening form
+  // Set default issue date when opening form
   const handleOpenAddForm = () => {
     const now = new Date();
     const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 16);
     setIssueDate(localDateTime);
+    setRefNumber('');
     setShowAddForm(true);
-    void (async () => {
-      try {
-        const { data, error } = await supabase.rpc('next_reference_number');
-        if (!error && data) setRefNumber(data as string);
-      } catch (err) {
-        console.error('Error generating next reference number:', err);
-      }
-    })();
   };
 
   const handleCloseAddForm = () => {
@@ -245,8 +275,32 @@ export default function ReferencesPage() {
     setSaving(true);
 
     try {
+      let finalRefNumber = refNumber.trim();
+
+      // If user left reference number blank (auto-generate on save)
+      if (!finalRefNumber) {
+        try {
+          const { data, error } = await supabase.rpc('next_reference_number');
+          if (!error && data) {
+            finalRefNumber = data as string;
+          }
+        } catch (rpcErr) {
+          console.error('Error generating next_reference_number RPC:', rpcErr);
+        }
+      }
+
+      // Fallback if RPC is unavailable
+      if (!finalRefNumber) {
+        finalRefNumber = formatReferenceNumber({
+          prefix: settings?.ref_number_prefix || 'REF',
+          formatPattern: settings?.ref_number_format || 'PREFIX-YYYY-SEQ',
+          seq: settings?.ref_number_next_seq || 1,
+          digits: settings?.ref_number_digits || 3,
+        });
+      }
+
       const payload = {
-        ref_number: refNumber,
+        ref_number: finalRefNumber,
         subject,
         details: details || null,
         issue_date: issueDate ? new Date(issueDate).toISOString() : new Date().toISOString(),
@@ -261,7 +315,7 @@ export default function ReferencesPage() {
 
       if (error) throw error;
 
-      showAlert('Guul', 'Sumadda si guul leh ayaa loo keydiyey!', 'success');
+      showAlert('Guul', `Sumadda (${finalRefNumber}) si guul leh ayaa loo keydiyey!`, 'success');
       handleCloseAddForm();
       fetchReferences();
     } catch (err: any) {
@@ -352,12 +406,14 @@ export default function ReferencesPage() {
                   </label>
                   <input
                     type="text"
-                    required
                     value={refNumber}
                     onChange={(e) => setRefNumber(e.target.value)}
                     className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                    placeholder="REF-2026-001"
+                    placeholder="Otomaatig marka la kaydiyo (Auto-generated on save)"
                   />
+                  <p className="mt-1.5 text-[10px] text-teal-600 font-bold">
+                    * Waxaad ka tagi kartaa iyada oo banaan — toos ayaa loo abuuri doonaa marka aad taabato SAVE.
+                  </p>
                 </div>
 
                 <div>
@@ -710,7 +766,7 @@ export default function ReferencesPage() {
 
                 {/* Public QR Code + Verification Link */}
                 <div className="p-5 bg-slate-50/60 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-center gap-5">
-                  <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-2">
+                  <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-2 flex flex-col items-center justify-center shadow-xs">
                     {qrDataUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={qrDataUrl} alt="QR code for public verification link" className="h-28 w-28" />
@@ -721,18 +777,44 @@ export default function ReferencesPage() {
                     )}
                   </div>
                   <div className="min-w-0 flex-1 space-y-2 text-center sm:text-left">
-                    <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-400">Link Xaqiijin (Public Verification)</span>
-                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                      Qof kasta oo scan-gareeya QR-kan wuxuu arki karaa xogtan iyada oo aan loo baahnayn in la soo galo app-ka.
-                      {selectedRef.surveys ? ' Wuxuu sidoo kale arki karaa mapka dhulka.' : ''}
-                    </p>
-                    <button
-                      onClick={handleCopyLink}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-                    >
-                      {linkCopied ? <Check className="h-3.5 w-3.5 text-teal-600" /> : <Copy className="h-3.5 w-3.5" />}
-                      {linkCopied ? 'La koobiyeeyay!' : 'Koobi Link-ga'}
-                    </button>
+                    <div>
+                      <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-400">Link Xaqiijin (Public Verification QR)</span>
+                      <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-0.5">
+                        Qof kasta oo scan-gareeya QR-kan wuxuu arki karaa xogtan iyada oo aan loo baahnayn in la soo galo app-ka.
+                        {selectedRef.surveys ? ' Wuxuu sidoo kale arki karaa mapka dhulka.' : ''}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer active:scale-95 shadow-xs"
+                      >
+                        {linkCopied ? <Check className="h-3.5 w-3.5 text-teal-600" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
+                        <span>{linkCopied ? 'La koobiyeeyay!' : 'Koobi Link'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleDownloadQr}
+                        disabled={!qrDataUrl}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-[11px] font-bold text-teal-700 hover:bg-teal-100/80 transition-colors cursor-pointer active:scale-95 disabled:opacity-50 shadow-xs"
+                      >
+                        <Download className="h-3.5 w-3.5 text-teal-600" />
+                        <span>Download PNG</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleCopyQrImage}
+                        disabled={!qrDataUrl}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer active:scale-95 disabled:opacity-50 shadow-xs"
+                      >
+                        {qrCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
+                        <span>{qrCopied ? 'La koobiyeeyay QR!' : 'Koobi Sawirka QR'}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
