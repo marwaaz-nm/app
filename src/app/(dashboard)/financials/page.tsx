@@ -1,0 +1,1772 @@
+'use client';
+
+import React, { useEffect, useMemo, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { Reference, Receipt, Expense } from '@/types';
+import { useAuth } from '@/context/AuthContext';
+import { useModal } from '@/context/ModalContext';
+import { useSettings } from '@/context/SettingsContext';
+import { useMobileSearch } from '@/context/MobileSearchContext';
+import { formatReferenceNumber } from '@/lib/numbering';
+import { dateGroupKey, groupItems } from '@/lib/listGrouping';
+import {
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  Plus,
+  Printer,
+  Search,
+  X,
+  CheckCircle2,
+  Loader2,
+  FileText,
+  CreditCard,
+  AlertCircle,
+  Calendar
+} from 'lucide-react';
+
+export default function FinancialsPage() {
+  const { profile } = useAuth();
+  const { showAlert, showConfirm } = useModal();
+  const { settings } = useSettings();
+  const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
+
+  useEffect(() => {
+    setSearchAvailable(true);
+  }, [setSearchAvailable]);
+
+  const [loading, setLoading] = useState(true);
+  const [savingReceipt, setSavingReceipt] = useState(false);
+  const [savingExpense, setSavingExpense] = useState(false);
+
+  // Data states
+  const [referencesWithReceipts, setReferencesWithReceipts] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+
+  // Totals
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [totalCredit, setTotalCredit] = useState(0);
+  const [totalExpenses, setTotalExpenses] = useState(0);
+
+  // Tabs
+  const [activeTab, setActiveTab] = useState<'payments' | 'expenses'>('payments');
+
+  // Search / sort / group controls
+  const [receiptSearchQuery, setReceiptSearchQuery] = useState('');
+  const [receiptStatusFilter, setReceiptStatusFilter] = useState<'' | 'Paid' | 'Credit' | 'Unpaid'>('');
+  const [receiptSortBy, setReceiptSortBy] = useState<'newest' | 'oldest'>('newest');
+  const [receiptGroupBy, setReceiptGroupBy] = useState<'none' | 'date'>('none');
+  const [receiptGroupAggregate, setReceiptGroupAggregate] = useState<'none' | 'count' | 'sum'>('count');
+
+  const [expenseSearchQuery, setExpenseSearchQuery] = useState('');
+  const [expenseSortBy, setExpenseSortBy] = useState<'newest' | 'oldest' | 'amount_high'>('newest');
+  const [expenseGroupBy, setExpenseGroupBy] = useState<'none' | 'date'>('none');
+  const [expenseGroupAggregate, setExpenseGroupAggregate] = useState<'none' | 'count' | 'sum'>('count');
+
+  // Pay Modal State
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payRefNumber, setPayRefNumber] = useState('');
+  const [payReceiptNo, setPayReceiptNo] = useState('');
+  const [payDetails, setPayDetails] = useState('');
+  const [payDate, setPayDate] = useState('');
+  const [payStatus, setPayStatus] = useState<'Paid' | 'Credit'>('Paid');
+  const [payMode, setPayMode] = useState<'EVC Plus' | 'eDahab' | 'Jeeb' | 'Cash'>('EVC Plus');
+
+  // View Receipt Modal State
+  const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
+  const [updatingCredit, setUpdatingCredit] = useState(false);
+
+  // Pay Debt Modal State (Partial or Full Payment)
+  const [showPayDebtModal, setShowPayDebtModal] = useState(false);
+  const [payDebtRef, setPayDebtRef] = useState<any | null>(null);
+  const [payDebtCreditReceipt, setPayDebtCreditReceipt] = useState<any | null>(null);
+  const [payDebtTotalCredit, setPayDebtTotalCredit] = useState(0);
+  const [payDebtPaidSoFar, setPayDebtPaidSoFar] = useState(0);
+  const [payDebtAmount, setPayDebtAmount] = useState('');
+  const [payDebtMode, setPayDebtMode] = useState<'EVC Plus' | 'eDahab' | 'Jeeb' | 'Cash'>('EVC Plus');
+  const [payDebtDate, setPayDebtDate] = useState('');
+  const [payDebtDetails, setPayDebtDetails] = useState('');
+  const [savingDebtPayment, setSavingDebtPayment] = useState(false);
+
+  // Bulk Payment Selection State
+  const [selectedRefIds, setSelectedRefIds] = useState<number[]>([]);
+  const [bulkAmounts, setBulkAmounts] = useState<Record<number, string>>({});
+
+  // Add Expense Modal State
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [expDescription, setExpDescription] = useState('');
+  const [expQty, setExpQty] = useState('1');
+  const [expAmount, setExpAmount] = useState('');
+  const [expDate, setExpDate] = useState('');
+
+  // Fetch Financial Data
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // 1. Fetch references with nested receipts
+      const { data: refsData, error: refsError } = await supabase
+        .from('references')
+        .select(`
+          id,
+          ref_number,
+          subject,
+          issue_date,
+          receipts (
+            id,
+            reference_id,
+            receipt_no,
+            amount,
+            status,
+            payment_mode,
+            payment_date,
+            details
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (refsError) throw refsError;
+      setReferencesWithReceipts(refsData || []);
+
+      // 2. Fetch Expenses
+      const { data: expData, error: expError } = await supabase
+        .from('expenses')
+        .select('*')
+        .order('expense_date', { ascending: false });
+
+      if (expError) throw expError;
+      setExpenses(expData || []);
+
+      // 3. Calculate Totals
+      // Fetch all receipts to compute revenue and credit
+      const { data: receiptsData } = await supabase
+        .from('receipts')
+        .select('amount, status');
+      
+      const revSum = receiptsData?.filter(r => r.status === 'Paid').reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0;
+      const creditSum = receiptsData?.filter(r => r.status === 'Credit').reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0;
+      setTotalRevenue(revSum);
+      setTotalCredit(creditSum);
+
+      const expSum = expData?.reduce((sum, e) => sum + parseFloat(e.total.toString()), 0) || 0;
+      setTotalExpenses(expSum);
+
+    } catch (err) {
+      console.error('Error fetching financial data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const filteredReferencesWithReceipts = useMemo(() => {
+    let result = [...referencesWithReceipts];
+
+    if (receiptSearchQuery.trim() !== '') {
+      const q = receiptSearchQuery.toLowerCase();
+      result = result.filter((r) => r.ref_number.toLowerCase().includes(q) || r.subject.toLowerCase().includes(q));
+    }
+
+    if (receiptStatusFilter) {
+      result = result.filter((r) => {
+        const receipts = r.receipts || [];
+        const paidAmount = receipts.filter((x: any) => x.status === 'Paid').reduce((s: number, x: any) => s + parseFloat(x.amount.toString()), 0);
+        const creditAmount = receipts.filter((x: any) => x.status === 'Credit').reduce((s: number, x: any) => s + parseFloat(x.amount.toString()), 0);
+        const hasCredit = creditAmount > 0;
+        const isPaid = !hasCredit && paidAmount > 0;
+        if (receiptStatusFilter === 'Paid') return isPaid;
+        if (receiptStatusFilter === 'Credit') return hasCredit;
+        return !isPaid && !hasCredit;
+      });
+    }
+
+    return result;
+  }, [referencesWithReceipts, receiptSearchQuery, receiptStatusFilter]);
+
+  const sortedReferencesWithReceipts = useMemo(() => {
+    const sorted = [...filteredReferencesWithReceipts];
+    sorted.sort((a, b) => {
+      const diff = new Date(b.issue_date || 0).getTime() - new Date(a.issue_date || 0).getTime();
+      return receiptSortBy === 'oldest' ? -diff : diff;
+    });
+    return sorted;
+  }, [filteredReferencesWithReceipts, receiptSortBy]);
+
+  const groupedReferencesWithReceipts = useMemo(() => {
+    if (receiptGroupBy === 'none') return null;
+    return groupItems(sortedReferencesWithReceipts, (r) => dateGroupKey(r.issue_date).key).map((group) => {
+      const baseLabel = dateGroupKey(group.items[0].issue_date).label;
+      let label = baseLabel;
+      if (receiptGroupAggregate === 'count') {
+        label = `${baseLabel} · ${group.items.length}`;
+      } else if (receiptGroupAggregate === 'sum') {
+        const sum = group.items.reduce((total, r) => {
+          const receipts = r.receipts || [];
+          return total + receipts.reduce((s: number, x: any) => s + parseFloat(x.amount.toString()), 0);
+        }, 0);
+        label = `${baseLabel} · $${sum.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+      }
+      return { ...group, label };
+    });
+  }, [sortedReferencesWithReceipts, receiptGroupBy, receiptGroupAggregate]);
+
+  const filteredExpenses = useMemo(() => {
+    if (expenseSearchQuery.trim() === '') return expenses;
+    const q = expenseSearchQuery.toLowerCase();
+    return expenses.filter((e) => e.description.toLowerCase().includes(q));
+  }, [expenses, expenseSearchQuery]);
+
+  const sortedExpenses = useMemo(() => {
+    const sorted = [...filteredExpenses];
+    sorted.sort((a, b) => {
+      if (expenseSortBy === 'amount_high') return parseFloat(b.total.toString()) - parseFloat(a.total.toString());
+      const diff = new Date(b.expense_date || 0).getTime() - new Date(a.expense_date || 0).getTime();
+      return expenseSortBy === 'oldest' ? -diff : diff;
+    });
+    return sorted;
+  }, [filteredExpenses, expenseSortBy]);
+
+  const groupedExpenses = useMemo(() => {
+    if (expenseGroupBy === 'none') return null;
+    return groupItems(sortedExpenses, (e) => dateGroupKey(e.expense_date).key).map((group) => {
+      const baseLabel = dateGroupKey(group.items[0].expense_date).label;
+      const sum = group.items.reduce((total, e) => total + parseFloat(e.total.toString()), 0);
+      const label =
+        expenseGroupAggregate === 'count' ? `${baseLabel} · ${group.items.length}` :
+        expenseGroupAggregate === 'sum' ? `${baseLabel} · $${sum.toLocaleString('en-US', { minimumFractionDigits: 2 })}` :
+        baseLabel;
+      return { ...group, label };
+    });
+  }, [sortedExpenses, expenseGroupBy, expenseGroupAggregate]);
+
+  // Stable row numbers independent of the current sort/group order (newest fetched = highest number).
+  const expenseSerial = useMemo(
+    () => new Map(expenses.map((e, idx) => [e.id, expenses.length - idx])),
+    [expenses],
+  );
+
+  // Pay Dialog triggers
+  const openPayDialog = (refId: number, refNum: string, subject: string) => {
+    setSelectedRefIds([refId]);
+    setPayRefNumber(refNum);
+    setPayDetails(subject);
+    
+    // Auto-generate Receipt No using Settings pattern
+    const generatedRecNo = formatReferenceNumber({
+      prefix: settings.receipt_number_prefix || 'REC',
+      formatPattern: settings.receipt_number_format || 'PREFIX-YYYY-SEQ',
+      seq: settings.receipt_number_next_seq || 1,
+      digits: settings.receipt_number_digits || 3,
+    });
+    setPayReceiptNo(generatedRecNo);
+    
+    // Set date to today
+    setPayDate(new Date().toISOString().split('T')[0]);
+    
+    const initialAmounts: Record<number, string> = { [refId]: '' };
+    setBulkAmounts(initialAmounts);
+    setPayStatus('Paid');
+    setPayMode('EVC Plus');
+    
+    setShowPayModal(true);
+  };
+
+  const openBulkPayDialog = () => {
+    if (selectedRefIds.length === 0) return;
+    
+    const selectedRefs = referencesWithReceipts.filter(r => selectedRefIds.includes(r.id));
+    
+    if (selectedRefs.length === 1) {
+      openPayDialog(selectedRefs[0].id, selectedRefs[0].ref_number, selectedRefs[0].subject);
+      return;
+    }
+
+    const refNumsString = selectedRefs.map(r => r.ref_number).join(', ');
+    const subjectsString = `Wadajir u bixiyey: ${selectedRefs.map(r => r.ref_number).join(', ')}`;
+    
+    setPayRefNumber(refNumsString);
+    setPayDetails(subjectsString);
+    
+    // Auto-generate Receipt No using Settings pattern
+    const generatedBulkRecNo = formatReferenceNumber({
+      prefix: settings.receipt_number_prefix || 'REC',
+      formatPattern: settings.receipt_number_format || 'PREFIX-YYYY-SEQ',
+      seq: settings.receipt_number_next_seq || 1,
+      digits: settings.receipt_number_digits || 3,
+    });
+    setPayReceiptNo(generatedBulkRecNo);
+    
+    // Set date to today
+    setPayDate(new Date().toISOString().split('T')[0]);
+    
+    const initialAmounts: Record<number, string> = {};
+    selectedRefIds.forEach(id => {
+      initialAmounts[id] = '';
+    });
+    setBulkAmounts(initialAmounts);
+    setPayStatus('Paid');
+    setPayMode('EVC Plus');
+    
+    setShowPayModal(true);
+  };
+
+  const closePayDialog = () => {
+    setShowPayModal(false);
+    setPayRefNumber('');
+    setPayReceiptNo('');
+    setPayDetails('');
+    setBulkAmounts({});
+    setSelectedRefIds([]);
+  };
+
+  // Save Client Payment Receipt
+  const handleSaveReceipt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedRefIds.length === 0) return;
+    setSavingReceipt(true);
+
+    try {
+      const payloads = selectedRefIds.map((refId, idx) => {
+        const recNo = selectedRefIds.length > 1 ? `${payReceiptNo}-${idx + 1}` : payReceiptNo;
+        const amountVal = parseFloat(bulkAmounts[refId]) || 0;
+        
+        return {
+          receipt_no: recNo,
+          reference_id: refId,
+          details: payDetails,
+          amount: amountVal,
+          status: payStatus,
+          payment_mode: payMode,
+          payment_date: payDate,
+        };
+      });
+
+      const { error } = await supabase
+        .from('receipts')
+        .insert(payloads);
+
+      if (error) throw error;
+
+      showAlert('Guul', 'Resiidhka/Resiidhada si guul leh ayaa loo keydiyey!', 'success');
+      closePayDialog();
+      fetchData();
+    } catch (err: any) {
+      console.error('Error saving receipt:', err);
+      showAlert('Cillad', err.message || 'Cillad ayaa dhacday.', 'error');
+    } finally {
+      setSavingReceipt(false);
+    }
+  };
+
+  // Mark Credit Receipt as Paid
+  const handleUpdateCreditToPaid = async (receiptId: number) => {
+    setUpdatingCredit(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (token) {
+        const res = await fetch('/api/financials/update-status', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ receipt_id: receiptId, status: 'Paid' })
+        });
+        const resData = await res.json();
+        if (!res.ok) throw new Error(resData.error || 'Failed to update receipt status.');
+      } else {
+        const { error } = await supabase
+          .from('receipts')
+          .update({ status: 'Paid', payment_date: new Date().toISOString().split('T')[0] })
+          .eq('id', receiptId);
+
+        if (error) throw error;
+      }
+
+      showAlert('Guul', 'Resiidhka waxaa loo bedelay Paid (Waa la bixiyey)!', 'success');
+      setSelectedReceipt(null);
+      fetchData();
+    } catch (err: any) {
+      console.error('Error updating credit to paid:', err);
+      showAlert('Cillad', err.message || 'Cillad ayaa dhacday.', 'error');
+    } finally {
+      setUpdatingCredit(false);
+    }
+  };
+
+  // Open Pay Debt Modal for a Reference
+  const openPayDebtDialog = (ref: any) => {
+    const receipts = ref.receipts || [];
+    const creditReceipt = receipts.find((r: any) => r.status === 'Credit');
+    const creditSum = creditReceipt ? parseFloat(creditReceipt.amount.toString()) : 0;
+    const paidSum = receipts
+      .filter((r: any) => r.status === 'Paid')
+      .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
+
+    setPayDebtRef(ref);
+    setPayDebtCreditReceipt(creditReceipt || null);
+    setPayDebtTotalCredit(creditSum);
+    setPayDebtPaidSoFar(paidSum);
+    setPayDebtAmount(creditSum > 0 ? creditSum.toString() : '');
+    setPayDebtMode('EVC Plus');
+    setPayDebtDate(new Date().toISOString().split('T')[0]);
+    setPayDebtDetails(`Bixinta deynta: ${ref.ref_number || ''}`);
+    setShowPayDebtModal(true);
+  };
+
+  // Save Debt Payment (Full or Partial)
+  const handleSaveDebtPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payDebtRef || !payDebtCreditReceipt) return;
+
+    const payAmt = parseFloat(payDebtAmount);
+    if (isNaN(payAmt) || payAmt <= 0) {
+      showAlert('Cillad', 'Fadlan geli lacag sax ah.', 'error');
+      return;
+    }
+
+    if (payAmt > payDebtTotalCredit + 0.001) {
+      showAlert('Cillad', `Lacagta la bixinayo ($${payAmt.toFixed(2)}) kama badan karto deynta lagu leeyahay ($${payDebtTotalCredit.toFixed(2)}).`, 'error');
+      return;
+    }
+
+    setSavingDebtPayment(true);
+
+    try {
+      const remainingCredit = payDebtTotalCredit - payAmt;
+      const today = payDebtDate || new Date().toISOString().split('T')[0];
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (token) {
+        const res = await fetch('/api/financials/pay-debt', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            reference_id: payDebtRef.id,
+            credit_receipt_id: payDebtCreditReceipt.id,
+            pay_amount: payAmt,
+            total_credit: payDebtTotalCredit,
+            payment_mode: payDebtMode,
+            payment_date: today,
+            details: payDebtDetails
+          })
+        });
+
+        const resData = await res.json();
+        if (!res.ok) throw new Error(resData.error || 'Cillad ayaa ka dhacday bixinta deynta.');
+      } else {
+        if (remainingCredit <= 0.001) {
+          const { error: updateError } = await supabase
+            .from('receipts')
+            .update({
+              status: 'Paid',
+              amount: payAmt,
+              payment_mode: payDebtMode,
+              payment_date: today,
+              details: payDebtDetails || `Bixinta buuxda ee deynta (${payDebtRef.ref_number})`
+            })
+            .eq('id', payDebtCreditReceipt.id);
+
+          if (updateError) throw updateError;
+        } else {
+          const { error: updateError } = await supabase
+            .from('receipts')
+            .update({
+              amount: remainingCredit,
+              details: `Deyn harsan (${payDebtRef.ref_number})`
+            })
+            .eq('id', payDebtCreditReceipt.id);
+
+          if (updateError) throw updateError;
+
+          const randomNum = Math.floor(1000 + Math.random() * 9000);
+          const newReceiptNo = `REC-${randomNum}`;
+
+          const { error: insertError } = await supabase
+            .from('receipts')
+            .insert({
+              receipt_no: newReceiptNo,
+              reference_id: payDebtRef.id,
+              amount: payAmt,
+              status: 'Paid',
+              payment_mode: payDebtMode,
+              payment_date: today,
+              details: payDebtDetails || `Bixinta qeyb ka mid ah deynta (${payDebtRef.ref_number})`
+            });
+
+          if (insertError) throw insertError;
+        }
+      }
+
+      if (remainingCredit <= 0.001) {
+        showAlert('Guul', `Deyntii oo dhan ($${payDebtTotalCredit.toFixed(2)}) waa la wada bixiyey!`, 'success');
+      } else {
+        showAlert('Guul', `Lacagta $${payAmt.toFixed(2)} waa la bixiyey. Deynta oo harsan waa $${remainingCredit.toFixed(2)}.`, 'success');
+      }
+
+      setShowPayDebtModal(false);
+      setSelectedReceipt(null);
+      fetchData();
+    } catch (err: any) {
+      console.error('Error saving debt payment:', err);
+      showAlert('Cillad', err.message || 'Cillad ayaa dhacday.', 'error');
+    } finally {
+      setSavingDebtPayment(false);
+    }
+  };
+
+  // Add Expense Dialog
+  const openExpenseDialog = () => {
+    setExpDescription('');
+    setExpQty('1');
+    setExpAmount('');
+    setExpDate(new Date().toISOString().split('T')[0]);
+    setShowExpenseModal(true);
+  };
+
+  const closeExpenseDialog = () => {
+    setShowExpenseModal(false);
+    setExpDescription('');
+    setExpQty('1');
+    setExpAmount('');
+  };
+
+  // Save Office Expense
+  const handleSaveExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingExpense(true);
+
+    const qty = parseInt(expQty) || 0;
+    const amount = parseFloat(expAmount) || 0;
+    const total = qty * amount;
+
+    try {
+      const payload = {
+        description: expDescription,
+        qty,
+        amount,
+        total,
+        expense_date: expDate,
+        created_by: profile?.fullname || 'Unknown Admin',
+      };
+
+      const { error } = await supabase
+        .from('expenses')
+        .insert([payload]);
+
+      if (error) throw error;
+
+      showAlert('Guul', 'Kharashka waa la keydiyey!', 'success');
+      closeExpenseDialog();
+      fetchData();
+    } catch (err: any) {
+      console.error('Error saving expense:', err);
+      showAlert('Cillad', err.message || 'Cillad ayaa dhacday.', 'error');
+    } finally {
+      setSavingExpense(false);
+    }
+  };
+
+  // Render receipt details popup
+  const openReceiptDetails = (receipt: any, ref: any) => {
+    const refNum = typeof ref === 'string' ? ref : ref?.ref_number;
+    const refId = typeof ref === 'object' ? ref?.id : receipt?.reference_id;
+    setSelectedReceipt({
+      ...receipt,
+      reference_id: refId || receipt?.reference_id,
+      ref_number: refNum
+    });
+  };
+
+  return (
+    <div className="p-4 md:p-8 w-full space-y-3.5 md:space-y-6 text-slate-800">
+      
+      {/* Stats Summary Cards */}
+      {/* Desktop Version */}
+      <div className="hidden md:grid grid-cols-4 gap-6">
+        {/* Revenue */}
+        <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm flex items-center gap-4">
+          <div className="bg-emerald-50 text-emerald-600 p-4 rounded-2xl border border-emerald-100">
+            <TrendingUp className="h-6 w-6" />
+          </div>
+          <div>
+            <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Total Revenue (Paid)</span>
+            <div className="text-2xl font-black text-emerald-600 mt-0.5">
+              ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+        </div>
+
+        {/* Credit */}
+        <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm flex items-center gap-4">
+          <div className="bg-amber-50 text-amber-600 p-4 rounded-2xl border border-amber-100">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <div>
+            <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Total Credit (Deyn)</span>
+            <div className="text-2xl font-black text-amber-600 mt-0.5">
+              ${totalCredit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+        </div>
+
+        {/* Expenses */}
+        <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm flex items-center gap-4">
+          <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl border border-rose-100">
+            <TrendingDown className="h-6 w-6" />
+          </div>
+          <div>
+            <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Total Expenses</span>
+            <div className="text-2xl font-black text-rose-600 mt-0.5">
+              ${totalExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+        </div>
+
+        {/* Net Profit */}
+        <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm flex items-center gap-4">
+          <div className="bg-teal-50 text-teal-600 p-4 rounded-2xl border border-teal-100">
+            <DollarSign className="h-6 w-6" />
+          </div>
+          <div>
+            <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Net Profit</span>
+            <div className={`text-2xl font-black mt-0.5 ${totalRevenue - totalExpenses >= 0 ? 'text-teal-600' : 'text-rose-600'}`}>
+              ${(totalRevenue - totalExpenses).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Version (2x2 Grid) */}
+      <div className="md:hidden grid grid-cols-2 gap-3.5">
+        <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm text-center">
+          <span className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Revenue (Paid)</span>
+          <div className="text-sm font-black text-emerald-600 mt-0.5 truncate">
+            ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </div>
+        </div>
+        
+        <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm text-center">
+          <span className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Credit (Deyn)</span>
+          <div className="text-sm font-black text-amber-600 mt-0.5 truncate">
+            ${totalCredit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm text-center">
+          <span className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Expenses</span>
+          <div className="text-sm font-black text-rose-600 mt-0.5 truncate">
+            ${totalExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm text-center">
+          <span className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Net Profit</span>
+          <div className={`text-sm font-black mt-0.5 truncate ${totalRevenue - totalExpenses >= 0 ? 'text-teal-600' : 'text-rose-600'}`}>
+            ${(totalRevenue - totalExpenses).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs Switcher */}
+      <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200/50 max-w-md">
+        <button
+          onClick={() => setActiveTab('payments')}
+          className={`flex-1 py-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            activeTab === 'payments'
+              ? 'bg-teal-600 text-white shadow-sm'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Client Payments
+        </button>
+        <button
+          onClick={() => setActiveTab('expenses')}
+          className={`flex-1 py-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            activeTab === 'expenses'
+              ? 'bg-rose-600 text-white shadow-sm'
+              : 'text-slate-500 hover:text-rose-600'
+          }`}
+        >
+          Office Expenses
+        </button>
+      </div>
+
+      {/* Search / Sort / Group toolbar */}
+      <div className={`${showMobileSearch ? 'flex' : 'hidden md:flex'} flex-col gap-2 md:flex-row md:items-center bg-white border border-slate-100 rounded-2xl md:rounded-3xl p-3 shadow-sm w-full`}>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          {activeTab === 'payments' ? (
+            <input
+              type="text"
+              value={receiptSearchQuery}
+              onChange={(e) => setReceiptSearchQuery(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-9 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              placeholder="Raadi Sumad / Ujeedo..."
+            />
+          ) : (
+            <input
+              type="text"
+              value={expenseSearchQuery}
+              onChange={(e) => setExpenseSearchQuery(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-9 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              placeholder="Raadi Description..."
+            />
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {activeTab === 'payments' ? (
+            <>
+              <select
+                value={receiptStatusFilter}
+                onChange={(e) => setReceiptStatusFilter(e.target.value as typeof receiptStatusFilter)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
+              >
+                <option value="">Status (All)...</option>
+                <option value="Paid">Paid</option>
+                <option value="Credit">Credit</option>
+                <option value="Unpaid">Unpaid</option>
+              </select>
+              <select
+                value={receiptSortBy}
+                onChange={(e) => setReceiptSortBy(e.target.value as typeof receiptSortBy)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
+              >
+                <option value="newest">Sort: Newest first</option>
+                <option value="oldest">Sort: Oldest first</option>
+              </select>
+            </>
+          ) : (
+            <select
+              value={expenseSortBy}
+              onChange={(e) => setExpenseSortBy(e.target.value as typeof expenseSortBy)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
+            >
+              <option value="newest">Sort: Newest first</option>
+              <option value="oldest">Sort: Oldest first</option>
+              <option value="amount_high">Sort: Amount (high–low)</option>
+            </select>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          {activeTab === 'payments' ? (
+            <>
+              <select
+                value={receiptGroupBy}
+                onChange={(e) => setReceiptGroupBy(e.target.value as typeof receiptGroupBy)}
+                className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="none">No group</option>
+                <option value="date">Group: Date</option>
+              </select>
+              {receiptGroupBy !== 'none' && (
+                <select
+                  value={receiptGroupAggregate}
+                  onChange={(e) => setReceiptGroupAggregate(e.target.value as typeof receiptGroupAggregate)}
+                  className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="none">Aggregate: None</option>
+                  <option value="count">Aggregate: Count</option>
+                  <option value="sum">Aggregate: Sum</option>
+                </select>
+              )}
+            </>
+          ) : (
+            <>
+              <select
+                value={expenseGroupBy}
+                onChange={(e) => setExpenseGroupBy(e.target.value as typeof expenseGroupBy)}
+                className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="none">No group</option>
+                <option value="date">Group: Date</option>
+              </select>
+              {expenseGroupBy !== 'none' && (
+                <select
+                  value={expenseGroupAggregate}
+                  onChange={(e) => setExpenseGroupAggregate(e.target.value as typeof expenseGroupAggregate)}
+                  className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="none">Aggregate: None</option>
+                  <option value="count">Aggregate: Count</option>
+                  <option value="sum">Aggregate: Sum</option>
+                </select>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Table & Dashboard view */}
+      {loading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+        </div>
+      ) : activeTab === 'payments' ? (
+        /* Client Payments list */
+        <>
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-hidden border border-slate-200/80 rounded-3xl bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase">
+                    <th className="px-4 py-4 text-center w-12">
+                      <input
+                        type="checkbox"
+                        checked={
+                          sortedReferencesWithReceipts.length > 0 &&
+                          sortedReferencesWithReceipts.filter(r => {
+                            const latestRec = r.receipts && r.receipts[0];
+                            return !latestRec || latestRec.status !== 'Paid';
+                          }).every(r => selectedRefIds.includes(r.id))
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const unpaidIds = sortedReferencesWithReceipts
+                              .filter(r => {
+                                const latestRec = r.receipts && r.receipts[0];
+                                return !latestRec || latestRec.status !== 'Paid';
+                              })
+                              .map(r => r.id);
+                            setSelectedRefIds(unpaidIds);
+                          } else {
+                            setSelectedRefIds([]);
+                          }
+                        }}
+                        className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer h-4 w-4"
+                      />
+                    </th>
+                    <th className="px-6 py-4">Ref No.</th>
+                    <th className="px-6 py-4">Ujeedo (Subject)</th>
+                    <th className="px-6 py-4">Date</th>
+                    <th className="px-6 py-4 text-center">Status / Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100/60 bg-white">
+                  {(groupedReferencesWithReceipts ?? [{ key: 'all', label: '', items: sortedReferencesWithReceipts }]).map((group) => (
+                    <React.Fragment key={group.key}>
+                      {receiptGroupBy !== 'none' && (
+                        <tr>
+                          <td colSpan={5} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                            {group.label}
+                          </td>
+                        </tr>
+                      )}
+                      {group.items.map((ref) => {
+                        const receipts = ref.receipts || [];
+                        const paidAmount = receipts
+                          .filter((r: any) => r.status === 'Paid')
+                          .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
+                        const creditAmount = receipts
+                          .filter((r: any) => r.status === 'Credit')
+                          .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
+
+                        const hasCredit = creditAmount > 0;
+                        const isPaid = !hasCredit && paidAmount > 0;
+                        const activeReceipt = receipts.find((r: any) => r.status === 'Credit') || receipts[0];
+
+                        return (
+                          <tr
+                            key={ref.id}
+                            onClick={() => activeReceipt && openReceiptDetails(activeReceipt, ref.ref_number)}
+                            className={`hover:bg-slate-50/80 transition-all ${activeReceipt ? 'cursor-pointer' : ''}`}
+                          >
+                            <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                              {!isPaid && (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedRefIds.includes(ref.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedRefIds(prev => [...prev, ref.id]);
+                                    } else {
+                                      setSelectedRefIds(prev => prev.filter(id => id !== ref.id));
+                                    }
+                                  }}
+                                  className="rounded border-slate-300 text-teal-650 focus:ring-teal-500 cursor-pointer h-4 w-4"
+                                />
+                              )}
+                            </td>
+                            <td className="px-6 py-4 font-black text-teal-600">
+                              {ref.ref_number}
+                            </td>
+                            <td className="px-6 py-4 font-bold text-slate-800">
+                              {ref.subject}
+                            </td>
+                            <td className="px-6 py-4 text-slate-500">
+                              {ref.issue_date ? new Date(ref.issue_date).toLocaleDateString('so-SO') : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                              {isPaid ? (
+                                <span
+                                  className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-100 px-3.5 py-1.5 rounded-full font-extrabold uppercase text-[10px] cursor-pointer"
+                                  onClick={() => openReceiptDetails(activeReceipt, ref.ref_number)}
+                                >
+                                  <CheckCircle2 className="h-3 w-3" /> Paid (${paidAmount.toFixed(2)})
+                                </span>
+                              ) : hasCredit ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  <div className="flex flex-col items-end">
+                                    <span
+                                      className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200/60 px-3 py-1 rounded-full font-extrabold uppercase text-[10px] cursor-pointer"
+                                      onClick={() => openReceiptDetails(activeReceipt, ref.ref_number)}
+                                    >
+                                      <AlertCircle className="h-3 w-3" /> Deyn: ${creditAmount.toFixed(2)}
+                                    </span>
+                                    {paidAmount > 0 && (
+                                      <span className="text-[9px] text-emerald-600 font-bold mt-0.5">
+                                        (Bixiyey: ${paidAmount.toFixed(2)})
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => openPayDebtDialog(ref)}
+                                    className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] py-1.5 px-3 rounded-xl shadow-sm cursor-pointer transition-all active:scale-95 flex items-center gap-1"
+                                  >
+                                    Pay Debt
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => openPayDialog(ref.id, ref.ref_number, ref.subject)}
+                                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] py-1.5 px-4 rounded-xl shadow-sm cursor-pointer transition-colors"
+                                >
+                                  Pay Now
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile List View */}
+          <div className="md:hidden">
+            {sortedReferencesWithReceipts.length > 0 && (
+              <div className="border-b border-slate-200 px-1 py-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+                Tixraacyo &amp; Lacag Bixinno
+              </div>
+            )}
+            {sortedReferencesWithReceipts.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 italic">
+                Tixraacyo lama hayo.
+              </div>
+            ) : (
+              <>
+              {(groupedReferencesWithReceipts ?? [{ key: 'all', label: '', items: sortedReferencesWithReceipts }]).map((group) => (
+              <div key={group.key}>
+                {receiptGroupBy !== 'none' && (
+                  <div className="px-4 pb-1.5 pt-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
+                    {group.label}
+                  </div>
+                )}
+                <div className="divide-y divide-slate-100/60">
+              {group.items.map((ref) => {
+                const receipts = ref.receipts || [];
+                const paidAmount = receipts
+                  .filter((r: any) => r.status === 'Paid')
+                  .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
+                const creditAmount = receipts
+                  .filter((r: any) => r.status === 'Credit')
+                  .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
+                
+                const hasCredit = creditAmount > 0;
+                const isPaid = !hasCredit && paidAmount > 0;
+                const activeReceipt = receipts.find((r: any) => r.status === 'Credit') || receipts[0];
+
+                return (
+                  <div
+                    key={ref.id}
+                    onClick={() => activeReceipt && openReceiptDetails(activeReceipt, ref.ref_number)}
+                    className={`px-1 py-4 flex flex-col gap-3 transition-colors hover:bg-slate-50/80 ${
+                      activeReceipt ? 'cursor-pointer active:bg-slate-50' : ''
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        {!isPaid && (
+                          <input
+                            type="checkbox"
+                            checked={selectedRefIds.includes(ref.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedRefIds(prev => [...prev, ref.id]);
+                              } else {
+                                setSelectedRefIds(prev => prev.filter(id => id !== ref.id));
+                              }
+                            }}
+                            className="rounded border-slate-300 text-teal-650 focus:ring-teal-500 cursor-pointer h-3.5 w-3.5"
+                          />
+                        )}
+                        <span className="font-black text-xs text-teal-650">{ref.ref_number}</span>
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        {isPaid ? (
+                          <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-100 px-2.5 py-1 rounded-full font-black uppercase text-[9px] cursor-pointer" onClick={() => openReceiptDetails(activeReceipt, ref.ref_number)}>
+                            <CheckCircle2 className="h-2.5 w-2.5" /> Paid (${paidAmount.toFixed(2)})
+                          </span>
+                        ) : hasCredit ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full font-black uppercase text-[9px] cursor-pointer" onClick={() => openReceiptDetails(activeReceipt, ref.ref_number)}>
+                              <AlertCircle className="h-2.5 w-2.5" /> Deyn: ${creditAmount.toFixed(2)}
+                            </span>
+                            <button
+                              onClick={() => openPayDebtDialog(ref)}
+                              className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[9px] py-0.5 px-2 rounded-xl shadow-sm cursor-pointer transition-colors"
+                            >
+                              Pay Debt
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => openPayDialog(ref.id, ref.ref_number, ref.subject)}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] py-1 px-3.5 rounded-xl shadow-sm cursor-pointer transition-colors"
+                          >
+                            Pay Now
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="min-w-0 truncate font-extrabold text-slate-800">{ref.subject}</span>
+                      <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold text-slate-500">
+                        <Calendar className="h-3 w-3" />
+                        {ref.issue_date ? new Date(ref.issue_date).toLocaleDateString('so-SO') : '-'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+                </div>
+              </div>
+              ))}
+              </>
+            )}
+          </div>
+        </>
+      ) : (
+        /* Office Expenses list */
+        <div className="space-y-4">
+          <div className="flex justify-between items-center px-1">
+            <h4 className="font-extrabold text-sm text-slate-700">Liiska Kharashyada (Expense List)</h4>
+            <button
+              onClick={openExpenseDialog}
+              className="flex items-center gap-1 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm cursor-pointer transition-colors"
+            >
+              <Plus className="h-4 w-4" /> Add Expense
+            </button>
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-hidden border border-slate-200/80 rounded-3xl bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase">
+                    <th className="px-6 py-4">S/N</th>
+                    <th className="px-6 py-4">Description</th>
+                    <th className="px-6 py-4">Date</th>
+                    <th className="px-6 py-4 text-center">Qty</th>
+                    <th className="px-6 py-4">Amount</th>
+                    <th className="px-6 py-4">Total</th>
+                    <th className="px-6 py-4">Created By</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100/60 bg-white">
+                  {sortedExpenses.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-12 text-center text-slate-400 italic">
+                        Kharashyo lama hayo.
+                      </td>
+                    </tr>
+                  ) : (
+                    (groupedExpenses ?? [{ key: 'all', label: '', items: sortedExpenses }]).map((group) => (
+                      <React.Fragment key={group.key}>
+                        {expenseGroupBy !== 'none' && (
+                          <tr>
+                            <td colSpan={7} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                              {group.label}
+                            </td>
+                          </tr>
+                        )}
+                        {group.items.map((e) => (
+                          <tr key={e.id} className="hover:bg-slate-50/80 transition-all">
+                            <td className="px-6 py-4 font-black text-slate-400">
+                              #{expenseSerial.get(e.id)}
+                            </td>
+                            <td className="px-6 py-4 font-bold text-slate-800">
+                              {e.description}
+                            </td>
+                            <td className="px-6 py-4 text-slate-500">
+                              {e.expense_date ? new Date(e.expense_date).toLocaleDateString('so-SO') : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-center font-bold text-slate-700">
+                              {e.qty}
+                            </td>
+                            <td className="px-6 py-4 font-bold text-slate-700">
+                              ${parseFloat(e.amount.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-6 py-4 font-black text-rose-600 text-sm">
+                              ${parseFloat(e.total.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="inline-flex px-2.5 py-0.5 rounded-full bg-slate-50 border border-slate-150 text-slate-500 text-[10px] font-extrabold">
+                                {e.created_by || 'Admin'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile List View */}
+          <div className="md:hidden">
+            {sortedExpenses.length > 0 && (
+              <div className="grid grid-cols-[36px_1fr_auto] items-center gap-3 border-b border-slate-200 px-1 py-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+                <span>#</span>
+                <span>Description</span>
+                <span>Total</span>
+              </div>
+            )}
+            {sortedExpenses.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 italic">
+                Kharashyo lama hayo.
+              </div>
+            ) : (
+              (groupedExpenses ?? [{ key: 'all', label: '', items: sortedExpenses }]).map((group) => (
+                <div key={group.key}>
+                  {expenseGroupBy !== 'none' && (
+                    <div className="px-1 pb-1.5 pt-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
+                      {group.label}
+                    </div>
+                  )}
+                  <div className="divide-y divide-slate-100/60">
+                    {group.items.map((e) => (
+                      <div key={e.id} className="grid grid-cols-[36px_1fr_auto] items-center gap-3 px-1 py-3.5">
+                        <span className="truncate text-xs font-black text-slate-400">#{expenseSerial.get(e.id)}</span>
+                        <div className="min-w-0">
+                          <h4 className="truncate text-xs font-extrabold text-slate-800">{e.description}</h4>
+                          <p className="mt-0.5 flex items-center gap-1 truncate text-[9px] text-slate-500">
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            <span>{e.expense_date ? new Date(e.expense_date).toLocaleDateString('so-SO') : '-'}</span>
+                            <span>•</span>
+                            <span>{e.qty} × ${parseFloat(e.amount.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                          </p>
+                        </div>
+                        <span className="justify-self-end whitespace-nowrap text-xs font-black text-rose-600">
+                          ${parseFloat(e.total.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Pay Modal (Create Receipt) */}
+      {showPayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center px-6 py-4 bg-slate-50 border-b border-slate-200">
+              <h3 className="font-extrabold text-slate-800 flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-emerald-600" />
+                Diiwaangeli Resiidhka (Pay Receipt)
+              </h3>
+              <button
+                onClick={closePayDialog}
+                className="text-slate-400 hover:text-slate-650 p-2 rounded-xl hover:bg-slate-105 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveReceipt} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Receipt No</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={payReceiptNo}
+                    className="w-full rounded-xl bg-slate-100 border border-slate-200 px-4 py-3.5 text-sm text-slate-500 font-extrabold focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Sumad (Ref)</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={payRefNumber}
+                    className="w-full rounded-xl bg-slate-100 border border-slate-200 px-4 py-3.5 text-sm text-teal-600 font-extrabold focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Faahfaahin (Details)</label>
+                <input
+                  type="text"
+                  required
+                  value={payDetails}
+                  onChange={(e) => setPayDetails(e.target.value)}
+                  className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3.5 text-sm text-slate-900 focus:outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={payDate}
+                    onChange={(e) => setPayDate(e.target.value)}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-900 focus:outline-none"
+                  />
+                </div>
+                {selectedRefIds.length === 1 && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Lacagta (Amount USD)</label>
+                    <input
+                      type="number"
+                      required
+                      step="0.01"
+                      value={bulkAmounts[selectedRefIds[0]] || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setBulkAmounts(prev => ({
+                          ...prev,
+                          [selectedRefIds[0]]: val
+                        }));
+                      }}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none"
+                      placeholder="0.00"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {selectedRefIds.length > 1 && (
+                <div className="border border-slate-150 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <label className="block text-xs font-extrabold text-slate-500 uppercase">Qaybta Lacagaha ee References-ka</label>
+                  <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                    {referencesWithReceipts.filter(r => selectedRefIds.includes(r.id)).map(ref => (
+                      <div key={ref.id} className="flex justify-between items-center gap-4 bg-white border border-slate-200/60 p-3 rounded-xl shadow-sm">
+                        <div className="text-xs">
+                          <span className="font-black text-teal-650 block">{ref.ref_number}</span>
+                          <span className="text-[10px] text-slate-450 font-semibold truncate block max-w-[180px]">{ref.subject}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-xs text-slate-405 font-extrabold">$</span>
+                          <input
+                            type="number"
+                            required
+                            step="0.01"
+                            value={bulkAmounts[ref.id] || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setBulkAmounts(prev => ({
+                                ...prev,
+                                [ref.id]: val
+                              }));
+                            }}
+                            onWheel={(e) => e.currentTarget.blur()}
+                            className="w-24 rounded-lg bg-slate-50 border border-slate-200 px-2.5 py-1.5 text-xs text-slate-900 font-bold focus:outline-none text-right"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-between items-center border-t border-slate-200 pt-3 text-xs font-black text-slate-700">
+                    <span>Total Amount:</span>
+                    <span className="text-sm text-teal-600">
+                      ${Object.values(bulkAmounts).reduce((sum, val) => sum + (parseFloat(val) || 0), 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Status</label>
+                  <select
+                    value={payStatus}
+                    onChange={(e) => setPayStatus(e.target.value as any)}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3.5 text-sm text-slate-900 focus:outline-none cursor-pointer"
+                  >
+                    <option value="Paid">Paid</option>
+                    <option value="Credit">Credit</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Payment Mode</label>
+                  <select
+                    value={payMode}
+                    onChange={(e) => setPayMode(e.target.value as any)}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3.5 text-sm text-slate-900 focus:outline-none cursor-pointer"
+                  >
+                    <option value="EVC Plus">EVC Plus</option>
+                    <option value="eDahab">eDahab</option>
+                    <option value="Jeeb">Jeeb</option>
+                    <option value="Cash">Cash</option>
+                  </select>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingReceipt}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-100 disabled:text-slate-400 px-5 py-4 font-bold text-white shadow-md cursor-pointer transition-all active:scale-95 text-sm"
+              >
+                {savingReceipt ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <span>PRINT & SAVE RECEIPT</span>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* View Receipt Details Modal */}
+      {selectedReceipt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md overflow-y-auto">
+          <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Header Accent Bar & Close Button */}
+            <div className={`relative pt-7 pb-4 px-6 text-center border-b ${
+              selectedReceipt.status === 'Credit' 
+                ? 'bg-gradient-to-b from-amber-500/10 via-amber-500/5 to-transparent border-amber-100/80' 
+                : 'bg-gradient-to-b from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-100/80'
+            }`}>
+              <button
+                onClick={() => setSelectedReceipt(null)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-2 rounded-full hover:bg-slate-100/80 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              {/* Status Icon with Glowing Effect */}
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl shadow-sm mb-3 transition-transform hover:scale-105">
+                {selectedReceipt.status === 'Credit' ? (
+                  <div className="bg-gradient-to-br from-amber-400 to-amber-600 text-white p-3.5 rounded-2xl shadow-lg shadow-amber-500/30">
+                    <AlertCircle className="h-8 w-8" />
+                  </div>
+                ) : (
+                  <div className="bg-gradient-to-br from-emerald-400 to-emerald-600 text-white p-3.5 rounded-2xl shadow-lg shadow-emerald-500/30">
+                    <CheckCircle2 className="h-8 w-8" />
+                  </div>
+                )}
+              </div>
+
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">Xogta Resiidhka</h3>
+              <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                Tixraac: <span className="text-teal-600 font-extrabold">{selectedReceipt.ref_number || 'N/A'}</span>
+              </p>
+              
+              <div className="mt-3 flex justify-center">
+                {selectedReceipt.status === 'Credit' ? (
+                  <span className="inline-flex items-center gap-1.5 bg-amber-100/80 text-amber-800 border border-amber-300/80 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-xs">
+                    <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    Deyn / Credit
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 bg-emerald-100/80 text-emerald-800 border border-emerald-300/80 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-xs">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                    Waa la Bixiyey / Paid
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Receipt Digital Card Body */}
+            <div className="px-6 py-5 space-y-4">
+              {/* Receipt Ticket Structure */}
+              <div className="bg-slate-50 border border-slate-200/90 rounded-3xl p-5 shadow-xs relative overflow-hidden">
+                
+                {/* Visual Top Pattern */}
+                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-teal-500 via-amber-500 to-emerald-500 opacity-30"></div>
+
+                {/* Amount Row */}
+                <div className="text-center py-3 border-b border-dashed border-slate-300">
+                  <span className="block text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">
+                    Wadarta Lacagta (Amount USD)
+                  </span>
+                  <div className={`text-4xl font-black tracking-tight ${
+                    selectedReceipt.status === 'Credit' ? 'text-amber-600' : 'text-emerald-600'
+                  }`}>
+                    ${parseFloat(selectedReceipt.amount.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+
+                {/* Receipt Fields Grid */}
+                <div className="space-y-3 pt-4 text-xs">
+                  <div className="flex justify-between items-center gap-4">
+                    <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Receipt No</span>
+                    <span className="font-mono font-black text-slate-800 bg-white border border-slate-200 px-3 py-1 rounded-xl shadow-2xs">
+                      {selectedReceipt.receipt_no}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center gap-4">
+                    <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Sumad (Ref)</span>
+                    <span className="font-mono font-black text-teal-650 bg-teal-50/80 border border-teal-200/70 px-3 py-1 rounded-xl shadow-2xs">
+                      {selectedReceipt.ref_number || 'N/A'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center gap-4">
+                    <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Payment Date</span>
+                    <span className="font-bold text-slate-700 bg-white border border-slate-200 px-3 py-1 rounded-xl shadow-2xs">
+                      {selectedReceipt.payment_date ? new Date(selectedReceipt.payment_date).toLocaleDateString('so-SO') : '-'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center gap-4">
+                    <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Paid Via</span>
+                    <span className="inline-flex px-3 py-1 rounded-xl bg-slate-900 text-white font-black uppercase text-[10px] shadow-xs">
+                      {selectedReceipt.payment_mode || 'Cash'}
+                    </span>
+                  </div>
+
+                  <div className="border-t border-slate-200/80 pt-3 mt-2">
+                    <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-extrabold mb-1.5">
+                      Faahfaahinta (Details)
+                    </span>
+                    <div className="font-bold text-slate-700 bg-white border border-slate-200 p-3.5 rounded-2xl text-xs leading-relaxed text-left shadow-2xs">
+                      {selectedReceipt.details || 'Bixinta lacagta'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-4 sm:px-6 sm:py-4.5 border-t border-slate-150 bg-slate-50/80 flex flex-col sm:flex-row gap-2.5">
+              <button
+                onClick={() => window.print()}
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-2xs border border-slate-200 transition-all active:scale-95"
+              >
+                <Printer className="h-3.5 w-3.5 text-slate-500" />
+                <span>PRINT RECEIPT</span>
+              </button>
+
+              {selectedReceipt.status === 'Credit' && (
+                <button
+                  onClick={() => {
+                    const currentSelected = selectedReceipt;
+                    setSelectedReceipt(null);
+                    const parentRef = referencesWithReceipts.find(
+                      r => r.id === currentSelected.reference_id || r.ref_number === currentSelected.ref_number
+                    );
+                    if (parentRef) {
+                      openPayDebtDialog(parentRef);
+                    } else {
+                      openPayDebtDialog({
+                        id: currentSelected.reference_id,
+                        ref_number: currentSelected.ref_number,
+                        subject: currentSelected.details || 'Bixinta deynta',
+                        receipts: [currentSelected]
+                      });
+                    }
+                  }}
+                  disabled={updatingCredit}
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-sm shadow-amber-500/20 transition-all hover:-translate-y-0.5 active:scale-95 disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-400"
+                >
+                  <CreditCard className="h-3.5 w-3.5" />
+                  <span>BIXI DEYNTA (PAY DEBT)</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pay Debt Modal (Partial or Full Payment) */}
+      {showPayDebtModal && payDebtRef && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Header */}
+            <div className="flex justify-between items-center px-6 py-4 bg-amber-50 border-b border-amber-200/60">
+              <div className="flex items-center gap-2.5">
+                <div className="bg-amber-500 text-white p-2 rounded-xl shadow-xs">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-base">
+                    Bixinta Deynta (Pay Debt)
+                  </h3>
+                  <p className="text-[11px] font-semibold text-slate-500">
+                    Sumad: <span className="text-teal-600 font-extrabold">{payDebtRef.ref_number}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPayDebtModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-white/60 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Summary Box */}
+            <div className="px-6 pt-5 pb-2">
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 grid grid-cols-2 gap-4 text-center">
+                <div>
+                  <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Deynta Lagu Leeyahay</span>
+                  <span className="text-xl font-black text-amber-600">
+                    ${payDebtTotalCredit.toFixed(2)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Waa La Bixiyey Hada</span>
+                  <span className="text-xl font-black text-emerald-600">
+                    ${payDebtPaidSoFar.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveDebtPayment} className="p-6 space-y-4 pt-2">
+              <div>
+                <label className="block text-xs font-extrabold text-slate-700 mb-1.5 uppercase">
+                  Lacagta Hada La Bixinayo (Amount to Pay USD)
+                </label>
+                <input
+                  type="number"
+                  required
+                  step="0.01"
+                  max={payDebtTotalCredit}
+                  value={payDebtAmount}
+                  onChange={(e) => setPayDebtAmount(e.target.value)}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  className="w-full rounded-2xl bg-white border-2 border-amber-300 focus:border-amber-500 px-4 py-3.5 text-lg font-black text-slate-900 shadow-xs focus:outline-none"
+                  placeholder="0.00"
+                />
+                
+                {/* Dynamic Payment Status Alert */}
+                {(() => {
+                  const val = parseFloat(payDebtAmount) || 0;
+                  const remaining = payDebtTotalCredit - val;
+                  if (val > 0 && remaining <= 0.001) {
+                    return (
+                      <div className="mt-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-xs font-bold flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                        <span>Deynta oo dhan waa la wada bixinayaa (Full Payment: ${val.toFixed(2)})</span>
+                      </div>
+                    );
+                  } else if (val > 0 && remaining > 0) {
+                    return (
+                      <div className="mt-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-800 text-xs font-bold flex items-center justify-between">
+                        <span>⚠ Qeyb ka mid ah deynta ayaa la bixinayaa</span>
+                        <span className="bg-amber-200/60 px-2.5 py-1 rounded-lg text-amber-900 font-extrabold">
+                          Deyn Harsan: ${remaining.toFixed(2)}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Payment Mode</label>
+                  <select
+                    value={payDebtMode}
+                    onChange={(e) => setPayDebtMode(e.target.value as any)}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-900 font-bold focus:outline-none cursor-pointer"
+                  >
+                    <option value="EVC Plus">EVC Plus</option>
+                    <option value="eDahab">eDahab</option>
+                    <option value="Jeeb">Jeeb</option>
+                    <option value="Cash">Cash</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={payDebtDate}
+                    onChange={(e) => setPayDebtDate(e.target.value)}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-900 font-bold focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Faahfaahin (Details)</label>
+                <input
+                  type="text"
+                  value={payDebtDetails}
+                  onChange={(e) => setPayDebtDetails(e.target.value)}
+                  className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-900 focus:outline-none"
+                  placeholder="Tusaale: Bixinta deynta qeyb ahaan"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingDebtPayment}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:from-slate-200 disabled:to-slate-200 disabled:text-slate-400 px-4 py-3 font-extrabold text-xs text-white shadow-sm cursor-pointer transition-all active:scale-95"
+              >
+                {savingDebtPayment ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <span>KEYDI BIXINTA DEYNTA</span>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Expense Modal */}
+      {showExpenseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center px-6 py-4 bg-slate-50 border-b border-slate-200">
+              <h3 className="font-extrabold text-slate-800 flex items-center gap-2">
+                <TrendingDown className="h-5 w-5 text-rose-500" />
+                Ku Dar Kharash Cusub (Add Expense)
+              </h3>
+              <button
+                onClick={closeExpenseDialog}
+                className="text-slate-400 hover:text-slate-650 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveExpense} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Faahfaahinta (Description)</label>
+                <input
+                  type="text"
+                  required
+                  value={expDescription}
+                  onChange={(e) => setExpDescription(e.target.value)}
+                  className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none"
+                  placeholder="Tusaale: Billka Internet-ka ama Qalabka Xafiiska"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Tirada (Qty)</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    value={expQty}
+                    onChange={(e) => setExpQty(e.target.value)}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-900 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Qiimaha (Amount USD)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={expAmount}
+                    onChange={(e) => setExpAmount(e.target.value)}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Taariikhda</label>
+                  <input
+                    type="date"
+                    required
+                    value={expDate}
+                    onChange={(e) => setExpDate(e.target.value)}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-900 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Wadarta (Total)</label>
+                  <div className="w-full rounded-xl bg-rose-50 border border-rose-100 px-4 py-3 text-sm text-rose-600 font-extrabold flex items-center">
+                    <span>$</span>
+                    <span>{((parseInt(expQty) || 0) * (parseFloat(expAmount) || 0)).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingExpense}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-600 hover:bg-rose-500 disabled:bg-slate-100 disabled:text-slate-400 px-4 py-3.5 font-bold text-white shadow-md cursor-pointer transition-all active:scale-95"
+              >
+                {savingExpense ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <span>KEYDI KHARASHKA</span>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Bulk Pay Bar */}
+      {selectedRefIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-xl flex items-center gap-6 border border-slate-800 animate-in slide-in-from-bottom duration-250">
+          <span className="text-xs font-bold">
+            {selectedRefIds.length} {selectedRefIds.length === 1 ? 'tixraac ayaa la doortay' : 'tixraac ayaa la doortay'}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSelectedRefIds([])}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={openBulkPayDialog}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md transition-colors cursor-pointer"
+            >
+              Pay Selected
+            </button>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
