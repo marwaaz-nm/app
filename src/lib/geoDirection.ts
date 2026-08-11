@@ -50,10 +50,17 @@ export type BoundaryInfo = Partial<Record<CompassDirection, BoundarySide>>;
 
 // Builds the label text for a boundary side, e.g. "Waqooyi — 25m — Axmed". Falls back
 // to just the direction name when the survey record has no measurement/neighbor typed
-// in for that side yet, rather than showing blank or fabricated values.
-export function buildDirectionLabel(direction: CompassDirection, side?: BoundarySide): string {
+// in for that side yet, rather than showing blank or fabricated values. The technical
+// sketch already carries its own per-edge length numbers, so its direction labels pass
+// `includeMeasurement: false` to drop the redundant "25m" and keep just the direction
+// (plus neighbor, which isn't a measurement).
+export function buildDirectionLabel(
+  direction: CompassDirection,
+  side?: BoundarySide,
+  options?: { includeMeasurement?: boolean },
+): string {
   const parts = [DIRECTION_LABELS[direction]];
-  if (side?.val) parts.push(`${side.val}m`);
+  if (options?.includeMeasurement !== false && side?.val) parts.push(`${side.val}m`);
   if (side?.neighbor) parts.push(side.neighbor);
   return parts.join(' — ');
 }

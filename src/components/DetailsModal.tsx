@@ -2,12 +2,12 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Survey } from '@/types';
-import { 
-  X, 
-  Layers, 
-  FileSpreadsheet, 
-  Printer, 
+import { Survey, Reference } from '@/types';
+import {
+  X,
+  Layers,
+  FileSpreadsheet,
+  Printer,
   Download,
   Calendar,
   Clock,
@@ -18,11 +18,15 @@ import {
   Ruler,
   Hash,
   Maximize2,
-  Minimize2
+  Minimize2,
+  ChevronLeft,
+  ChevronRight,
+  Loader2
 } from 'lucide-react';
 import L from 'leaflet';
 import { useModal } from '@/context/ModalContext';
 import { useSettings } from '@/context/SettingsContext';
+import { supabase } from '@/lib/supabase';
 import { buildDirectionLabel, getDirectionFromCenter, parseDirectionPositions, type BoundaryInfo, type CompassDirection } from '@/lib/geoDirection';
 
 interface DetailsModalProps {
@@ -36,6 +40,33 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
   const [mounted, setMounted] = useState(false);
   const [isSatFullscreen, setIsSatFullscreen] = useState(false);
   const [isSketchFullscreen, setIsSketchFullscreen] = useState(false);
+  const [showRefPanel, setShowRefPanel] = useState(false);
+  const [linkedRefs, setLinkedRefs] = useState<Reference[]>([]);
+  const [linkedRefsLoading, setLinkedRefsLoading] = useState(false);
+
+  // Reference numbers (Nootaayo/Document Archive records) that were issued against this
+  // specific land parcel — `references.survey_id` is the link. Fetched whenever a
+  // different record is opened, independent of whether the side panel is visible yet, so
+  // the toggle button can show a count right away.
+  useEffect(() => {
+    if (!record?.id) {
+      setLinkedRefs([]);
+      return;
+    }
+    let cancelled = false;
+    setLinkedRefsLoading(true);
+    supabase
+      .from('references')
+      .select('id, ref_number, subject, status, issue_date, created_at')
+      .eq('survey_id', record.id)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (!error) setLinkedRefs((data as Reference[]) || []);
+        setLinkedRefsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [record?.id]);
 
   useEffect(() => {
     setMounted(true);
@@ -209,7 +240,9 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
   // placed spot (from `boundary_label_positions`) or the automatic fallback computed
   // above.
   const renderDirectionLabel = (direction: CompassDirection, position: L.LatLng, map: L.Map, boundaryInfo: BoundaryInfo, rotation = 0) => {
-    const label = buildDirectionLabel(direction, boundaryInfo[direction]);
+    // The sketch already prints a length number on every edge, so the direction label
+    // itself only needs the direction (and neighbor) — not a duplicate "Xm".
+    const label = buildDirectionLabel(direction, boundaryInfo[direction], { includeMeasurement: false });
     L.marker(position, {
       icon: L.divIcon({
         className: 'boundary-direction-label',
@@ -361,8 +394,6 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           fillColor: '#eab308',
           fillOpacity: 0.15
         }).addTo(satMap);
-
-        addBoundaryDirectionLabels(satMap, latlngs, mainBoundaryIndices, vertexCenter, boundaryInfo, manualPositions);
 
         L.control.zoom({ position: 'bottomright' }).addTo(satMap);
 
@@ -1026,7 +1057,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center md:p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
-      <div className="w-full h-full md:h-auto md:max-w-6xl bg-white border-0 md:border md:border-slate-100 md:rounded-3xl overflow-hidden shadow-2xl flex flex-col my-0 md:my-8 animate-in fade-in md:zoom-in-95 duration-200 text-slate-800">
+      <div className="relative w-full h-full md:h-auto md:max-w-6xl bg-white border-0 md:border md:border-slate-100 md:rounded-3xl overflow-hidden shadow-2xl flex flex-col my-0 md:my-8 animate-in fade-in md:zoom-in-95 duration-200 text-slate-800">
         
         {/* Modal Header */}
         <div className="flex justify-between items-center px-4 md:px-6 py-4 bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
@@ -1040,6 +1071,21 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
+            <button
+              onClick={() => setShowRefPanel((prev) => !prev)}
+              className={`relative flex items-center gap-1.5 text-xs font-bold py-2 md:py-2.5 px-3 md:px-4 rounded-xl shadow-md cursor-pointer transition-all active:scale-95 shrink-0 ${
+                showRefPanel ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Hash className="h-3.5 w-3.5 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">REF NUMBERS</span>
+              <span className="sm:hidden">REF</span>
+              {linkedRefs.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-black text-white">
+                  {linkedRefs.length}
+                </span>
+              )}
+            </button>
             <button
               onClick={handlePrintPDF}
               className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold py-2 md:py-2.5 px-3 md:px-4 rounded-xl shadow-md cursor-pointer transition-all active:scale-95 shrink-0"
@@ -1303,6 +1349,81 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
           </div>
         </div>
+
+        {/* Reference-numbers side panel: every Nootaayo reference (Document Archive
+            entry) issued against this specific land parcel, linked via
+            references.survey_id. Slides in from the right instead of taking permanent
+            space, since most records will have few or none. */}
+        <div
+          className={`absolute inset-y-0 right-0 z-20 flex w-full max-w-xs flex-col border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ${
+            showRefPanel ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 text-white">
+                <Hash className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-xs font-black text-slate-800">Ref Numbers</p>
+                <p className="text-[10px] font-semibold text-slate-500">Dhulkan lagu isticmaalay</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowRefPanel(false)}
+              className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              aria-label="Xir"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            {linkedRefsLoading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-xs font-semibold text-slate-400">
+                <Loader2 className="h-4 w-4 animate-spin" /> Sug fadlan...
+              </div>
+            ) : linkedRefs.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-10 text-center">
+                <Hash className="h-6 w-6 text-slate-300" />
+                <p className="text-xs font-semibold text-slate-400">Weli ma jiro ref number dhulkan lagu isticmaalay.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {linkedRefs.map((ref) => (
+                  <div key={ref.id} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-sm font-black text-slate-900">{ref.ref_number}</span>
+                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black ${
+                        ref.status === 'Completed' ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : ref.status === 'Picked Up' ? 'border-violet-200 bg-violet-50 text-violet-700'
+                        : 'border-amber-200 bg-amber-50 text-amber-700'
+                      }`}>
+                        {ref.status}
+                      </span>
+                    </div>
+                    <p className="mt-1.5 text-xs font-semibold text-slate-600">{ref.subject}</p>
+                    <p className="mt-1 text-[10px] font-medium text-slate-400">
+                      {ref.issue_date ? new Date(ref.issue_date).toLocaleDateString('so-SO') : (ref.created_at ? new Date(ref.created_at).toLocaleDateString('so-SO') : '-')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Tab handle to reopen the panel once closed, so it's discoverable without
+            re-reading the header button. */}
+        {!showRefPanel && (
+          <button
+            onClick={() => setShowRefPanel(true)}
+            className="absolute right-0 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 rounded-l-xl border border-r-0 border-slate-200 bg-white px-1.5 py-3 text-slate-500 shadow-md hover:bg-slate-50 hover:text-slate-800"
+            aria-label="Fur Ref Numbers"
+            title="Ref Numbers"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </div>,
     document.body

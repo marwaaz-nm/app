@@ -604,7 +604,9 @@ export default function MiniMap({
     latlng: L.LatLng,
     rotation = 0,
   ) => {
-    const label = buildDirectionLabel(direction, boundaryInfoRef.current?.[direction]);
+    // The sketch already has its own per-edge length numbers, so the direction label
+    // itself only needs the direction (and neighbor, if typed in) — not a duplicate "Xm".
+    const label = buildDirectionLabel(direction, boundaryInfoRef.current?.[direction], { includeMeasurement: false });
     const icon = L.divIcon({
       className: 'boundary-direction-marker',
       html: `
