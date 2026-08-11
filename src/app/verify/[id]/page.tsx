@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from 'react';
 import dynamic from 'next/dynamic';
 import { useSettings } from '@/context/SettingsContext';
-import { FileText, Calendar, MapPin, Loader2, ShieldCheck, ShieldX, Map as MapIcon, Compass, ArrowLeft } from 'lucide-react';
+import { FileText, Calendar, MapPin, Loader2, ShieldCheck, ShieldX, Map as MapIcon, Compass, ArrowLeft, Download } from 'lucide-react';
 
 // Leaflet touches `window` at import time, so it must never be pulled into
 // the server-rendered bundle for this page — dynamic + ssr:false keeps it
@@ -46,6 +46,7 @@ type PublicReference = {
   ref_number: string;
   subject: string;
   issue_date?: string;
+  archive_file_name?: string | null;
   surveys: PublicSurvey | null;
 };
 
@@ -143,6 +144,16 @@ export default function PublicReferencePage({ params }: { params: Promise<{ id: 
                   </div>
                 </div>
               </div>
+
+              {reference.archive_file_name && (
+                <a
+                  href={`/api/public/references/${id}/document`}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-xs font-extrabold text-teal-700 shadow-sm transition-all hover:bg-teal-100 active:scale-95"
+                >
+                  <Download className="h-4 w-4" />
+                  Soo Deji Dukumiintiga Asalka ah (PDF)
+                </a>
+              )}
 
               {reference.surveys && (
                 <div className="rounded-2xl border border-teal-100 bg-teal-50/40 p-5 space-y-4">

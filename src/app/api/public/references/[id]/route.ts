@@ -29,6 +29,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ref_number,
       subject,
       issue_date,
+      archive_file_name,
       surveys (
         serial_no,
         owner_name,

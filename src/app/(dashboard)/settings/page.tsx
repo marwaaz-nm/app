@@ -7,12 +7,14 @@ import { useSettings } from '@/context/SettingsContext';
 import { useModal } from '@/context/ModalContext';
 import { formatReferenceNumber } from '@/lib/numbering';
 import DriveConnectionsPanel from '@/components/DriveConnectionsPanel';
+import ArchiveDriveConfigPanel from '@/components/ArchiveDriveConfigPanel';
 import {
   Settings as SettingsIcon,
   UserCircle,
   Building2,
   ListChecks,
   Cloud,
+  Archive,
   Loader2,
   Save,
   X,
@@ -20,7 +22,7 @@ import {
   KeyRound,
 } from 'lucide-react';
 
-type Tab = 'account' | 'organization' | 'options' | 'drive';
+type Tab = 'account' | 'organization' | 'options' | 'drive' | 'archive';
 
 async function authenticatedFetch(path: string, options: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -297,6 +299,7 @@ export default function SettingsPage() {
     { id: 'organization', label: 'Nootaayo (Notary)', icon: Building2, adminOnly: true },
     { id: 'options', label: 'Liisaska (Options)', icon: ListChecks, adminOnly: true },
     { id: 'drive', label: 'Drive Connections', icon: Cloud, adminOnly: true, hidden: !canManageDriveConnections },
+    { id: 'archive', label: 'Document Archive', icon: Archive, adminOnly: true },
   ];
 
   return (
@@ -543,6 +546,8 @@ export default function SettingsPage() {
       )}
 
       {tab === 'drive' && canManageDriveConnections && <DriveConnectionsPanel />}
+
+      {tab === 'archive' && isAdmin && <ArchiveDriveConfigPanel />}
     </div>
   );
 }

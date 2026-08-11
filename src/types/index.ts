@@ -85,6 +85,9 @@ export interface Reference {
   issue_date?: string;
   created_at?: string;
   created_by?: string;
+  archive_drive_file_id?: string | null;
+  archive_file_name?: string | null;
+  archive_uploaded_at?: string | null;
   // Expanded relation from join
   surveys?: {
     id: number;

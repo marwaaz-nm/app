@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Archive,
   ArrowLeftRight,
   BarChart3,
   ChartNoAxesCombined,
@@ -30,6 +31,7 @@ const primaryNavigation = [
   { href: '/financials', label: 'Financials', mobileLabel: 'Xisaab', icon: Wallet },
   { href: '/drive-files', label: 'Diiwaanka Drive', mobileLabel: 'Drive', icon: FolderSearch },
   { href: '/customers', label: 'Macmiisha', mobileLabel: 'Macmiil', icon: Users },
+  { href: '/document-archive', label: 'Document Archive', mobileLabel: 'Archive', icon: Archive },
   { href: '/reports', label: 'Reports & Export', mobileLabel: 'Reports', icon: BarChart3 },
   { href: '/settings', label: 'Settings', mobileLabel: 'Settings', icon: Settings, alwaysVisible: true },
 ];

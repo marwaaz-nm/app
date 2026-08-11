@@ -19,7 +19,7 @@ export default function DashboardLayout({
   // Route protection based on permitted_menus
   useEffect(() => {
     if (!loading && user && profile && profile.role !== 'Admin' && profile.role !== 'SuperAdmin') {
-      const standardRoutes = ['/references', '/explorer', '/records', '/transfers', '/financials', '/reports', '/drive-files', '/customers'];
+      const standardRoutes = ['/references', '/explorer', '/records', '/transfers', '/financials', '/reports', '/drive-files', '/customers', '/document-archive'];
       const currentBaseRoute = standardRoutes.find(route => pathname.startsWith(route));
       
       if (currentBaseRoute) {

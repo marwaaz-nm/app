@@ -22,7 +22,8 @@ import {
   Wallet,
   Shield,
   FolderSearch,
-  Users
+  Users,
+  Archive
 } from 'lucide-react';
 
 export default function UsersPage() {
@@ -53,7 +54,8 @@ export default function UsersPage() {
     { href: '/financials', label: 'Financials (Xisaabta)' },
     { href: '/reports', label: 'Reports & Export (Warbixin)' },
     { href: '/drive-files', label: 'Diiwaanka Drive (Drive Files)' },
-    { href: '/customers', label: 'Macmiisha (Customers)' }
+    { href: '/customers', label: 'Macmiisha (Customers)' },
+    { href: '/document-archive', label: 'Document Archive' }
   ];
   const AVAILABLE_ACTIONS = [
     { id: 'survey.create', label: 'Abuur survey' },
@@ -75,7 +77,8 @@ export default function UsersPage() {
     '/financials',
     '/reports',
     '/drive-files',
-    '/customers'
+    '/customers',
+    '/document-archive'
   ]);
   const [permittedActions, setPermittedActions] = useState<string[]>([
     'survey.create', 'survey.edit', 'survey.submit', 'reference.manage', 'transfer.create', 'finance.manage', 'report.view'
@@ -141,7 +144,8 @@ export default function UsersPage() {
       '/financials',
       '/reports',
       '/drive-files',
-      '/customers'
+      '/customers',
+      '/document-archive'
     ]);
     setPermittedActions(['survey.create', 'survey.edit', 'survey.submit', 'reference.manage', 'transfer.create', 'finance.manage', 'report.view']);
     setError(null);
@@ -157,7 +161,7 @@ export default function UsersPage() {
 
     const userMenus = Array.isArray(u.permitted_menus) && u.permitted_menus.length > 0
       ? u.permitted_menus
-      : ['/references', '/explorer', '/records', '/transfers', '/financials', '/reports', '/drive-files', '/customers'];
+      : ['/references', '/explorer', '/records', '/transfers', '/financials', '/reports', '/drive-files', '/customers', '/document-archive'];
     setPermittedMenus(userMenus);
 
     const userActions = Array.isArray(u.permitted_actions) && u.permitted_actions.length > 0
@@ -334,7 +338,8 @@ export default function UsersPage() {
                                               menu === '/financials' ? 'Financials' :
                                               menu === '/reports' ? 'Reports' :
                                               menu === '/drive-files' ? 'Drive Files' :
-                                              menu === '/customers' ? 'Customers' : menu;
+                                              menu === '/customers' ? 'Customers' :
+                                              menu === '/document-archive' ? 'Document Archive' : menu;
                                 return (
                                   <span key={menu} className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[9px] font-bold text-slate-600">
                                     {label}
@@ -533,7 +538,8 @@ export default function UsersPage() {
                             menu.href === '/transfers' ? ArrowLeftRight :
                             menu.href === '/financials' ? Wallet :
                             menu.href === '/drive-files' ? FolderSearch :
-                            menu.href === '/customers' ? Users : Shield;
+                            menu.href === '/customers' ? Users :
+                            menu.href === '/document-archive' ? Archive : Shield;
 
                           return (
                             <button
