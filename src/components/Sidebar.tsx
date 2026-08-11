@@ -28,37 +28,37 @@ type NavItem = { href: string; label: string; mobileLabel: string; icon: typeof 
 // 11+ menu items scannable instead of a wall of undifferentiated links.
 const navigationGroups: { label: string; items: NavItem[] }[] = [
   {
-    label: 'Guud',
+    label: 'Overview',
     items: [
       { href: '/dashboard', label: 'Dashboard', mobileLabel: 'Home', icon: ChartNoAxesCombined, alwaysVisible: true },
-      { href: '/references', label: 'References', mobileLabel: 'Tixraac', icon: Files },
+      { href: '/references', label: 'References', mobileLabel: 'Refs', icon: Files },
     ],
   },
   {
-    label: 'Sahannada Dhulka',
+    label: 'Land Surveys',
     items: [
-      { href: '/explorer', label: 'Map Explorer', mobileLabel: 'Maab', icon: Compass },
-      { href: '/records', label: 'Survey Records', mobileLabel: 'Sahan', icon: Layers },
-      { href: '/transfers', label: 'Wareejin Dhul', mobileLabel: 'Wareejin', icon: ArrowLeftRight },
+      { href: '/explorer', label: 'Map Explorer', mobileLabel: 'Explorer', icon: Compass },
+      { href: '/records', label: 'Survey Records', mobileLabel: 'Surveys', icon: Layers },
+      { href: '/transfers', label: 'Land Transfers', mobileLabel: 'Transfers', icon: ArrowLeftRight },
     ],
   },
   {
-    label: 'Xogta & Dukumentiyada',
+    label: 'Data & Documents',
     items: [
-      { href: '/drive-files', label: 'Diiwaanka Drive', mobileLabel: 'Drive', icon: FolderSearch },
-      { href: '/customers', label: 'Macmiisha', mobileLabel: 'Macmiil', icon: Users },
+      { href: '/drive-files', label: 'Drive Files', mobileLabel: 'Drive', icon: FolderSearch },
+      { href: '/customers', label: 'Customers', mobileLabel: 'Customers', icon: Users },
       { href: '/document-archive', label: 'Document Archive', mobileLabel: 'Archive', icon: Archive },
     ],
   },
   {
-    label: 'Maaliyadda & Warbixinta',
+    label: 'Finance & Reports',
     items: [
-      { href: '/financials', label: 'Financials', mobileLabel: 'Xisaab', icon: Wallet },
+      { href: '/financials', label: 'Financials', mobileLabel: 'Finance', icon: Wallet },
       { href: '/reports', label: 'Reports & Export', mobileLabel: 'Reports', icon: BarChart3 },
     ],
   },
   {
-    label: 'Maamulka',
+    label: 'Administration',
     items: [
       { href: '/settings', label: 'Settings', mobileLabel: 'Settings', icon: Settings, alwaysVisible: true },
       { href: '/users', label: 'User Control', mobileLabel: 'Staff', icon: Lock },
