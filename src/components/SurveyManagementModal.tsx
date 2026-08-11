@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import type { Survey, SurveyDocument, SurveyRevision, SurveyStatus } from '@/types';
+import type { BoundaryInfo } from '@/lib/geoDirection';
 import { Archive, CheckCircle2, Clock3, FileText, History, Loader2, RotateCcw, Save, Send, ShieldCheck, Trash2, Upload, X, XCircle } from 'lucide-react';
 
 const MiniMap = dynamic(() => import('@/components/MiniMap'), {
@@ -253,6 +254,12 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
                 onGpsChange={(value) => setDraft((prev) => ({ ...prev, gps_location: value }))}
                 polygonValue={String(draft.polygon_boundary ?? '')}
                 onPolygonChange={(value) => setDraft((prev) => ({ ...prev, polygon_boundary: value }))}
+                boundaryInfo={{
+                  N: { val: draft.boundary_w_val, neighbor: draft.boundary_w_neighbor },
+                  E: { val: draft.boundary_b_val, neighbor: draft.boundary_b_neighbor },
+                  S: { val: draft.boundary_k_val, neighbor: draft.boundary_k_neighbor },
+                  W: { val: draft.boundary_g_val, neighbor: draft.boundary_g_neighbor },
+                } as BoundaryInfo}
                 onSketchDetailsChange={(value) => setDraft((prev) => ({
                   ...prev,
                   sketch_dimensions: value || undefined,

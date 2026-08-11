@@ -23,6 +23,7 @@ import {
 import L from 'leaflet';
 import { useModal } from '@/context/ModalContext';
 import { useSettings } from '@/context/SettingsContext';
+import { buildDirectionLabel, getDirectionFromCenter, type BoundaryInfo } from '@/lib/geoDirection';
 
 interface DetailsModalProps {
   record: Survey | null;
@@ -101,9 +102,8 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
   };
 
   // Helper to add dimension markers to the sketch map
-  const addSketchDimension = (start: L.LatLng, end: L.LatLng, map: L.Map, allCoords: L.LatLng[], showDirection = true) => {
+  const addSketchDimension = (start: L.LatLng, end: L.LatLng, map: L.Map, allCoords: L.LatLng[]) => {
     const dist = map.distance(start, end).toFixed(1);
-    const mid = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
 
     let angle = Math.atan2(end.lat - start.lat, end.lng - start.lng) * 180 / Math.PI;
     if (angle > 90 || angle < -90) { angle += 180; }
@@ -138,6 +138,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
     let oy = pLat * offset;
 
     // Check if the offset midpoint is inside the polygon; if so, flip it to the outside
+    const mid = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
     const testMid = L.latLng(mid.lat + oy, mid.lng + ox);
     if (isPointInPolygon(testMid, allCoords)) {
       ox = -ox;
@@ -148,11 +149,6 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
     const p2 = L.latLng(end.lat + oy, end.lng + ox);
     const labelPos = L.latLng((p1.lat + p2.lat) / 2, (p1.lng + p2.lng) / 2);
 
-    // Position for the direction letter - further outward so they never overlap
-    const ly = oy * 1.95;
-    const lx = ox * 1.95;
-    const letterPos = L.latLng(mid.lat + ly, mid.lng + lx);
-
     // Draw dimension polyline
     L.polyline([p1, p2], { color: '#3b82f6', weight: 1.5, opacity: 0.8 }).addTo(map);
 
@@ -160,51 +156,68 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
     L.polyline([start, p1], { color: '#3b82f6', weight: 1, opacity: 0.5 }).addTo(map);
     L.polyline([end, p2], { color: '#3b82f6', weight: 1, opacity: 0.5 }).addTo(map);
 
-    // Calculate direction letter based on segment location relative to polygon center
-    let sumLat = 0, sumLng = 0;
-    allCoords.forEach(c => {
-      sumLat += c.lat;
-      sumLng += c.lng;
-    });
-    const center = { lat: sumLat / allCoords.length, lng: sumLng / allCoords.length };
-    const diffLat = mid.lat - center.lat;
-    const diffLng = mid.lng - center.lng;
-
-    let dirLetter = '';
-    if (Math.abs(diffLng) > Math.abs(diffLat)) {
-      dirLetter = diffLng > 0 ? 'E' : 'W';
-    } else {
-      dirLetter = diffLat > 0 ? 'N' : 'S';
-    }
-
     // Create editable dimension label (rotated)
     L.marker(labelPos, {
       icon: L.divIcon({
         className: 'sketch-dist-label',
         html: `
-          <div contenteditable="true" spellcheck="false" class="editable-field" 
+          <div contenteditable="true" spellcheck="false" class="editable-field"
                style="transform: translate(-50%, -50%) rotate(${-angle}deg); min-width: 45px; text-align: center;">
                <span class="dist-text">${parseFloat(dist).toFixed(3)}</span>
           </div>`,
         iconSize: [0, 0],
-        iconAnchor: [0, 0] 
+        iconAnchor: [0, 0]
       })
     }).addTo(map);
+  };
 
-    // Create direction letter label (completely unrotated/upright) - only if showDirection is true
-    if (showDirection) {
-      L.marker(letterPos, {
-        icon: L.divIcon({
-          className: 'sketch-dir-letter',
-          html: `
-            <div class="dir-letter-val" style="transform: translate(-50%, -50%); font-family: sans-serif; font-size: 13px; font-weight: bold; color: #000000; text-align: center; display: none;">
-                 ${dirLetter}
-            </div>`,
-          iconSize: [0, 0],
-          iconAnchor: [0, 0]
-        })
-      }).addTo(map);
+  // Labels one of the polygon's 4 main boundary sides with its real compass direction
+  // (computed from the true bearing between the polygon's centroid and this segment's
+  // midpoint — not the raw lat/lng-difference heuristic previously used, which drifted
+  // off true north away from the equator) plus the matching Waqooyi/Bari/Koonfur/Galbeed
+  // measurement and neighbor name typed into the survey record, e.g. "Waqooyi — 25m —
+  // Axmed". Shared between the satellite map and the sketch, which otherwise had no
+  // direction indicator on it at all and a screen-invisible (print-only) one respectively.
+  const addBoundaryDirectionLabel = (
+    start: L.LatLng,
+    end: L.LatLng,
+    map: L.Map,
+    allCoords: L.LatLng[],
+    center: { lat: number; lng: number },
+    boundaryInfo: BoundaryInfo,
+  ) => {
+    const mid = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
+    const direction = getDirectionFromCenter(center.lat, center.lng, mid.lat, mid.lng);
+    const label = buildDirectionLabel(direction, boundaryInfo[direction]);
+
+    const dLat = end.lat - start.lat;
+    const dLng = end.lng - start.lng;
+    let sum = 0;
+    for (let i = 0; i < allCoords.length; i++) {
+      const p1 = allCoords[i];
+      const p2 = allCoords[(i + 1) % allCoords.length];
+      sum += (p2.lng - p1.lng) * (p2.lat + p1.lat);
     }
+    const isCCW = sum < 0;
+    let pLat = isCCW ? -dLng : dLng;
+    let pLng = isCCW ? dLat : -dLat;
+    const pLen = Math.sqrt(pLat * pLat + pLng * pLng);
+    if (pLen > 0) { pLat /= pLen; pLng /= pLen; }
+
+    const offset = 0.00005;
+    let ox = pLng * offset;
+    let oy = pLat * offset;
+    const testMid = L.latLng(mid.lat + oy, mid.lng + ox);
+    if (isPointInPolygon(testMid, allCoords)) { ox = -ox; oy = -oy; }
+
+    L.marker(L.latLng(mid.lat + oy, mid.lng + ox), {
+      icon: L.divIcon({
+        className: 'boundary-direction-label',
+        html: `<div class="boundary-direction-box">${label}</div>`,
+        iconSize: [150, 36],
+        iconAnchor: [75, 18],
+      }),
+    }).addTo(map);
   };
 
   // Initialize satellite and sketch maps inside the modal
@@ -251,6 +264,32 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
       const polygon = L.polygon(coords);
       const bounds = polygon.getBounds();
+      const latlngs = coords.map((c) => L.latLng(c));
+
+      // Vertex-average center (not the bounding-box center) — this is what the
+      // direction bearing is measured from, matching the reference point the segment
+      // "main 4" selection below already reasons about.
+      const vertexCenter = latlngs.reduce(
+        (acc, c) => ({ lat: acc.lat + c.lat / latlngs.length, lng: acc.lng + c.lng / latlngs.length }),
+        { lat: 0, lng: 0 },
+      );
+
+      const boundaryInfo: BoundaryInfo = {
+        N: { val: record.boundary_w_val, neighbor: record.boundary_w_neighbor },
+        E: { val: record.boundary_b_val, neighbor: record.boundary_b_neighbor },
+        S: { val: record.boundary_k_val, neighbor: record.boundary_k_neighbor },
+        W: { val: record.boundary_g_val, neighbor: record.boundary_g_neighbor },
+      };
+
+      // The 4 longest sides are treated as the plot's "main" boundaries — the ones that
+      // get a Waqooyi/Bari/Koonfur/Galbeed label — same selection both maps use.
+      const segmentDistances = latlngs.map((startPt, idx) => {
+        const endPt = latlngs[(idx + 1) % latlngs.length];
+        return { index: idx, dist: L.latLng(startPt).distanceTo(L.latLng(endPt)) };
+      });
+      const mainBoundaryIndices = new Set(
+        [...segmentDistances].sort((a, b) => b.dist - a.dist).slice(0, 4).map((s) => s.index),
+      );
 
       // --- SATELLITE MAP INITIALIZATION ---
       if (satelliteMapContainerRef.current) {
@@ -291,6 +330,13 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           fillOpacity: 0.15
         }).addTo(satMap);
 
+        for (let i = 0; i < latlngs.length; i++) {
+          if (!mainBoundaryIndices.has(i)) continue;
+          const start = latlngs[i];
+          const end = latlngs[(i + 1) % latlngs.length];
+          addBoundaryDirectionLabel(start, end, satMap, latlngs, vertexCenter, boundaryInfo);
+        }
+
         L.control.zoom({ position: 'bottomright' }).addTo(satMap);
 
         // Single-finger dragging is intentionally off on mobile (so the modal can still
@@ -330,27 +376,15 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
         const center = bounds.getCenter();
 
-        // Add dimensions to each line segment
-        const latlngs = coords.map(c => L.latLng(c));
-        
-        // Calculate all segment lengths first
-        const segments = latlngs.map((startPt, idx) => {
-          const endPt = latlngs[(idx + 1) % latlngs.length];
-          const dist = skMap.distance(startPt, endPt);
-          return { startPt, endPt, dist, index: idx };
-        });
-
-        // Find the indices of the 4 longest segments (the main boundaries)
-        const longestIndices = [...segments]
-          .sort((a, b) => b.dist - a.dist)
-          .slice(0, 4)
-          .map(s => s.index);
-
+        // Add dimensions to each line segment (all sides get a length; only the 4 main
+        // boundaries additionally get a Waqooyi/Bari/Koonfur/Galbeed direction label).
         for (let i = 0; i < latlngs.length; i++) {
           const start = latlngs[i];
           const end = latlngs[(i + 1) % latlngs.length];
-          const showDirection = longestIndices.includes(i);
-          addSketchDimension(start, end, skMap, latlngs, showDirection);
+          addSketchDimension(start, end, skMap, latlngs);
+          if (mainBoundaryIndices.has(i)) {
+            addBoundaryDirectionLabel(start, end, skMap, latlngs, vertexCenter, boundaryInfo);
+          }
         }
 
         // Add Center Area Label
@@ -443,8 +477,9 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         color: #000000 !important;
         font-weight: bold !important;
       }
-      .sketch-dir-letter .dir-letter-val {
-        display: block !important;
+      .boundary-direction-box {
+        background: #ffffff !important;
+        box-shadow: none !important;
       }
       .sketch-area-label .modal-area-box {
         border: none !important;

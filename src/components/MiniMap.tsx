@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Compass, Fullscreen, Navigation, Loader2, MapPin, MousePointer2, PencilRuler, ZoomIn } from 'lucide-react';
 import L from 'leaflet';
 import { useModal } from '@/context/ModalContext';
+import { buildDirectionLabel, getDirectionFromCenter, type BoundaryInfo } from '@/lib/geoDirection';
 
 // Assign L to window so leaflet-draw can find it on the client
 if (typeof window !== 'undefined') {
@@ -63,6 +64,10 @@ interface MiniMapProps {
   polygonValue: string;
   onPolygonChange: (value: string) => void;
   onSketchDetailsChange: (value: string) => void;
+  // Waqooyi/Bari/Koonfur/Galbeed measurement + neighbor, typed elsewhere in the same
+  // form — used to label the polygon's 4 main sides with e.g. "Waqooyi — 25m — Axmed"
+  // once it's been drawn/edited. Optional so MiniMap still works before that data exists.
+  boundaryInfo?: BoundaryInfo;
 }
 
 const createGpsMarkerIcon = (isCurrentLocation: boolean) =>
@@ -94,17 +99,26 @@ export default function MiniMap({
   onGpsChange,
   polygonValue,
   onPolygonChange,
-  onSketchDetailsChange
+  onSketchDetailsChange,
+  boundaryInfo
 }: MiniMapProps) {
   const { showAlert } = useModal();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const sketchContainerRef = useRef<HTMLDivElement>(null);
-  
+
   const mapRef = useRef<L.Map | null>(null);
   const sketchMapRef = useRef<L.Map | null>(null);
   const drawnItemsRef = useRef<L.FeatureGroup | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const measurementLayerRef = useRef<L.LayerGroup | null>(null);
+  const directionLayerRef = useRef<L.LayerGroup | null>(null);
+  // The map-init effect below only runs once (guarded by mapRef.current), so its event
+  // handlers close over whatever `boundaryInfo` was at that first render. Reading through
+  // a ref instead means a later edit to the Waqooyi/Bari/Koonfur/Galbeed text fields is
+  // picked up the next time the polygon is drawn/edited, without needing to re-init the
+  // whole map.
+  const boundaryInfoRef = useRef<BoundaryInfo | undefined>(boundaryInfo);
+  useEffect(() => { boundaryInfoRef.current = boundaryInfo; }, [boundaryInfo]);
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSketch, setShowSketch] = useState(false);
@@ -167,9 +181,55 @@ export default function MiniMap({
 
     const measurementLayer = new L.LayerGroup().addTo(map);
     measurementLayerRef.current = measurementLayer;
+    const directionLayer = new L.LayerGroup().addTo(map);
+    directionLayerRef.current = directionLayer;
     let drawingVertices: L.LatLng[] = [];
     let liveMeasurementMarker: L.Marker | null = null;
     let drawingWasCompleted = false;
+
+    // Labels the polygon's 4 longest sides (the "main" boundaries) with their real
+    // compass direction plus the matching Waqooyi/Bari/Koonfur/Galbeed measurement and
+    // neighbor name from boundaryInfoRef — e.g. "Waqooyi — 25m — Axmed". Mirrors the
+    // same logic in DetailsModal.tsx's read-only view, kept independent since the two
+    // components don't share Leaflet map instances.
+    const addBoundaryDirectionMarkers = (coords: L.LatLng[]) => {
+      directionLayer.clearLayers();
+      const info = boundaryInfoRef.current;
+      if (!info || coords.length < 3) return;
+
+      const center = coords.reduce(
+        (acc, c) => ({ lat: acc.lat + c.lat / coords.length, lng: acc.lng + c.lng / coords.length }),
+        { lat: 0, lng: 0 },
+      );
+      const segmentDistances = coords.map((start, idx) => {
+        const end = coords[(idx + 1) % coords.length];
+        return { index: idx, dist: map.distance(start, end) };
+      });
+      const mainIndices = new Set(
+        [...segmentDistances].sort((a, b) => b.dist - a.dist).slice(0, 4).map((s) => s.index),
+      );
+
+      for (const { index } of segmentDistances) {
+        if (!mainIndices.has(index)) continue;
+        const start = coords[index];
+        const end = coords[(index + 1) % coords.length];
+        const mid = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
+        const direction = getDirectionFromCenter(center.lat, center.lng, mid.lat, mid.lng);
+        const label = buildDirectionLabel(direction, info[direction]);
+
+        L.marker(mid, {
+          interactive: false,
+          keyboard: false,
+          icon: L.divIcon({
+            className: 'boundary-direction-label',
+            html: `<div class="boundary-direction-box">${label}</div>`,
+            iconSize: [150, 36],
+            iconAnchor: [75, 50],
+          }),
+          zIndexOffset: 1100,
+        }).addTo(directionLayer);
+      }
+    };
 
     const drawSegmentMeasurements = (coords: L.LatLng[], includeClosingSegment: boolean) => {
       measurementLayer.clearLayers();
@@ -211,6 +271,7 @@ export default function MiniMap({
           const seededPolygon = L.polygon(seededLatLngs, { color: '#3388ff', weight: 3 });
           drawnItems.addLayer(seededPolygon);
           drawSegmentMeasurements(seededLatLngs, true);
+          addBoundaryDirectionMarkers(seededLatLngs);
           generateSketch(seededLatLngs, seededPolygon.getBounds());
           map.fitBounds(seededPolygon.getBounds(), { padding: [40, 40] });
         }
@@ -250,6 +311,7 @@ export default function MiniMap({
       drawingWasCompleted = false;
       drawingVertices = [];
       measurementLayer.clearLayers();
+      directionLayer.clearLayers();
       liveMeasurementMarker = null;
     });
     map.on('draw:drawstop', () => {
@@ -307,6 +369,7 @@ export default function MiniMap({
       const latlngs = layer.getLatLngs()[0] as L.LatLng[];
       drawingWasCompleted = true;
       drawSegmentMeasurements(latlngs, true);
+      addBoundaryDirectionMarkers(latlngs);
       const polyString = latlngs.map(c => `${c.lat.toFixed(6)},${c.lng.toFixed(6)}`).join('; ');
       onPolygonChange(polyString);
 
@@ -331,6 +394,7 @@ export default function MiniMap({
         const polygonLayer = layer as L.Polygon;
         const latlngs = polygonLayer.getLatLngs()[0] as L.LatLng[];
         drawSegmentMeasurements(latlngs, true);
+        addBoundaryDirectionMarkers(latlngs);
         const polyString = latlngs.map((c: L.LatLng) => `${c.lat.toFixed(6)},${c.lng.toFixed(6)}`).join('; ');
         onPolygonChange(polyString);
 

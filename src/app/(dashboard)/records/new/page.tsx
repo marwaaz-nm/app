@@ -436,6 +436,12 @@ export default function NewRecordPage() {
               polygonValue={polygonBoundary}
               onPolygonChange={setPolygonBoundary}
               onSketchDetailsChange={setSketchDetails}
+              boundaryInfo={{
+                N: { val: wVal, neighbor: wNeighbor },
+                E: { val: bVal, neighbor: bNeighbor },
+                S: { val: kVal, neighbor: kNeighbor },
+                W: { val: gVal, neighbor: gNeighbor },
+              }}
             />
           </div>
         </div>
