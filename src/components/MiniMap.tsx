@@ -119,8 +119,8 @@ export default function MiniMap({
   const isDrawingRef = useRef(false);
 
   useEffect(() => {
-    if (gpsValue.trim() && !mapUnlocked) setMapUnlocked(true);
-  }, [gpsValue, mapUnlocked]);
+    if ((gpsValue.trim() || polygonValue.trim()) && !mapUnlocked) setMapUnlocked(true);
+  }, [gpsValue, polygonValue, mapUnlocked]);
 
   // Initialize Drawing Map (declared before the marker-sync effect below so that,
   // once mapUnlocked flips true and the container mounts, the map exists in the same
@@ -190,6 +190,35 @@ export default function MiniMap({
         }).addTo(measurementLayer);
       }
     };
+
+    // Seed the map with an already-existing polygon (edit mode). MiniMap is otherwise
+    // write-only — it reports the drawn shape outward via onPolygonChange but never
+    // draws one coming in — so editing a survey that already has a boundary opened to a
+    // blank map instead of showing (and letting you reshape) what's already there.
+    if (polygonValue && polygonValue.trim()) {
+      try {
+        const seededLatLngs = polygonValue
+          .split(';')
+          .map((pair) => pair.trim())
+          .filter(Boolean)
+          .map((pair) => {
+            const [latStr, lngStr] = pair.split(',');
+            return L.latLng(parseFloat(latStr), parseFloat(lngStr));
+          })
+          .filter((ll) => !Number.isNaN(ll.lat) && !Number.isNaN(ll.lng));
+
+        if (seededLatLngs.length >= 3) {
+          const seededPolygon = L.polygon(seededLatLngs, { color: '#3388ff', weight: 3 });
+          drawnItems.addLayer(seededPolygon);
+          drawSegmentMeasurements(seededLatLngs, true);
+          generateSketch(seededLatLngs, seededPolygon.getBounds());
+          map.fitBounds(seededPolygon.getBounds(), { padding: [40, 40] });
+        }
+      } catch {
+        // Malformed existing polygon string — leave the map blank to draw fresh rather
+        // than throwing.
+      }
+    }
 
     // Add Draw control
     const drawControl = new (L.Control as any).Draw({

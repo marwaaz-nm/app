@@ -2,10 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
+import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import type { Survey, SurveyDocument, SurveyRevision, SurveyStatus } from '@/types';
 import { Archive, CheckCircle2, Clock3, FileText, History, Loader2, RotateCcw, Save, Send, ShieldCheck, Trash2, Upload, X, XCircle } from 'lucide-react';
+
+const MiniMap = dynamic(() => import('@/components/MiniMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[400px] w-full bg-slate-50 border border-slate-200 rounded-3xl flex items-center justify-center text-xs text-slate-500">
+      <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+    </div>
+  ),
+});
 
 type Tab = 'edit' | 'workflow' | 'documents' | 'history';
 type Props = { record: Survey; onClose: () => void; onChanged: () => void };
@@ -16,7 +26,6 @@ const fields: Array<{ key: keyof Survey; label: string; wide?: boolean }> = [
   { key: 'neighborhood', label: 'Xaafadda' },
   { key: 'branch', label: 'Laanta' },
   { key: 'vicinity', label: 'Nawaaxiga' },
-  { key: 'gps_location', label: 'GPS (Latitude, Longitude)' },
   { key: 'boundary_w_val', label: 'Waqooyi — cabbirka' },
   { key: 'boundary_w_neighbor', label: 'Waqooyi — deriska' },
   { key: 'boundary_b_val', label: 'Bari — cabbirka' },
@@ -26,8 +35,11 @@ const fields: Array<{ key: keyof Survey; label: string; wide?: boolean }> = [
   { key: 'boundary_g_val', label: 'Galbeed — cabbirka' },
   { key: 'boundary_g_neighbor', label: 'Galbeed — deriska' },
   { key: 'built_details', label: 'Faahfaahinta dhismaha', wide: true },
-  { key: 'polygon_boundary', label: 'Polygon coordinates', wide: true },
 ];
+
+// Managed by the interactive map below, not the plain text-field grid above — kept as a
+// separate list so saveEdit still persists them even though they're not in `fields`.
+const MAP_MANAGED_KEYS: Array<keyof Survey> = ['gps_location', 'polygon_boundary', 'sketch_area', 'sketch_dimensions'];
 
 const statusStyle: Record<SurveyStatus, string> = {
   Draft: 'bg-slate-100 text-slate-700 border-slate-200',
@@ -121,7 +133,9 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
   }
 
   async function saveEdit() {
-    const payload = Object.fromEntries(fields.map(({ key }) => [key, draft[key] ?? null]));
+    const payload = Object.fromEntries(
+      [...fields.map(({ key }) => key), ...MAP_MANAGED_KEYS].map((key) => [key, draft[key] ?? null]),
+    );
     if (!schemaReady) {
       setBusy(true);
       setMessage(null);
@@ -229,8 +243,24 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
           {tab === 'edit' && <div>
             {!can('survey.edit') && <p className="mb-4 rounded-2xl bg-amber-50 p-4 text-xs font-bold text-amber-700">Ma lihid survey.edit permission.</p>}
             <div className="grid gap-4 md:grid-cols-2">
-              {fields.map(({ key, label, wide }) => <label key={key} className={`block ${wide ? 'md:col-span-2' : ''}`}><span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</span>{wide ? <textarea rows={key === 'polygon_boundary' ? 4 : 3} value={String(draft[key] ?? '')} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white" /> : <input value={String(draft[key] ?? '')} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white" />}</label>)}
+              {fields.map(({ key, label, wide }) => <label key={key} className={`block ${wide ? 'md:col-span-2' : ''}`}><span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</span>{wide ? <textarea rows={3} value={String(draft[key] ?? '')} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white" /> : <input value={String(draft[key] ?? '')} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white" />}</label>)}
             </div>
+
+            <div className="mt-5">
+              <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-slate-500">Maabka &amp; Soohdinta (Map &amp; Boundary)</span>
+              <MiniMap
+                gpsValue={String(draft.gps_location ?? '')}
+                onGpsChange={(value) => setDraft((prev) => ({ ...prev, gps_location: value }))}
+                polygonValue={String(draft.polygon_boundary ?? '')}
+                onPolygonChange={(value) => setDraft((prev) => ({ ...prev, polygon_boundary: value }))}
+                onSketchDetailsChange={(value) => setDraft((prev) => ({
+                  ...prev,
+                  sketch_dimensions: value || undefined,
+                  sketch_area: value.split(' | ')[0]?.replace(/Area:|Area/gi, '').trim() || undefined,
+                }))}
+              />
+            </div>
+
             <button disabled={busy || !can('survey.edit')} onClick={saveEdit} className="mt-5 flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-xs font-black text-white disabled:opacity-40"><Save className="h-4 w-4" /> Kaydi isbeddelka</button>
           </div>}
 
