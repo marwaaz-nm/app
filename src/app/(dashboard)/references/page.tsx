@@ -61,6 +61,7 @@ export default function ReferencesPage() {
   const [subject, setSubject] = useState('');
   const [details, setDetails] = useState('');
   const [selectedSurveyId, setSelectedSurveyId] = useState<string>('');
+  const [surveySearchQuery, setSurveySearchQuery] = useState('');
   
   // Selected Ref Details Modal
   const [selectedRef, setSelectedRef] = useState<Reference | null>(null);
@@ -245,7 +246,16 @@ export default function ReferencesPage() {
     setSubject('');
     setDetails('');
     setSelectedSurveyId('');
+    setSurveySearchQuery('');
   };
+
+  const filteredSurveys = useMemo(() => {
+    const query = surveySearchQuery.trim().toLowerCase();
+    if (!query) return surveys;
+    return surveys.filter(
+      (s) => s.owner_name.toLowerCase().includes(query) || String(s.serial_no).includes(query),
+    );
+  }, [surveys, surveySearchQuery]);
 
   // Connected survey visibility check (AppSheet-like dynamic logic)
   const isSurveyLinkVisible = () => {
@@ -418,13 +428,10 @@ export default function ReferencesPage() {
                   <input
                     type="text"
                     value={refNumber}
-                    onChange={(e) => setRefNumber(e.target.value)}
-                    className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                    readOnly
+                    className="w-full cursor-not-allowed rounded-2xl bg-slate-100 border border-slate-200 px-4 py-3.5 text-sm text-slate-500 placeholder-slate-400 focus:outline-none"
                     placeholder="Otomaatig marka la kaydiyo (Auto-generated on save)"
                   />
-                  <p className="mt-1.5 text-[10px] text-teal-600 font-bold">
-                    * Waxaad ka tagi kartaa iyada oo banaan — toos ayaa loo abuuri doonaa marka aad taabato SAVE.
-                  </p>
                 </div>
 
                 <div>
@@ -477,6 +484,13 @@ export default function ReferencesPage() {
                   <label className="block text-xs font-bold text-teal-600">
                     Survey Lr (Xidhiidhka Sahanka)
                   </label>
+                  <input
+                    type="text"
+                    value={surveySearchQuery}
+                    onChange={(e) => setSurveySearchQuery(e.target.value)}
+                    placeholder="Raadi magaca ama serial no..."
+                    className="w-full rounded-xl bg-white border border-teal-200 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none"
+                  />
                   <select
                     required
                     value={selectedSurveyId}
@@ -484,15 +498,12 @@ export default function ReferencesPage() {
                     className="w-full rounded-xl bg-white border border-teal-200 px-4 py-3.5 text-sm text-slate-900 focus:outline-none cursor-pointer"
                   >
                     <option value="">Dooro Sahanka (S/N & Magaca)...</option>
-                    {surveys.map(s => (
+                    {filteredSurveys.map(s => (
                       <option key={s.id} value={s.id}>
-                        #{s.serial_no} — {s.owner_name}
+                        {s.serial_no} — {s.owner_name}
                       </option>
                     ))}
                   </select>
-                  <p className="text-[10px] text-teal-600 font-bold">
-                    * Dukumiintigan wuxuu u baahan yahay in lala xidhiidhiyo Sahan hore u jiray.
-                  </p>
                 </div>
               )}
             </form>
@@ -626,7 +637,7 @@ export default function ReferencesPage() {
                               {r.ref_number}
                             </td>
                             <td className="px-6 py-4 text-slate-700 font-semibold">
-                              {r.surveys ? `#${r.surveys.serial_no} — ${r.surveys.owner_name}` : 'N/A'}
+                              {r.surveys ? `${r.surveys.serial_no} — ${r.surveys.owner_name}` : 'N/A'}
                             </td>
                             <td className="px-6 py-4">
                               <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-655 text-[10px] font-extrabold">
@@ -678,7 +689,7 @@ export default function ReferencesPage() {
                         <h4 className="truncate text-xs font-extrabold text-slate-800">{r.subject}</h4>
                         {r.surveys && (
                           <p className="mt-0.5 truncate text-[9px] font-semibold text-slate-500">
-                            Sahan #{r.surveys.serial_no} — {r.surveys.owner_name}
+                            Sahan {r.surveys.serial_no} — {r.surveys.owner_name}
                           </p>
                         )}
                       </div>
@@ -756,7 +767,7 @@ export default function ReferencesPage() {
                       <div className="flex items-center gap-2 text-slate-855 font-extrabold text-sm">
                         <span className="h-2 w-2 rounded-full bg-teal-500" />
                         <span className="text-teal-700 underline decoration-teal-300 underline-offset-2">
-                          Sahan Lr: #{selectedRef.surveys.serial_no} — {selectedRef.surveys.owner_name}
+                          Sahan Lr: {selectedRef.surveys.serial_no} — {selectedRef.surveys.owner_name}
                         </span>
                       </div>
                       {loadingSurvey ? (
