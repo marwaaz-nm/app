@@ -368,7 +368,7 @@ export default function TransfersPage() {
                     <option value="">Dooro Sahanka...</option>
                     {surveys.map(s => (
                       <option key={s.id} value={s.id}>
-                        #{s.serial_no} — {s.owner_name}
+                        {s.serial_no} — {s.owner_name}
                       </option>
                     ))}
                   </select>
@@ -524,7 +524,7 @@ export default function TransfersPage() {
                             className="hover:bg-slate-50/80 transition-all"
                           >
                             <td className="px-6 py-4 font-black text-slate-550">
-                              #{t.serial_no}
+                              {t.serial_no}
                             </td>
                             <td className="px-6 py-4 font-bold text-slate-800">
                               <div>{t.seller_name}</div>
@@ -536,7 +536,7 @@ export default function TransfersPage() {
                             </td>
                             <td className="px-6 py-4">
                               <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-650 text-[10px] font-bold">
-                                {t.surveys ? `#${t.surveys.serial_no} — ${t.surveys.owner_name}` : 'N/A'}
+                                {t.surveys ? `${t.surveys.serial_no} — ${t.surveys.owner_name}` : 'N/A'}
                               </span>
                             </td>
                             <td className="px-6 py-4 font-black text-emerald-600 text-sm">
@@ -573,7 +573,7 @@ export default function TransfersPage() {
                     <div className="divide-y divide-slate-100/60">
                       {group.items.map(t => (
                         <div key={t.id} className="grid grid-cols-[44px_1fr_auto] items-center gap-3 px-1 py-3.5">
-                          <span className="truncate text-xs font-black text-slate-500">#{t.serial_no}</span>
+                          <span className="truncate text-xs font-black text-slate-500">{t.serial_no}</span>
                           <div className="min-w-0">
                             <p className="truncate text-xs font-extrabold text-slate-800">
                               {t.seller_name} <span className="text-slate-300">→</span> <span className="text-teal-600">{t.buyer_name}</span>
@@ -582,7 +582,7 @@ export default function TransfersPage() {
                               <Calendar className="h-3 w-3 shrink-0" />
                               <span>{t.transfer_date ? new Date(t.transfer_date).toLocaleDateString('so-SO') : '-'}</span>
                               <span>•</span>
-                              <span>{t.surveys ? `Sahan #${t.surveys.serial_no}` : 'N/A'}</span>
+                              <span>{t.surveys ? `Sahan ${t.surveys.serial_no}` : 'N/A'}</span>
                             </p>
                           </div>
                           <span className="justify-self-end whitespace-nowrap text-xs font-black text-emerald-600">

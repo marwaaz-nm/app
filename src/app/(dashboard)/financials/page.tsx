@@ -1110,7 +1110,7 @@ export default function FinancialsPage() {
                         {group.items.map((e) => (
                           <tr key={e.id} className="hover:bg-slate-50/80 transition-all">
                             <td className="px-6 py-4 font-black text-slate-400">
-                              #{expenseSerial.get(e.id)}
+                              {expenseSerial.get(e.id)}
                             </td>
                             <td className="px-6 py-4 font-bold text-slate-800">
                               {e.description}
@@ -1166,7 +1166,7 @@ export default function FinancialsPage() {
                   <div className="divide-y divide-slate-100/60">
                     {group.items.map((e) => (
                       <div key={e.id} className="grid grid-cols-[36px_1fr_auto] items-center gap-3 px-1 py-3.5">
-                        <span className="truncate text-xs font-black text-slate-400">#{expenseSerial.get(e.id)}</span>
+                        <span className="truncate text-xs font-black text-slate-400">{expenseSerial.get(e.id)}</span>
                         <div className="min-w-0">
                           <h4 className="truncate text-xs font-extrabold text-slate-800">{e.description}</h4>
                           <p className="mt-0.5 flex items-center gap-1 truncate text-[9px] text-slate-500">

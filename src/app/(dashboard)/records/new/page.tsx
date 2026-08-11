@@ -153,7 +153,7 @@ export default function NewRecordPage() {
       const result = await response.json();
       if (!response.ok) {
         const overlapMessage = Array.isArray(result.overlaps) && result.overlaps.length
-          ? ` Wuxuu ku dul dhacay: ${result.overlaps.map((item: { serial_no: number; owner_name: string; overlap_area_m2: number }) => `#${item.serial_no} ${item.owner_name} (${Number(item.overlap_area_m2).toFixed(1)} m²)`).join(', ')}.`
+          ? ` Wuxuu ku dul dhacay: ${result.overlaps.map((item: { serial_no: number; owner_name: string; overlap_area_m2: number }) => `${item.serial_no} ${item.owner_name} (${Number(item.overlap_area_m2).toFixed(1)} m²)`).join(', ')}.`
           : '';
         throw new Error(`${result.error || 'Kaydinta waa fashilantay.'}${overlapMessage}`);
       }

@@ -208,7 +208,7 @@ export default function DashboardPage() {
     const surveyActivity: ActivityItem[] = surveys.slice(0, 6).map((survey) => ({
       id: `survey-${survey.id}`,
       kind: 'survey',
-      title: `Survey #${survey.serial_no}`,
+      title: `Survey ${survey.serial_no}`,
       detail: `${survey.owner_name} · ${survey.neighborhood}`,
       date: survey.created_at,
       href: '/records',
@@ -224,7 +224,7 @@ export default function DashboardPage() {
     const transferActivity: ActivityItem[] = transfers.slice(0, 6).map((transfer) => ({
       id: `transfer-${transfer.id}`,
       kind: 'transfer',
-      title: `Transfer #${transfer.serial_no}`,
+      title: `Transfer ${transfer.serial_no}`,
       detail: `${transfer.seller_name} → ${transfer.buyer_name}`,
       date: transfer.created_at ?? transfer.transfer_date,
       href: '/transfers',

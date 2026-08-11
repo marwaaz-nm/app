@@ -22,26 +22,49 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 
-const primaryNavigation = [
-  { href: '/dashboard', label: 'Dashboard', mobileLabel: 'Home', icon: ChartNoAxesCombined, alwaysVisible: true },
-  { href: '/references', label: 'References', mobileLabel: 'Tixraac', icon: Files },
-  { href: '/explorer', label: 'Map Explorer', mobileLabel: 'Maab', icon: Compass },
-  { href: '/records', label: 'Survey Records', mobileLabel: 'Sahan', icon: Layers },
-  { href: '/transfers', label: 'Wareejin Dhul', mobileLabel: 'Wareejin', icon: ArrowLeftRight },
-  { href: '/financials', label: 'Financials', mobileLabel: 'Xisaab', icon: Wallet },
-  { href: '/drive-files', label: 'Diiwaanka Drive', mobileLabel: 'Drive', icon: FolderSearch },
-  { href: '/customers', label: 'Macmiisha', mobileLabel: 'Macmiil', icon: Users },
-  { href: '/document-archive', label: 'Document Archive', mobileLabel: 'Archive', icon: Archive },
-  { href: '/reports', label: 'Reports & Export', mobileLabel: 'Reports', icon: BarChart3 },
-  { href: '/settings', label: 'Settings', mobileLabel: 'Settings', icon: Settings, alwaysVisible: true },
-];
+type NavItem = { href: string; label: string; mobileLabel: string; icon: typeof ChartNoAxesCombined; alwaysVisible?: boolean };
 
-const adminNavigation = {
-  href: '/users',
-  label: 'User Control',
-  mobileLabel: 'Staff',
-  icon: Lock,
-};
+// Grouped by what the user is actually doing, rather than one long flat list — makes the
+// 11+ menu items scannable instead of a wall of undifferentiated links.
+const navigationGroups: { label: string; items: NavItem[] }[] = [
+  {
+    label: 'Guud',
+    items: [
+      { href: '/dashboard', label: 'Dashboard', mobileLabel: 'Home', icon: ChartNoAxesCombined, alwaysVisible: true },
+      { href: '/references', label: 'References', mobileLabel: 'Tixraac', icon: Files },
+    ],
+  },
+  {
+    label: 'Sahannada Dhulka',
+    items: [
+      { href: '/explorer', label: 'Map Explorer', mobileLabel: 'Maab', icon: Compass },
+      { href: '/records', label: 'Survey Records', mobileLabel: 'Sahan', icon: Layers },
+      { href: '/transfers', label: 'Wareejin Dhul', mobileLabel: 'Wareejin', icon: ArrowLeftRight },
+    ],
+  },
+  {
+    label: 'Xogta & Dukumentiyada',
+    items: [
+      { href: '/drive-files', label: 'Diiwaanka Drive', mobileLabel: 'Drive', icon: FolderSearch },
+      { href: '/customers', label: 'Macmiisha', mobileLabel: 'Macmiil', icon: Users },
+      { href: '/document-archive', label: 'Document Archive', mobileLabel: 'Archive', icon: Archive },
+    ],
+  },
+  {
+    label: 'Maaliyadda & Warbixinta',
+    items: [
+      { href: '/financials', label: 'Financials', mobileLabel: 'Xisaab', icon: Wallet },
+      { href: '/reports', label: 'Reports & Export', mobileLabel: 'Reports', icon: BarChart3 },
+    ],
+  },
+  {
+    label: 'Maamulka',
+    items: [
+      { href: '/settings', label: 'Settings', mobileLabel: 'Settings', icon: Settings, alwaysVisible: true },
+      { href: '/users', label: 'User Control', mobileLabel: 'Staff', icon: Lock },
+    ],
+  },
+];
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -49,15 +72,19 @@ export default function Sidebar() {
   const { settings } = useSettings();
   const isAdmin = profile?.role === 'Admin' || profile?.role === 'SuperAdmin';
 
-  const permittedNavigation = isAdmin
-    ? [...primaryNavigation, adminNavigation]
-    : primaryNavigation.filter(
-        (item) =>
-          item.alwaysVisible ||
-          ((Array.isArray(profile?.permitted_menus)
-            ? profile.permitted_menus.includes(item.href)
-            : false) && (item.href !== '/reports' || profile?.permitted_actions?.includes('report.view'))),
-      );
+  const isPermitted = (item: NavItem) =>
+    item.href === '/users'
+      ? isAdmin
+      : isAdmin ||
+        item.alwaysVisible ||
+        ((Array.isArray(profile?.permitted_menus) ? profile.permitted_menus.includes(item.href) : false) &&
+          (item.href !== '/reports' || profile?.permitted_actions?.includes('report.view')));
+
+  const permittedGroups = navigationGroups
+    .map((group) => ({ ...group, items: group.items.filter(isPermitted) }))
+    .filter((group) => group.items.length > 0);
+
+  const permittedNavigation = permittedGroups.flatMap((group) => group.items);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const initials = (profile?.fullname || 'GeoSurvey User')
@@ -103,47 +130,53 @@ export default function Sidebar() {
           <div className="mx-4 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
 
           <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4" aria-label="Main navigation">
-            <p className="mb-2.5 px-3 text-[9px] font-extrabold uppercase tracking-[0.2em] text-slate-400">
-              Workspace
-            </p>
-            <div className="space-y-1">
-              {permittedNavigation.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.href);
+            <div className="space-y-5">
+              {permittedGroups.map((group) => (
+                <div key={group.label}>
+                  <p className="mb-2 px-3 text-[9px] font-extrabold uppercase tracking-[0.2em] text-slate-400">
+                    {group.label}
+                  </p>
+                  <div className="space-y-1">
+                    {group.items.map((item) => {
+                      const Icon = item.icon;
+                      const active = isActive(item.href);
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={active ? 'page' : undefined}
-                    className={`group relative flex min-h-11 items-center gap-2.5 rounded-xl px-2.5 py-2 transition-all duration-200 ${
-                      active
-                        ? 'bg-teal-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.2)]'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
-                    }`}
-                  >
-                    <span
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] transition-colors ${
-                        active
-                          ? 'bg-white/15 text-white'
-                          : 'bg-slate-100 text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700'
-                      }`}
-                    >
-                      <Icon className="h-[17px] w-[17px]" strokeWidth={2.2} />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-bold tracking-[-0.01em]">
-                      {item.label}
-                    </span>
-                    <ChevronRight
-                      className={`h-4 w-4 transition-all ${
-                        active
-                          ? 'translate-x-0 text-white/70 opacity-100'
-                          : '-translate-x-1 text-slate-300 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'
-                      }`}
-                    />
-                  </Link>
-                );
-              })}
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          aria-current={active ? 'page' : undefined}
+                          className={`group relative flex min-h-11 items-center gap-2.5 rounded-xl px-2.5 py-2 transition-all duration-200 ${
+                            active
+                              ? 'bg-teal-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.2)]'
+                              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+                          }`}
+                        >
+                          <span
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] transition-colors ${
+                              active
+                                ? 'bg-white/15 text-white'
+                                : 'bg-slate-100 text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700'
+                            }`}
+                          >
+                            <Icon className="h-[17px] w-[17px]" strokeWidth={2.2} />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-[13px] font-bold tracking-[-0.01em]">
+                            {item.label}
+                          </span>
+                          <ChevronRight
+                            className={`h-4 w-4 transition-all ${
+                              active
+                                ? 'translate-x-0 text-white/70 opacity-100'
+                                : '-translate-x-1 text-slate-300 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'
+                            }`}
+                          />
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </nav>
 

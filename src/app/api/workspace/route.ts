@@ -36,9 +36,9 @@ export async function GET(req: NextRequest) {
         const key = `${type}-${row.id}`;
         if (seen.has(key)) return null;
         seen.add(key);
-        if (type === 'survey') return { id: key, type, title: `Survey #${row.serial_no} — ${row.owner_name}`, subtitle: `${row.neighborhood} · ${row.status || 'Draft'}`, href: '/records' };
+        if (type === 'survey') return { id: key, type, title: `Survey ${row.serial_no} — ${row.owner_name}`, subtitle: `${row.neighborhood} · ${row.status || 'Draft'}`, href: '/records' };
         if (type === 'reference') return { id: key, type, title: String(row.ref_number), subtitle: `${row.subject} · ${row.status}`, href: '/references' };
-        return { id: key, type, title: `Transfer #${row.serial_no}`, subtitle: `${row.seller_name} → ${row.buyer_name}`, href: '/transfers' };
+        return { id: key, type, title: `Transfer ${row.serial_no}`, subtitle: `${row.seller_name} → ${row.buyer_name}`, href: '/transfers' };
       }).filter(Boolean).slice(0, 10);
       return NextResponse.json({ items });
     }
@@ -62,8 +62,8 @@ export async function GET(req: NextRequest) {
 
     const alerts = [
       ...(surveySchemaMissing && viewer.role === 'Admin' ? [{ id: 'schema-upgrade', level: 'warning', title: 'Database upgrade ayaa loo baahan yahay', detail: 'Orod labada Supabase migration si workflow-ku u shaqeeyo.', href: '/reports', date: new Date().toISOString() }] : []),
-      ...(!surveySchemaMissing ? (pendingResult.data || []).map((row) => ({ id: `pending-${row.id}`, level: 'review', title: `Survey #${row.serial_no} wuxuu sugayaa ansixin`, detail: row.owner_name, href: '/records', date: row.updated_at })) : []),
-      ...(!surveySchemaMissing ? (rejectedResult.data || []).map((row) => ({ id: `rejected-${row.id}`, level: 'warning', title: `Survey #${row.serial_no} waa la diiday`, detail: row.rejection_reason || row.owner_name, href: '/records', date: row.updated_at })) : []),
+      ...(!surveySchemaMissing ? (pendingResult.data || []).map((row) => ({ id: `pending-${row.id}`, level: 'review', title: `Survey ${row.serial_no} wuxuu sugayaa ansixin`, detail: row.owner_name, href: '/records', date: row.updated_at })) : []),
+      ...(!surveySchemaMissing ? (rejectedResult.data || []).map((row) => ({ id: `rejected-${row.id}`, level: 'warning', title: `Survey ${row.serial_no} waa la diiday`, detail: row.rejection_reason || row.owner_name, href: '/records', date: row.updated_at })) : []),
       ...(referenceResult.data || []).map((row) => ({ id: `reference-${row.id}`, level: 'info', title: `${row.ref_number} wali wuu socdaa`, detail: row.subject, href: '/references', date: row.created_at })),
     ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()).slice(0, 12);
 

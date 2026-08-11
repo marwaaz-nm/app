@@ -82,7 +82,7 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
     const result = await response.json();
     if (!response.ok) {
       const overlap = Array.isArray(result.overlaps) && result.overlaps.length
-        ? ` ${result.overlaps.map((item: { serial_no: number; owner_name: string }) => `#${item.serial_no} ${item.owner_name}`).join(', ')}`
+        ? ` ${result.overlaps.map((item: { serial_no: number; owner_name: string }) => `${item.serial_no} ${item.owner_name}`).join(', ')}`
         : '';
       throw new Error(`${result.error || 'Codsigu wuu fashilmay.'}${overlap}`);
     }
@@ -199,7 +199,7 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
         <header className="flex items-start justify-between border-b border-slate-100 px-5 py-4 md:px-7">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-black text-slate-900">Maamulka Survey #{survey.serial_no}</h2>
+              <h2 className="text-lg font-black text-slate-900">Maamulka Survey {survey.serial_no}</h2>
               {schemaReady && <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${statusStyle[survey.status || 'Draft']}`}>{survey.status || 'Draft'}</span>}
               {schemaReady && <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-700">Version {survey.version || 1}</span>}
             </div>
