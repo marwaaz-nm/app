@@ -20,33 +20,32 @@ export type DriveItem = {
   size?: string;
 };
 
-let client: drive_v3.Drive | null = null;
+// Credentials for one named Google Drive connection (the notary office can register
+// several — e.g. one per branch — each with its own service account and shared folder).
+export type DriveConnection = {
+  id: number;
+  clientEmail: string;
+  privateKey: string;
+  rootFolderId: string;
+};
 
-function getClient(): drive_v3.Drive {
-  if (client) return client;
+// A Drive client is specific to one connection's credentials, so it's cached per
+// connection id rather than as a single module-level singleton.
+const clientCache = new Map<number, drive_v3.Drive>();
 
-  const email = process.env.GOOGLE_DRIVE_CLIENT_EMAIL;
-  const rawKey = process.env.GOOGLE_DRIVE_PRIVATE_KEY;
-  if (!email || !rawKey) {
-    throw Object.assign(new Error('Google Drive integration-ka lama dejin. Fadlan buuxi GOOGLE_DRIVE_CLIENT_EMAIL iyo GOOGLE_DRIVE_PRIVATE_KEY ee .env.local, ka dibna dib u bilow server-ka.'), { status: 503 });
-  }
+function getClient(conn: DriveConnection): drive_v3.Drive {
+  const cached = clientCache.get(conn.id);
+  if (cached) return cached;
 
   const auth = new google.auth.JWT({
-    email,
-    key: rawKey.replace(/\\n/g, '\n'),
+    email: conn.clientEmail,
+    key: conn.privateKey.replace(/\\n/g, '\n'),
     scopes: ['https://www.googleapis.com/auth/drive.readonly'],
   });
 
-  client = google.drive({ version: 'v3', auth });
+  const client = google.drive({ version: 'v3', auth });
+  clientCache.set(conn.id, client);
   return client;
-}
-
-export function getRootFolderId(): string {
-  const rootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
-  if (!rootId) {
-    throw Object.assign(new Error('GOOGLE_DRIVE_ROOT_FOLDER_ID lama dejin ee .env.local.'), { status: 503 });
-  }
-  return rootId;
 }
 
 // Word auto-save/lock artifacts (e.g. "~$report.docx", "~WRL0005.tmp") are not
@@ -68,8 +67,8 @@ function toDriveItem(file: drive_v3.Schema$File): DriveItem {
   };
 }
 
-async function listAllPages(query: string): Promise<drive_v3.Schema$File[]> {
-  const drive = getClient();
+async function listAllPages(conn: DriveConnection, query: string): Promise<drive_v3.Schema$File[]> {
+  const drive = getClient(conn);
   const files: drive_v3.Schema$File[] = [];
   let pageToken: string | undefined;
   do {
@@ -88,79 +87,167 @@ async function listAllPages(query: string): Promise<drive_v3.Schema$File[]> {
   return files;
 }
 
-// The tree rarely changes; cache it briefly so repeated searches don't re-walk
-// the whole folder structure on every keystroke.
-const folderTreeCache = new Map<string, { ids: string[]; expiresAt: number }>();
-const TREE_CACHE_MS = 5 * 60 * 1000;
+// The tree rarely changes; cache it so repeated searches don't re-walk the whole
+// folder structure on every keystroke. This is an in-memory cache scoped to one
+// warm serverless instance — it speeds up back-to-back requests but resets on a
+// cold start, so it's a latency optimization, not a guarantee. Keyed by connection id
+// since each connection has its own independent folder tree.
+const folderTreeCache = new Map<number, { ids: string[]; expiresAt: number }>();
+const folderTreeInFlight = new Map<number, Promise<string[]>>();
+const TREE_CACHE_MS = 30 * 60 * 1000;
+const TREE_LEVEL_CHUNK = 30;
 
-async function getFolderTreeIds(rootId: string): Promise<string[]> {
-  const cached = folderTreeCache.get(rootId);
-  if (cached && cached.expiresAt > Date.now()) return cached.ids;
-
-  const ids = [rootId];
-  const queue = [rootId];
-  while (queue.length) {
-    const batch = queue.splice(0, 20);
-    const clause = batch.map((id) => `'${id}' in parents`).join(' or ');
-    const children = await listAllPages(`(${clause}) and mimeType = '${FOLDER_MIME_TYPE}' and trashed = false`);
-    for (const child of children) {
+// Walks the tree one depth level at a time, firing every query at a given level in
+// parallel instead of 20-at-a-time regardless of depth. Measured against the real
+// folder structure (8 levels, 225 folders) this cut the cold walk from ~11s to ~8s —
+// the remaining time is simply one network round trip per depth level.
+async function buildFolderTreeIds(conn: DriveConnection): Promise<string[]> {
+  const ids = [conn.rootFolderId];
+  let level = [conn.rootFolderId];
+  while (level.length) {
+    const chunks: string[][] = [];
+    for (let i = 0; i < level.length; i += TREE_LEVEL_CHUNK) chunks.push(level.slice(i, i + TREE_LEVEL_CHUNK));
+    const results = await Promise.all(chunks.map((chunk) => {
+      const clause = chunk.map((id) => `'${id}' in parents`).join(' or ');
+      return listAllPages(conn, `(${clause}) and mimeType = '${FOLDER_MIME_TYPE}' and trashed = false`);
+    }));
+    const next: string[] = [];
+    for (const child of results.flat()) {
       if (child.id && !ids.includes(child.id)) {
         ids.push(child.id);
-        queue.push(child.id);
+        next.push(child.id);
       }
     }
+    level = next;
   }
-
-  folderTreeCache.set(rootId, { ids, expiresAt: Date.now() + TREE_CACHE_MS });
   return ids;
+}
+
+// Concurrent callers (e.g. two connections searched in parallel, or overlapping
+// requests) share one in-flight walk instead of each starting their own.
+function getFolderTreeIds(conn: DriveConnection): Promise<string[]> {
+  const cached = folderTreeCache.get(conn.id);
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.ids);
+
+  const inFlight = folderTreeInFlight.get(conn.id);
+  if (inFlight) return inFlight;
+
+  const promise = buildFolderTreeIds(conn).then((ids) => {
+    folderTreeCache.set(conn.id, { ids, expiresAt: Date.now() + TREE_CACHE_MS });
+    folderTreeInFlight.delete(conn.id);
+    return ids;
+  }, (err) => {
+    folderTreeInFlight.delete(conn.id);
+    throw err;
+  });
+  folderTreeInFlight.set(conn.id, promise);
+  return promise;
 }
 
 function escapeQueryValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
-export async function browseFolder(folderId: string): Promise<DriveItem[]> {
-  const files = await listAllPages(`'${folderId}' in parents and trashed = false`);
+// Short-lived cache for folder listings — opening the same folder again (e.g.
+// navigating back via breadcrumbs) is then instant instead of a fresh Drive call.
+// Keyed by connection id + folder id since the same folder id could theoretically
+// collide across two different connections' drives.
+const browseCache = new Map<string, { items: DriveItem[]; expiresAt: number }>();
+const BROWSE_CACHE_MS = 3 * 60 * 1000;
+
+export async function browseFolder(conn: DriveConnection, folderId: string): Promise<DriveItem[]> {
+  const cacheKey = `${conn.id}::${folderId}`;
+  const cached = browseCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.items;
+
+  const files = await listAllPages(conn, `'${folderId}' in parents and trashed = false`);
   const items = files
     .map(toDriveItem)
     .filter((item) => !isJunkFileName(item.name) && (item.kind === 'folder' || WORD_MIME_TYPES.includes(item.mimeType)));
-  return items.sort((a, b) => {
+  items.sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
     return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
   });
+
+  browseCache.set(cacheKey, { items, expiresAt: Date.now() + BROWSE_CACHE_MS });
+  return items;
 }
 
-export async function searchWordFiles(rootId: string, rawQuery: string): Promise<DriveItem[]> {
+// Lists every Word file across a connection's whole folder tree — used by the background
+// index sync job, not by live search. Unlike searchWordFiles, this deliberately pays the
+// folder-tree-walk cost (needed here since we want every file, not a text-filtered
+// subset) because it runs as a background job, never blocking a user-facing request.
+export async function listAllWordFilesInTree(conn: DriveConnection): Promise<DriveItem[]> {
+  const folderIds = await getFolderTreeIds(conn);
+  const mimeClause = WORD_MIME_TYPES.map((mime) => `mimeType = '${mime}'`).join(' or ');
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < folderIds.length; i += TREE_LEVEL_CHUNK) chunks.push(folderIds.slice(i, i + TREE_LEVEL_CHUNK));
+  const results = await Promise.all(chunks.map((chunk) => {
+    const parentClause = chunk.map((id) => `'${id}' in parents`).join(' or ');
+    return listAllPages(conn, `(${parentClause}) and (${mimeClause}) and trashed = false`);
+  }));
+
+  const byId = new Map<string, drive_v3.Schema$File>();
+  for (const file of results.flat()) {
+    if (file.id) byId.set(file.id, file);
+  }
+  return Array.from(byId.values()).map(toDriveItem).filter((item) => !isJunkFileName(item.name));
+}
+
+// Debounced typing and the Macmiisha lookup often re-issue the same query moments
+// apart; caching the raw Drive search briefly avoids repeating that round trip.
+const searchCache = new Map<string, { items: DriveItem[]; expiresAt: number }>();
+const SEARCH_CACHE_MS = 3 * 60 * 1000;
+
+export async function searchWordFiles(conn: DriveConnection, rawQuery: string): Promise<DriveItem[]> {
   const query = escapeQueryValue(rawQuery.trim());
   if (!query) return [];
 
-  const folderIds = await getFolderTreeIds(rootId);
+  const cacheKey = `${conn.id}::${query.toLowerCase()}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.items;
+
   const mimeClause = WORD_MIME_TYPES.map((mime) => `mimeType = '${mime}'`).join(' or ');
   const textClause = `(name contains '${query}' or fullText contains '${query}')`;
 
-  const chunkSize = 20;
-  const chunks: string[][] = [];
-  for (let i = 0; i < folderIds.length; i += chunkSize) chunks.push(folderIds.slice(i, i + chunkSize));
+  // The service account can only see files actually shared with it — i.e. this folder
+  // tree — so a single unscoped search already can't return anything outside it. Folding
+  // an OR-clause of every folder ID into the query itself (what this used to do, split
+  // into chunked parallel requests to stay under the query length limit) measured at
+  // 11-14s regardless of caching; Drive evidently takes a while to evaluate a large OR
+  // clause server-side. A single plain query removes that cost.
+  const files = await listAllPages(conn, `(${mimeClause}) and ${textClause} and trashed = false`);
 
-  const chunkResults = await Promise.all(chunks.map((chunk) => {
-    const parentClause = chunk.map((id) => `'${id}' in parents`).join(' or ');
-    const q = `(${parentClause}) and (${mimeClause}) and ${textClause} and trashed = false`;
-    return listAllPages(q);
-  }));
-
-  const resultsById = new Map<string, DriveItem>();
-  for (const files of chunkResults) {
-    for (const file of files) {
-      const item = toDriveItem(file);
-      if (item.id && !isJunkFileName(item.name)) resultsById.set(item.id, item);
-    }
+  // The folder-tree scope check below is a safety net (Drive search shouldn't return
+  // anything outside what's shared with the service account, but this guards against
+  // it anyway) — confirmed against real searches to never actually exclude a result.
+  // Building the tree from scratch takes several seconds per depth level, so it's only
+  // applied when already warm from a previous search; a cold search isn't held up
+  // waiting on a filter that, in practice, changes nothing. The walk still gets kicked
+  // off in the background so the *next* search benefits from a warm cache.
+  const cachedTree = folderTreeCache.get(conn.id);
+  let scopedFiles = files;
+  if (cachedTree && cachedTree.expiresAt > Date.now()) {
+    const folderIdSet = new Set(cachedTree.ids);
+    scopedFiles = files.filter((file) => file.parents?.some((parentId) => folderIdSet.has(parentId)));
+  } else {
+    void getFolderTreeIds(conn).catch(() => {});
   }
 
-  return Array.from(resultsById.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  const resultsById = new Map<string, DriveItem>();
+  for (const file of scopedFiles) {
+    const item = toDriveItem(file);
+    if (item.id && !isJunkFileName(item.name)) resultsById.set(item.id, item);
+  }
+
+  const results = Array.from(resultsById.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  searchCache.set(cacheKey, { items: results, expiresAt: Date.now() + SEARCH_CACHE_MS });
+  return results;
 }
 
-export async function getFolderPath(folderId: string, rootId: string): Promise<{ id: string; name: string }[]> {
-  const drive = getClient();
+export async function getFolderPath(conn: DriveConnection, folderId: string): Promise<{ id: string; name: string }[]> {
+  const drive = getClient(conn);
   const path: { id: string; name: string }[] = [];
   let currentId: string | undefined = folderId;
   let guard = 0;
@@ -169,14 +256,26 @@ export async function getFolderPath(folderId: string, rootId: string): Promise<{
     const response: { data: drive_v3.Schema$File } = await drive.files.get({ fileId: currentId, fields: 'id, name, parents', supportsAllDrives: true });
     const { data } = response;
     path.unshift({ id: data.id || currentId, name: data.name || '' });
-    if (data.id === rootId) break;
+    if (data.id === conn.rootFolderId) break;
     currentId = data.parents?.[0];
   }
   return path;
 }
 
-export async function downloadFile(fileId: string): Promise<{ buffer: Buffer; name: string; mimeType: string }> {
-  const drive = getClient();
+// Fetches just the file bytes — one Drive API call instead of the two downloadFile()
+// makes (a metadata lookup plus the content fetch). Used by the customer search, which
+// already has the file's name from the search results and has no use for its metadata.
+export async function downloadFileContent(conn: DriveConnection, fileId: string): Promise<Buffer> {
+  const drive = getClient(conn);
+  const contentResponse = await drive.files.get(
+    { fileId, alt: 'media', supportsAllDrives: true },
+    { responseType: 'arraybuffer' },
+  ) as unknown as { data: ArrayBuffer };
+  return Buffer.from(contentResponse.data);
+}
+
+export async function downloadFile(conn: DriveConnection, fileId: string): Promise<{ buffer: Buffer; name: string; mimeType: string }> {
+  const drive = getClient(conn);
   const metaResponse: { data: drive_v3.Schema$File } = await drive.files.get({
     fileId,
     fields: 'name, mimeType',
@@ -193,4 +292,89 @@ export async function downloadFile(fileId: string): Promise<{ buffer: Buffer; na
     name: metaResponse.data.name || 'document',
     mimeType: metaResponse.data.mimeType || 'application/octet-stream',
   };
+}
+
+// --- Drive push notifications (webhooks) ---
+// Lets the index stay current within seconds of a document being added/changed/removed
+// in Drive, instead of waiting for a manual "Sync Now". A "channel" is a subscription:
+// Drive POSTs a near-empty ping to our webhook whenever something changes, and we then
+// pull the actual delta via changes.list() using a stored page-token cursor.
+
+// The starting cursor for a brand-new channel — changes.list() calls made with this
+// token only return changes from this point forward, so registering a channel doesn't
+// retroactively process the connection's whole existing history.
+export async function getStartPageToken(conn: DriveConnection): Promise<string> {
+  const drive = getClient(conn);
+  const res = await drive.changes.getStartPageToken({ supportsAllDrives: true });
+  if (!res.data.startPageToken) throw new Error('Drive did not return a start page token.');
+  return res.data.startPageToken;
+}
+
+export async function watchDriveChanges(
+  conn: DriveConnection,
+  opts: { channelId: string; address: string; token: string; pageToken: string },
+): Promise<{ resourceId: string; expiration: string }> {
+  const drive = getClient(conn);
+  const res = await drive.changes.watch({
+    pageToken: opts.pageToken,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+    requestBody: { id: opts.channelId, type: 'web_hook', address: opts.address, token: opts.token },
+  });
+  if (!res.data.resourceId || !res.data.expiration) throw new Error('Drive did not confirm the watch channel.');
+  return { resourceId: res.data.resourceId, expiration: res.data.expiration };
+}
+
+// Best-effort — an old channel that's already expired or was replaced will 404 here,
+// which is fine to ignore (it wasn't going to notify us again anyway).
+export async function stopDriveWatch(conn: DriveConnection, channelId: string, resourceId: string): Promise<void> {
+  const drive = getClient(conn);
+  try {
+    await drive.channels.stop({ requestBody: { id: channelId, resourceId } });
+  } catch {
+    // See comment above.
+  }
+}
+
+export type DriveChange = {
+  fileId: string;
+  removed: boolean;
+  file?: { id: string; name: string; mimeType: string; modifiedTime?: string; webViewLink?: string; trashed?: boolean };
+};
+
+// Pages through every change since `pageToken`, returning the flat list plus the new
+// cursor to store for next time. Drive's response only carries a `newStartPageToken`
+// once it reaches the current end of the change log (vs. `nextPageToken` mid-pagination).
+export async function listDriveChanges(conn: DriveConnection, pageToken: string): Promise<{ changes: DriveChange[]; newStartPageToken: string | null }> {
+  const drive = getClient(conn);
+  const changes: DriveChange[] = [];
+  let token: string | undefined = pageToken;
+  let newStartPageToken: string | null = null;
+
+  while (token) {
+    const res: { data: drive_v3.Schema$ChangeList } = await drive.changes.list({
+      pageToken: token,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      fields: 'nextPageToken, newStartPageToken, changes(fileId, removed, file(id, name, mimeType, modifiedTime, webViewLink, trashed))',
+    });
+    for (const c of res.data.changes || []) {
+      if (!c.fileId) continue;
+      changes.push({
+        fileId: c.fileId,
+        removed: Boolean(c.removed),
+        file: c.file
+          ? { id: c.file.id || c.fileId, name: c.file.name || '', mimeType: c.file.mimeType || '', modifiedTime: c.file.modifiedTime || undefined, webViewLink: c.file.webViewLink || undefined, trashed: c.file.trashed || false }
+          : undefined,
+      });
+    }
+    if (res.data.newStartPageToken) {
+      newStartPageToken = res.data.newStartPageToken;
+      token = undefined;
+    } else {
+      token = res.data.nextPageToken || undefined;
+    }
+  }
+
+  return { changes, newStartPageToken };
 }

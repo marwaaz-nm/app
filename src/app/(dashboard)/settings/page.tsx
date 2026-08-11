@@ -6,11 +6,13 @@ import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { useModal } from '@/context/ModalContext';
 import { formatReferenceNumber } from '@/lib/numbering';
+import DriveConnectionsPanel from '@/components/DriveConnectionsPanel';
 import {
   Settings as SettingsIcon,
   UserCircle,
   Building2,
   ListChecks,
+  Cloud,
   Loader2,
   Save,
   X,
@@ -18,7 +20,7 @@ import {
   KeyRound,
 } from 'lucide-react';
 
-type Tab = 'account' | 'organization' | 'options';
+type Tab = 'account' | 'organization' | 'options' | 'drive';
 
 async function authenticatedFetch(path: string, options: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -76,6 +78,7 @@ export default function SettingsPage() {
   const { settings, loading: settingsLoading, refetch: refetchSettings } = useSettings();
   const { showAlert } = useModal();
   const isAdmin = profile?.role === 'Admin';
+  const canManageDriveConnections = profile?.username === 'samanor';
 
   const [tab, setTab] = useState<Tab>('account');
 
@@ -289,10 +292,11 @@ export default function SettingsPage() {
     }
   };
 
-  const tabs: { id: Tab; label: string; icon: typeof UserCircle; adminOnly?: boolean }[] = [
+  const tabs: { id: Tab; label: string; icon: typeof UserCircle; adminOnly?: boolean; hidden?: boolean }[] = [
     { id: 'account', label: 'Xisaabta (Account)', icon: UserCircle },
     { id: 'organization', label: 'Nootaayo (Notary)', icon: Building2, adminOnly: true },
     { id: 'options', label: 'Liisaska (Options)', icon: ListChecks, adminOnly: true },
+    { id: 'drive', label: 'Drive Connections', icon: Cloud, adminOnly: true, hidden: !canManageDriveConnections },
   ];
 
   return (
@@ -310,7 +314,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {tabs.filter((t) => !t.adminOnly || isAdmin).map((t) => {
+        {tabs.filter((t) => (!t.adminOnly || isAdmin) && !t.hidden).map((t) => {
           const Icon = t.icon;
           return (
             <button
@@ -537,6 +541,8 @@ export default function SettingsPage() {
           )}
         </div>
       )}
+
+      {tab === 'drive' && canManageDriveConnections && <DriveConnectionsPanel />}
     </div>
   );
 }

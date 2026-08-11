@@ -15,6 +15,7 @@ import {
   LogOut,
   MapPinned,
   Settings,
+  Users,
   Wallet,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -28,6 +29,7 @@ const primaryNavigation = [
   { href: '/transfers', label: 'Wareejin Dhul', mobileLabel: 'Wareejin', icon: ArrowLeftRight },
   { href: '/financials', label: 'Financials', mobileLabel: 'Xisaab', icon: Wallet },
   { href: '/drive-files', label: 'Diiwaanka Drive', mobileLabel: 'Drive', icon: FolderSearch },
+  { href: '/customers', label: 'Macmiisha', mobileLabel: 'Macmiil', icon: Users },
   { href: '/reports', label: 'Reports & Export', mobileLabel: 'Reports', icon: BarChart3 },
   { href: '/settings', label: 'Settings', mobileLabel: 'Settings', icon: Settings, alwaysVisible: true },
 ];

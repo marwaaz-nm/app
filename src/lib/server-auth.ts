@@ -6,8 +6,13 @@ import type { NextRequest } from 'next/server';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+// Only this admin account manages Google Drive connection credentials — restricted
+// because the connections list includes each service account's email and root folder id.
+export const DRIVE_CONNECTIONS_MANAGER_USERNAME = 'samanor';
+
 export type RequestViewer = {
   userId: string;
+  username: string;
   role: 'Admin' | 'User';
   permittedActions: string[];
   permittedMenus: string[] | null;
@@ -34,7 +39,7 @@ export async function requireViewer(req: NextRequest, action?: string): Promise<
 
   let { data: profile, error: profileError } = await admin
     .from('profiles')
-    .select('role, permitted_actions, permitted_menus')
+    .select('username, role, permitted_actions, permitted_menus')
     .eq('id', user.id)
     .single();
 
@@ -42,7 +47,7 @@ export async function requireViewer(req: NextRequest, action?: string): Promise<
   if (profileError?.code === '42703') {
     const legacyResult = await admin
       .from('profiles')
-      .select('role, permitted_menus')
+      .select('username, role, permitted_menus')
       .eq('id', user.id)
       .single();
     profile = legacyResult.data ? { ...legacyResult.data, permitted_actions: null } : null;
@@ -59,7 +64,7 @@ export async function requireViewer(req: NextRequest, action?: string): Promise<
     throw Object.assign(new Error(`Permission required: ${action}`), { status: 403 });
   }
 
-  return { userId: user.id, role, permittedActions, permittedMenus, admin };
+  return { userId: user.id, username: profile.username || '', role, permittedActions, permittedMenus, admin };
 }
 
 export function apiError(error: unknown) {
