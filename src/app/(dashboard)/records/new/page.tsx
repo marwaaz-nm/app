@@ -104,6 +104,7 @@ export default function NewRecordPage() {
   const [gpsLocation, setGpsLocation] = useState('');
   const [polygonBoundary, setPolygonBoundary] = useState('');
   const [sketchDetails, setSketchDetails] = useState('');
+  const [boundaryLabelPositions, setBoundaryLabelPositions] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,6 +137,7 @@ export default function NewRecordPage() {
         polygon_boundary: polygonBoundary,
         sketch_area: sketchDetails.split(' | ')[0]?.replace(/Area:|Area/gi, '').trim() || null,
         sketch_dimensions: sketchDetails || null,
+        boundary_label_positions: boundaryLabelPositions || null,
       };
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -436,6 +438,8 @@ export default function NewRecordPage() {
               polygonValue={polygonBoundary}
               onPolygonChange={setPolygonBoundary}
               onSketchDetailsChange={setSketchDetails}
+              labelPositionsValue={boundaryLabelPositions}
+              onLabelPositionsChange={setBoundaryLabelPositions}
               boundaryInfo={{
                 N: { val: wVal, neighbor: wNeighbor },
                 E: { val: bVal, neighbor: bNeighbor },

@@ -4,7 +4,15 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Compass, Fullscreen, Navigation, Loader2, MapPin, MousePointer2, PencilRuler, ZoomIn } from 'lucide-react';
 import L from 'leaflet';
 import { useModal } from '@/context/ModalContext';
-import { buildDirectionLabel, getDirectionFromCenter, type BoundaryInfo } from '@/lib/geoDirection';
+import {
+  buildDirectionLabel,
+  parseDirectionPositions,
+  serializeDirectionPositions,
+  DIRECTION_LABELS,
+  type BoundaryInfo,
+  type CompassDirection,
+  type DirectionPositions,
+} from '@/lib/geoDirection';
 
 // Assign L to window so leaflet-draw can find it on the client
 if (typeof window !== 'undefined') {
@@ -65,9 +73,14 @@ interface MiniMapProps {
   onPolygonChange: (value: string) => void;
   onSketchDetailsChange: (value: string) => void;
   // Waqooyi/Bari/Koonfur/Galbeed measurement + neighbor, typed elsewhere in the same
-  // form — used to label the polygon's 4 main sides with e.g. "Waqooyi — 25m — Axmed"
-  // once it's been drawn/edited. Optional so MiniMap still works before that data exists.
+  // form — used to label a manually-placed direction marker with e.g.
+  // "Waqooyi — 25m — Axmed". Optional so MiniMap still works before that data exists.
   boundaryInfo?: BoundaryInfo;
+  // Manually-placed direction label positions, serialized as "N:lat,lng;E:lat,lng;...".
+  // The surveyor clicks a direction button then clicks the map to drop that label
+  // wherever it actually belongs, rather than the app guessing from polygon geometry.
+  labelPositionsValue?: string;
+  onLabelPositionsChange?: (value: string) => void;
 }
 
 const createGpsMarkerIcon = (isCurrentLocation: boolean) =>
@@ -100,7 +113,9 @@ export default function MiniMap({
   polygonValue,
   onPolygonChange,
   onSketchDetailsChange,
-  boundaryInfo
+  boundaryInfo,
+  labelPositionsValue,
+  onLabelPositionsChange,
 }: MiniMapProps) {
   const { showAlert } = useModal();
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -115,10 +130,20 @@ export default function MiniMap({
   // The map-init effect below only runs once (guarded by mapRef.current), so its event
   // handlers close over whatever `boundaryInfo` was at that first render. Reading through
   // a ref instead means a later edit to the Waqooyi/Bari/Koonfur/Galbeed text fields is
-  // picked up the next time the polygon is drawn/edited, without needing to re-init the
-  // whole map.
+  // picked up next time a direction label is placed/moved, without needing to re-init
+  // the whole map.
   const boundaryInfoRef = useRef<BoundaryInfo | undefined>(boundaryInfo);
   useEffect(() => { boundaryInfoRef.current = boundaryInfo; }, [boundaryInfo]);
+
+  // Manually-placed direction labels: which direction (if any) is "armed" for the next
+  // map click to place, the markers currently on the map per direction, and the
+  // positions themselves (kept in a ref too so the stable map-click handler always sees
+  // the latest state without needing to be re-registered).
+  const [placingDirection, setPlacingDirection] = useState<CompassDirection | null>(null);
+  const placingDirectionRef = useRef<CompassDirection | null>(null);
+  useEffect(() => { placingDirectionRef.current = placingDirection; }, [placingDirection]);
+  const directionMarkersRef = useRef<Partial<Record<CompassDirection, L.Marker>>>({});
+  const labelPositionsRef = useRef<DirectionPositions>(parseDirectionPositions(labelPositionsValue));
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSketch, setShowSketch] = useState(false);
@@ -187,48 +212,55 @@ export default function MiniMap({
     let liveMeasurementMarker: L.Marker | null = null;
     let drawingWasCompleted = false;
 
-    // Labels the polygon's 4 longest sides (the "main" boundaries) with their real
-    // compass direction plus the matching Waqooyi/Bari/Koonfur/Galbeed measurement and
-    // neighbor name from boundaryInfoRef — e.g. "Waqooyi — 25m — Axmed". Mirrors the
-    // same logic in DetailsModal.tsx's read-only view, kept independent since the two
-    // components don't share Leaflet map instances.
-    const addBoundaryDirectionMarkers = (coords: L.LatLng[]) => {
-      directionLayer.clearLayers();
-      const info = boundaryInfoRef.current;
-      if (!info || coords.length < 3) return;
-
-      const center = coords.reduce(
-        (acc, c) => ({ lat: acc.lat + c.lat / coords.length, lng: acc.lng + c.lng / coords.length }),
-        { lat: 0, lng: 0 },
-      );
-      const segmentDistances = coords.map((start, idx) => {
-        const end = coords[(idx + 1) % coords.length];
-        return { index: idx, dist: map.distance(start, end) };
+    // Places (or moves, if one already exists for this direction) a draggable
+    // Waqooyi/Bari/Koonfur/Galbeed label at the given point — the surveyor arms a
+    // direction via the toolbar buttons below, then clicks/taps the map. Dragging
+    // repositions it; double-clicking removes it. Every change re-serializes the full
+    // set of positions outward via onLabelPositionsChange.
+    const placeDirectionMarker = (direction: CompassDirection, latlng: L.LatLng) => {
+      const label = buildDirectionLabel(direction, boundaryInfoRef.current?.[direction]);
+      const icon = L.divIcon({
+        className: 'boundary-direction-label',
+        html: `<div class="boundary-direction-box">${label}</div>`,
+        iconSize: [150, 36],
+        iconAnchor: [75, 18],
       });
-      const mainIndices = new Set(
-        [...segmentDistances].sort((a, b) => b.dist - a.dist).slice(0, 4).map((s) => s.index),
-      );
 
-      for (const { index } of segmentDistances) {
-        if (!mainIndices.has(index)) continue;
-        const start = coords[index];
-        const end = coords[(index + 1) % coords.length];
-        const mid = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
-        const direction = getDirectionFromCenter(center.lat, center.lng, mid.lat, mid.lng);
-        const label = buildDirectionLabel(direction, info[direction]);
-
-        L.marker(mid, {
-          interactive: false,
-          keyboard: false,
-          icon: L.divIcon({
-            className: 'boundary-direction-label',
-            html: `<div class="boundary-direction-box">${label}</div>`,
-            iconSize: [150, 36],
-            iconAnchor: [75, 50],
-          }),
-          zIndexOffset: 1100,
-        }).addTo(directionLayer);
+      const existing = directionMarkersRef.current[direction];
+      if (existing) {
+        existing.setLatLng(latlng);
+        existing.setIcon(icon);
+      } else {
+        const marker = L.marker(latlng, { draggable: true, icon, zIndexOffset: 1100 }).addTo(directionLayer);
+        marker.on('dragend', () => {
+          const pos = marker.getLatLng();
+          labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: pos.lat, lng: pos.lng } };
+          onLabelPositionsChange?.(serializeDirectionPositions(labelPositionsRef.current));
+        });
+        marker.on('dblclick', () => {
+          directionLayer.removeLayer(marker);
+          delete directionMarkersRef.current[direction];
+          const next = { ...labelPositionsRef.current };
+          delete next[direction];
+          labelPositionsRef.current = next;
+          onLabelPositionsChange?.(serializeDirectionPositions(next));
+        });
+        directionMarkersRef.current[direction] = marker;
       }
+
+      labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: latlng.lat, lng: latlng.lng } };
+      onLabelPositionsChange?.(serializeDirectionPositions(labelPositionsRef.current));
+    };
+
+    // Redraws whatever direction labels were already saved (edit mode / a reload) —
+    // MiniMap otherwise has no memory of positions from a previous session.
+    const renderStoredDirectionMarkers = () => {
+      directionLayer.clearLayers();
+      directionMarkersRef.current = {};
+      (Object.keys(labelPositionsRef.current) as CompassDirection[]).forEach((direction) => {
+        const pos = labelPositionsRef.current[direction];
+        if (pos) placeDirectionMarker(direction, L.latLng(pos.lat, pos.lng));
+      });
     };
 
     const drawSegmentMeasurements = (coords: L.LatLng[], includeClosingSegment: boolean) => {
@@ -271,7 +303,7 @@ export default function MiniMap({
           const seededPolygon = L.polygon(seededLatLngs, { color: '#3388ff', weight: 3 });
           drawnItems.addLayer(seededPolygon);
           drawSegmentMeasurements(seededLatLngs, true);
-          addBoundaryDirectionMarkers(seededLatLngs);
+          renderStoredDirectionMarkers();
           generateSketch(seededLatLngs, seededPolygon.getBounds());
           map.fitBounds(seededPolygon.getBounds(), { padding: [40, 40] });
         }
@@ -349,9 +381,18 @@ export default function MiniMap({
       }
     });
 
-    // Map Click Listener to place marker
+    // Map Click Listener — either drops an "armed" direction label (see the toolbar
+    // buttons in the JSX below) or, the rest of the time, places the GPS marker.
     map.on('click', (e: L.LeafletMouseEvent) => {
       if (isDrawingRef.current) return;
+
+      if (placingDirectionRef.current) {
+        placeDirectionMarker(placingDirectionRef.current, e.latlng);
+        placingDirectionRef.current = null;
+        setPlacingDirection(null);
+        return;
+      }
+
       const { lat, lng } = e.latlng;
       setIsAtCurrentLocation(false);
       setLocationAccuracy(null);
@@ -365,11 +406,17 @@ export default function MiniMap({
       const layer = e.layer;
       drawnItems.addLayer(layer);
 
+      // A freshly-drawn shape invalidates any previously-placed direction labels — they
+      // were positioned relative to the old (now gone) polygon, not this new one.
+      directionLayer.clearLayers();
+      directionMarkersRef.current = {};
+      labelPositionsRef.current = {};
+      onLabelPositionsChange?.('');
+
       // Handle polygon coordinates
       const latlngs = layer.getLatLngs()[0] as L.LatLng[];
       drawingWasCompleted = true;
       drawSegmentMeasurements(latlngs, true);
-      addBoundaryDirectionMarkers(latlngs);
       const polyString = latlngs.map(c => `${c.lat.toFixed(6)},${c.lng.toFixed(6)}`).join('; ');
       onPolygonChange(polyString);
 
@@ -394,7 +441,9 @@ export default function MiniMap({
         const polygonLayer = layer as L.Polygon;
         const latlngs = polygonLayer.getLatLngs()[0] as L.LatLng[];
         drawSegmentMeasurements(latlngs, true);
-        addBoundaryDirectionMarkers(latlngs);
+        // Direction labels are placed independently of the polygon's exact geometry
+        // (absolute lat/lng, not tied to a specific edge index), so a reshape via the
+        // Edit toolbar deliberately leaves them where the surveyor put them.
         const polyString = latlngs.map((c: L.LatLng) => `${c.lat.toFixed(6)},${c.lng.toFixed(6)}`).join('; ');
         onPolygonChange(polyString);
 
@@ -822,6 +871,31 @@ export default function MiniMap({
               >
                 <Fullscreen className="h-[18px] w-[18px]" />
               </button>
+            </div>
+
+            {/* Manual direction-label placement: pick a side, then tap the map to drop it there. */}
+            <div className="absolute bottom-3 left-3 z-10 flex flex-col gap-2">
+              {placingDirection && (
+                <span className="w-fit rounded-xl border border-blue-200 bg-blue-600/95 px-3 py-1.5 text-[10px] font-extrabold text-white shadow-md backdrop-blur-md">
+                  Riix meesha mapka ka mid ah si aad ugu dhigto &quot;{DIRECTION_LABELS[placingDirection]}&quot;
+                </span>
+              )}
+              <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-md backdrop-blur-md">
+                {(Object.keys(DIRECTION_LABELS) as CompassDirection[]).map((dir) => (
+                  <button
+                    key={dir}
+                    type="button"
+                    onClick={() => setPlacingDirection((prev) => (prev === dir ? null : dir))}
+                    className={`flex h-9 cursor-pointer items-center justify-center rounded-xl px-3 text-[10px] font-extrabold transition-all ${
+                      placingDirection === dir
+                        ? 'bg-teal-600 text-white shadow-[0_6px_16px_rgba(37,99,235,0.3)]'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {DIRECTION_LABELS[dir]}
+                  </button>
+                ))}
+              </div>
             </div>
 
           </div>

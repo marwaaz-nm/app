@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
       polygon_boundary: polygonBoundary,
       sketch_area: requiredText(body.sketch_area) || null,
       sketch_dimensions: requiredText(body.sketch_dimensions) || null,
+      boundary_label_positions: requiredText(body.boundary_label_positions) || null,
       status: 'Draft',
       created_by: viewer.userId,
       updated_by: viewer.userId,

@@ -6,7 +6,7 @@ const editableFields = [
   'owner_name', 'neighborhood', 'branch', 'vicinity', 'land_type', 'built_details',
   'boundary_w_val', 'boundary_w_neighbor', 'boundary_b_val', 'boundary_b_neighbor',
   'boundary_k_val', 'boundary_k_neighbor', 'boundary_g_val', 'boundary_g_neighbor',
-  'gps_location', 'polygon_boundary', 'sketch_area', 'sketch_dimensions',
+  'gps_location', 'polygon_boundary', 'sketch_area', 'sketch_dimensions', 'boundary_label_positions',
 ] as const;
 
 type RouteContext = { params: Promise<{ id: string }> };

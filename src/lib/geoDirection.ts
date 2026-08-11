@@ -57,3 +57,33 @@ export function buildDirectionLabel(direction: CompassDirection, side?: Boundary
   if (side?.neighbor) parts.push(side.neighbor);
   return parts.join(' — ');
 }
+
+// Serialization for manually-placed direction labels (a surveyor clicks a direction
+// button, then clicks the map to drop that label there) — stored as
+// "N:lat,lng;E:lat,lng;..." in `surveys.boundary_label_positions`. Only directions the
+// user has actually placed are included, so a record with none stored falls back to the
+// automatic bearing calculation elsewhere.
+export type LatLngPoint = { lat: number; lng: number };
+export type DirectionPositions = Partial<Record<CompassDirection, LatLngPoint>>;
+
+export function serializeDirectionPositions(positions: DirectionPositions): string {
+  return (Object.keys(positions) as CompassDirection[])
+    .filter((dir) => positions[dir])
+    .map((dir) => `${dir}:${positions[dir]!.lat.toFixed(6)},${positions[dir]!.lng.toFixed(6)}`)
+    .join(';');
+}
+
+export function parseDirectionPositions(raw: string | null | undefined): DirectionPositions {
+  const result: DirectionPositions = {};
+  if (!raw || !raw.trim()) return result;
+  for (const entry of raw.split(';')) {
+    const [dirRaw, coordRaw] = entry.split(':');
+    const dir = dirRaw?.trim().toUpperCase() as CompassDirection;
+    if (!coordRaw || !['N', 'E', 'S', 'W'].includes(dir)) continue;
+    const [latStr, lngStr] = coordRaw.split(',');
+    const lat = parseFloat(latStr);
+    const lng = parseFloat(lngStr);
+    if (!Number.isNaN(lat) && !Number.isNaN(lng)) result[dir] = { lat, lng };
+  }
+  return result;
+}

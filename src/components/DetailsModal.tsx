@@ -23,7 +23,7 @@ import {
 import L from 'leaflet';
 import { useModal } from '@/context/ModalContext';
 import { useSettings } from '@/context/SettingsContext';
-import { buildDirectionLabel, getDirectionFromCenter, type BoundaryInfo } from '@/lib/geoDirection';
+import { buildDirectionLabel, getDirectionFromCenter, parseDirectionPositions, type BoundaryInfo, type CompassDirection } from '@/lib/geoDirection';
 
 interface DetailsModalProps {
   record: Survey | null;
@@ -178,18 +178,10 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
   // measurement and neighbor name typed into the survey record, e.g. "Waqooyi — 25m —
   // Axmed". Shared between the satellite map and the sketch, which otherwise had no
   // direction indicator on it at all and a screen-invisible (print-only) one respectively.
-  const addBoundaryDirectionLabel = (
-    start: L.LatLng,
-    end: L.LatLng,
-    map: L.Map,
-    allCoords: L.LatLng[],
-    center: { lat: number; lng: number },
-    boundaryInfo: BoundaryInfo,
-  ) => {
+  // Computes where the automatic (bearing-based) label for a boundary segment would sit
+  // — the segment's midpoint, nudged outward away from the polygon's interior.
+  const computeAutoDirectionPosition = (start: L.LatLng, end: L.LatLng, allCoords: L.LatLng[]): L.LatLng => {
     const mid = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
-    const direction = getDirectionFromCenter(center.lat, center.lng, mid.lat, mid.lng);
-    const label = buildDirectionLabel(direction, boundaryInfo[direction]);
-
     const dLat = end.lat - start.lat;
     const dLng = end.lng - start.lng;
     let sum = 0;
@@ -210,7 +202,15 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
     const testMid = L.latLng(mid.lat + oy, mid.lng + ox);
     if (isPointInPolygon(testMid, allCoords)) { ox = -ox; oy = -oy; }
 
-    L.marker(L.latLng(mid.lat + oy, mid.lng + ox), {
+    return L.latLng(mid.lat + oy, mid.lng + ox);
+  };
+
+  // Renders a single direction label marker at an exact position — either a manually
+  // placed spot (from `boundary_label_positions`) or the automatic fallback computed
+  // above.
+  const renderDirectionLabel = (direction: CompassDirection, position: L.LatLng, map: L.Map, boundaryInfo: BoundaryInfo) => {
+    const label = buildDirectionLabel(direction, boundaryInfo[direction]);
+    L.marker(position, {
       icon: L.divIcon({
         className: 'boundary-direction-label',
         html: `<div class="boundary-direction-box">${label}</div>`,
@@ -218,6 +218,37 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         iconAnchor: [75, 18],
       }),
     }).addTo(map);
+  };
+
+  // Draws all 4 direction labels on a map. Manually placed positions (surveyor clicked
+  // a direction button then tapped the map) win when present; any direction missing a
+  // manual position falls back to the automatic bearing-based placement, so older
+  // records saved before this feature still show all 4 labels.
+  const addBoundaryDirectionLabels = (
+    map: L.Map,
+    latlngs: L.LatLng[],
+    mainBoundaryIndices: Set<number>,
+    center: { lat: number; lng: number },
+    boundaryInfo: BoundaryInfo,
+    manualPositions: ReturnType<typeof parseDirectionPositions>,
+  ) => {
+    const directions: CompassDirection[] = ['N', 'E', 'S', 'W'];
+    for (const direction of directions) {
+      const manual = manualPositions[direction];
+      if (manual) {
+        renderDirectionLabel(direction, L.latLng(manual.lat, manual.lng), map, boundaryInfo);
+        continue;
+      }
+      for (const idx of mainBoundaryIndices) {
+        const start = latlngs[idx];
+        const end = latlngs[(idx + 1) % latlngs.length];
+        const mid = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
+        if (getDirectionFromCenter(center.lat, center.lng, mid.lat, mid.lng) === direction) {
+          renderDirectionLabel(direction, computeAutoDirectionPosition(start, end, latlngs), map, boundaryInfo);
+          break;
+        }
+      }
+    }
   };
 
   // Initialize satellite and sketch maps inside the modal
@@ -280,6 +311,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         S: { val: record.boundary_k_val, neighbor: record.boundary_k_neighbor },
         W: { val: record.boundary_g_val, neighbor: record.boundary_g_neighbor },
       };
+      const manualPositions = parseDirectionPositions(record.boundary_label_positions);
 
       // The 4 longest sides are treated as the plot's "main" boundaries — the ones that
       // get a Waqooyi/Bari/Koonfur/Galbeed label — same selection both maps use.
@@ -330,12 +362,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           fillOpacity: 0.15
         }).addTo(satMap);
 
-        for (let i = 0; i < latlngs.length; i++) {
-          if (!mainBoundaryIndices.has(i)) continue;
-          const start = latlngs[i];
-          const end = latlngs[(i + 1) % latlngs.length];
-          addBoundaryDirectionLabel(start, end, satMap, latlngs, vertexCenter, boundaryInfo);
-        }
+        addBoundaryDirectionLabels(satMap, latlngs, mainBoundaryIndices, vertexCenter, boundaryInfo, manualPositions);
 
         L.control.zoom({ position: 'bottomright' }).addTo(satMap);
 
@@ -382,10 +409,8 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           const start = latlngs[i];
           const end = latlngs[(i + 1) % latlngs.length];
           addSketchDimension(start, end, skMap, latlngs);
-          if (mainBoundaryIndices.has(i)) {
-            addBoundaryDirectionLabel(start, end, skMap, latlngs, vertexCenter, boundaryInfo);
-          }
         }
+        addBoundaryDirectionLabels(skMap, latlngs, mainBoundaryIndices, vertexCenter, boundaryInfo, manualPositions);
 
         // Add Center Area Label
         const matchArea = record.sketch_dimensions?.match(/Area:\s*([^\s|]+)/i) || record.sketch_dimensions?.match(/Area\s*([^\s|]+)/i);

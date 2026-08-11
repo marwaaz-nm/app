@@ -29,6 +29,7 @@ export interface Survey {
   polygon_boundary?: string;
   sketch_area?: string;
   sketch_dimensions?: string;
+  boundary_label_positions?: string;
   created_at?: string;
   created_by?: string;
   status?: SurveyStatus;

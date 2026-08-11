@@ -40,7 +40,7 @@ const fields: Array<{ key: keyof Survey; label: string; wide?: boolean }> = [
 
 // Managed by the interactive map below, not the plain text-field grid above — kept as a
 // separate list so saveEdit still persists them even though they're not in `fields`.
-const MAP_MANAGED_KEYS: Array<keyof Survey> = ['gps_location', 'polygon_boundary', 'sketch_area', 'sketch_dimensions'];
+const MAP_MANAGED_KEYS: Array<keyof Survey> = ['gps_location', 'polygon_boundary', 'sketch_area', 'sketch_dimensions', 'boundary_label_positions'];
 
 const statusStyle: Record<SurveyStatus, string> = {
   Draft: 'bg-slate-100 text-slate-700 border-slate-200',
@@ -254,6 +254,8 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
                 onGpsChange={(value) => setDraft((prev) => ({ ...prev, gps_location: value }))}
                 polygonValue={String(draft.polygon_boundary ?? '')}
                 onPolygonChange={(value) => setDraft((prev) => ({ ...prev, polygon_boundary: value }))}
+                labelPositionsValue={String(draft.boundary_label_positions ?? '')}
+                onLabelPositionsChange={(value) => setDraft((prev) => ({ ...prev, boundary_label_positions: value }))}
                 boundaryInfo={{
                   N: { val: draft.boundary_w_val, neighbor: draft.boundary_w_neighbor },
                   E: { val: draft.boundary_b_val, neighbor: draft.boundary_b_neighbor },
