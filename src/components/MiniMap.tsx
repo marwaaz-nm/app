@@ -848,7 +848,11 @@ export default function MiniMap({
                 : 'h-[460px] w-full'
             }`}
           >
-            <div ref={mapContainerRef} className="w-full h-full" />
+            {/* relative + z-0 here (not just on the outer wrapper) makes this div its
+                own stacking context, so Leaflet's internal panes/controls — which go up
+                to z-index 1000 — can never escape it and cover the overlay buttons below,
+                which sit in the outer wrapper's stacking context at z-10. */}
+            <div ref={mapContainerRef} className="relative z-0 w-full h-full" />
 
             {/* Map controls */}
             <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
