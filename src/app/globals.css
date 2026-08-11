@@ -164,6 +164,37 @@ body {
   line-height: 1.2;
 }
 
+.boundary-direction-wrap {
+  position: relative;
+  display: inline-block;
+  cursor: grab;
+}
+
+.boundary-direction-rotate-handle {
+  position: absolute;
+  left: 50%;
+  top: -26px;
+  transform: translateX(-50%);
+  display: flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #1d4ed8;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: grab;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.25);
+  touch-action: none;
+  user-select: none;
+}
+
+.boundary-direction-rotate-handle:active {
+  cursor: grabbing;
+}
+
 .boundary-direction-box {
   display: inline-block;
   transform: translate(-50%, -50%);

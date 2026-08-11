@@ -126,7 +126,11 @@ export default function MiniMap({
   const drawnItemsRef = useRef<L.FeatureGroup | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const measurementLayerRef = useRef<L.LayerGroup | null>(null);
-  const directionLayerRef = useRef<L.LayerGroup | null>(null);
+  // The sketch map is torn down and rebuilt on every generateSketch() call (new draw,
+  // reshape, or edit-mode seed), so this points at whichever sketch map's direction-label
+  // layer is currently live — direction labels live on the sketch now, not the satellite
+  // map, so a manual placement always has a clean technical-drawing background to sit on.
+  const sketchDirectionLayerRef = useRef<L.LayerGroup | null>(null);
   // The map-init effect below only runs once (guarded by mapRef.current), so its event
   // handlers close over whatever `boundaryInfo` was at that first render. Reading through
   // a ref instead means a later edit to the Waqooyi/Bari/Koonfur/Galbeed text fields is
@@ -206,62 +210,9 @@ export default function MiniMap({
 
     const measurementLayer = new L.LayerGroup().addTo(map);
     measurementLayerRef.current = measurementLayer;
-    const directionLayer = new L.LayerGroup().addTo(map);
-    directionLayerRef.current = directionLayer;
     let drawingVertices: L.LatLng[] = [];
     let liveMeasurementMarker: L.Marker | null = null;
     let drawingWasCompleted = false;
-
-    // Places (or moves, if one already exists for this direction) a draggable
-    // Waqooyi/Bari/Koonfur/Galbeed label at the given point — the surveyor arms a
-    // direction via the toolbar buttons below, then clicks/taps the map. Dragging
-    // repositions it; double-clicking removes it. Every change re-serializes the full
-    // set of positions outward via onLabelPositionsChange.
-    const placeDirectionMarker = (direction: CompassDirection, latlng: L.LatLng) => {
-      const label = buildDirectionLabel(direction, boundaryInfoRef.current?.[direction]);
-      const icon = L.divIcon({
-        className: 'boundary-direction-label',
-        html: `<div class="boundary-direction-box">${label}</div>`,
-        iconSize: [150, 36],
-        iconAnchor: [75, 18],
-      });
-
-      const existing = directionMarkersRef.current[direction];
-      if (existing) {
-        existing.setLatLng(latlng);
-        existing.setIcon(icon);
-      } else {
-        const marker = L.marker(latlng, { draggable: true, icon, zIndexOffset: 1100 }).addTo(directionLayer);
-        marker.on('dragend', () => {
-          const pos = marker.getLatLng();
-          labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: pos.lat, lng: pos.lng } };
-          onLabelPositionsChange?.(serializeDirectionPositions(labelPositionsRef.current));
-        });
-        marker.on('dblclick', () => {
-          directionLayer.removeLayer(marker);
-          delete directionMarkersRef.current[direction];
-          const next = { ...labelPositionsRef.current };
-          delete next[direction];
-          labelPositionsRef.current = next;
-          onLabelPositionsChange?.(serializeDirectionPositions(next));
-        });
-        directionMarkersRef.current[direction] = marker;
-      }
-
-      labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: latlng.lat, lng: latlng.lng } };
-      onLabelPositionsChange?.(serializeDirectionPositions(labelPositionsRef.current));
-    };
-
-    // Redraws whatever direction labels were already saved (edit mode / a reload) —
-    // MiniMap otherwise has no memory of positions from a previous session.
-    const renderStoredDirectionMarkers = () => {
-      directionLayer.clearLayers();
-      directionMarkersRef.current = {};
-      (Object.keys(labelPositionsRef.current) as CompassDirection[]).forEach((direction) => {
-        const pos = labelPositionsRef.current[direction];
-        if (pos) placeDirectionMarker(direction, L.latLng(pos.lat, pos.lng));
-      });
-    };
 
     const drawSegmentMeasurements = (coords: L.LatLng[], includeClosingSegment: boolean) => {
       measurementLayer.clearLayers();
@@ -302,8 +253,14 @@ export default function MiniMap({
         if (seededLatLngs.length >= 3) {
           const seededPolygon = L.polygon(seededLatLngs, { color: '#3388ff', weight: 3 });
           drawnItems.addLayer(seededPolygon);
+          // Fires continuously while a vertex is being dragged in Edit mode (not just
+          // once on Save) — without this the segment-length labels stayed frozen until
+          // the whole edit was committed, even though the polygon outline itself moved
+          // live.
+          seededPolygon.on('editdrag', () => {
+            drawSegmentMeasurements(seededPolygon.getLatLngs()[0] as L.LatLng[], true);
+          });
           drawSegmentMeasurements(seededLatLngs, true);
-          renderStoredDirectionMarkers();
           generateSketch(seededLatLngs, seededPolygon.getBounds());
           map.fitBounds(seededPolygon.getBounds(), { padding: [40, 40] });
         }
@@ -343,7 +300,6 @@ export default function MiniMap({
       drawingWasCompleted = false;
       drawingVertices = [];
       measurementLayer.clearLayers();
-      directionLayer.clearLayers();
       liveMeasurementMarker = null;
     });
     map.on('draw:drawstop', () => {
@@ -381,17 +337,10 @@ export default function MiniMap({
       }
     });
 
-    // Map Click Listener — either drops an "armed" direction label (see the toolbar
-    // buttons in the JSX below) or, the rest of the time, places the GPS marker.
+    // Map Click Listener — places the GPS marker. (Direction-label placement happens on
+    // the technical sketch below, not this satellite map.)
     map.on('click', (e: L.LeafletMouseEvent) => {
       if (isDrawingRef.current) return;
-
-      if (placingDirectionRef.current) {
-        placeDirectionMarker(placingDirectionRef.current, e.latlng);
-        placingDirectionRef.current = null;
-        setPlacingDirection(null);
-        return;
-      }
 
       const { lat, lng } = e.latlng;
       setIsAtCurrentLocation(false);
@@ -405,10 +354,14 @@ export default function MiniMap({
       drawnItems.clearLayers();
       const layer = e.layer;
       drawnItems.addLayer(layer);
+      // See the matching listener on the seeded polygon above — keeps segment-length
+      // labels live while dragging a vertex in Edit mode, not just after Save.
+      layer.on('editdrag', () => {
+        drawSegmentMeasurements(layer.getLatLngs()[0] as L.LatLng[], true);
+      });
 
       // A freshly-drawn shape invalidates any previously-placed direction labels — they
       // were positioned relative to the old (now gone) polygon, not this new one.
-      directionLayer.clearLayers();
       directionMarkersRef.current = {};
       labelPositionsRef.current = {};
       onLabelPositionsChange?.('');
@@ -637,6 +590,121 @@ export default function MiniMap({
     });
   };
 
+  // Places (or moves, if one already exists for this direction) a draggable
+  // Waqooyi/Bari/Koonfur/Galbeed label at the given point on the sketch map — the
+  // surveyor arms a direction via the toolbar buttons, then clicks/taps the sketch.
+  // Dragging the marker repositions it; the small handle above it rotates it smoothly as
+  // you drag (updated on every pointer move, not snapped to fixed steps); double-clicking
+  // removes it. Every change re-serializes the full set of positions (including rotation)
+  // outward via onLabelPositionsChange.
+  const placeDirectionMarker = (
+    targetMap: L.Map,
+    layer: L.LayerGroup,
+    direction: CompassDirection,
+    latlng: L.LatLng,
+    rotation = 0,
+  ) => {
+    const label = buildDirectionLabel(direction, boundaryInfoRef.current?.[direction]);
+    const icon = L.divIcon({
+      className: 'boundary-direction-marker',
+      html: `
+        <div class="boundary-direction-wrap" style="transform: translate(-50%, -50%) rotate(${rotation}deg);">
+          <div class="boundary-direction-rotate-handle" title="Wareeji (rotate)">&#8635;</div>
+          <div class="boundary-direction-box">${label}</div>
+        </div>`,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0],
+    });
+
+    const existing = directionMarkersRef.current[direction];
+    let marker: L.Marker;
+    if (existing) {
+      existing.setLatLng(latlng);
+      existing.setIcon(icon);
+      marker = existing;
+    } else {
+      marker = L.marker(latlng, { draggable: true, icon, zIndexOffset: 1100 }).addTo(layer);
+      marker.on('dragend', () => {
+        const pos = marker.getLatLng();
+        const prevRotation = labelPositionsRef.current[direction]?.rotation ?? 0;
+        labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: pos.lat, lng: pos.lng, rotation: prevRotation } };
+        onLabelPositionsChange?.(serializeDirectionPositions(labelPositionsRef.current));
+      });
+      marker.on('dblclick', () => {
+        layer.removeLayer(marker);
+        delete directionMarkersRef.current[direction];
+        const next = { ...labelPositionsRef.current };
+        delete next[direction];
+        labelPositionsRef.current = next;
+        onLabelPositionsChange?.(serializeDirectionPositions(next));
+      });
+      directionMarkersRef.current[direction] = marker;
+    }
+
+    labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: latlng.lat, lng: latlng.lng, rotation } };
+    onLabelPositionsChange?.(serializeDirectionPositions(labelPositionsRef.current));
+
+    // A divIcon's DOM is rebuilt on every setIcon() call, so the rotate-handle listeners
+    // have to be rewired every time (not just once on creation).
+    const el = marker.getElement();
+    const wrap = el?.querySelector('.boundary-direction-wrap') as HTMLElement | null;
+    const handle = el?.querySelector('.boundary-direction-rotate-handle') as HTMLElement | null;
+    if (!wrap || !handle) return;
+    L.DomEvent.disableClickPropagation(handle);
+
+    const startRotate = (clientX: number, clientY: number) => {
+      const markerPoint = targetMap.latLngToContainerPoint(marker.getLatLng());
+      const mapRect = targetMap.getContainer().getBoundingClientRect();
+      const centerX = mapRect.left + markerPoint.x;
+      const centerY = mapRect.top + markerPoint.y;
+      // 0deg = pointer straight above center, increasing clockwise — matches CSS rotate().
+      const angleFor = (x: number, y: number) => (Math.atan2(x - centerX, -(y - centerY)) * 180) / Math.PI;
+
+      const onMove = (x: number, y: number) => {
+        wrap.style.transform = `translate(-50%, -50%) rotate(${angleFor(x, y)}deg)`;
+      };
+      const finish = (x: number, y: number) => {
+        const angle = angleFor(x, y);
+        const pos = marker.getLatLng();
+        labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: pos.lat, lng: pos.lng, rotation: angle } };
+        onLabelPositionsChange?.(serializeDirectionPositions(labelPositionsRef.current));
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.removeEventListener('touchmove', onTouchMove);
+        document.removeEventListener('touchend', onTouchEnd);
+      };
+      const onMouseMove = (event: MouseEvent) => onMove(event.clientX, event.clientY);
+      const onMouseUp = (event: MouseEvent) => finish(event.clientX, event.clientY);
+      const onTouchMove = (event: TouchEvent) => {
+        const touch = event.touches[0];
+        if (touch) onMove(touch.clientX, touch.clientY);
+      };
+      const onTouchEnd = (event: TouchEvent) => {
+        const touch = event.changedTouches[0];
+        if (touch) finish(touch.clientX, touch.clientY);
+      };
+
+      // Orient immediately from the press point rather than waiting for the first move,
+      // so the label visibly starts tracking the handle right away.
+      onMove(clientX, clientY);
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      document.addEventListener('touchmove', onTouchMove, { passive: false });
+      document.addEventListener('touchend', onTouchEnd);
+    };
+
+    L.DomEvent.on(handle, 'mousedown', (event) => {
+      L.DomEvent.stop(event);
+      startRotate((event as MouseEvent).clientX, (event as MouseEvent).clientY);
+    });
+    L.DomEvent.on(handle, 'touchstart', (event) => {
+      L.DomEvent.stop(event);
+      const touch = (event as TouchEvent).touches[0];
+      if (touch) startRotate(touch.clientX, touch.clientY);
+    });
+  };
+
   const generateSketch = (latlngs: L.LatLng[], bounds: L.LatLngBounds) => {
     setShowSketch(true);
     
@@ -702,6 +770,24 @@ export default function MiniMap({
         const end = latlngs[(i + 1) % latlngs.length];
         addSketchDimension(start, end, skMap, latlngs);
       }
+
+      // Manual direction labels (Waqooyi/Bari/Koonfur/Galbeed) live on the sketch, not
+      // the satellite map. The sketch map is rebuilt from scratch here every time, so
+      // redraw whatever positions were already saved and rewire the click-to-place
+      // listener on this fresh map instance.
+      const directionLayer = new L.LayerGroup().addTo(skMap);
+      sketchDirectionLayerRef.current = directionLayer;
+      directionMarkersRef.current = {};
+      (Object.keys(labelPositionsRef.current) as CompassDirection[]).forEach((direction) => {
+        const pos = labelPositionsRef.current[direction];
+        if (pos) placeDirectionMarker(skMap, directionLayer, direction, L.latLng(pos.lat, pos.lng), pos.rotation ?? 0);
+      });
+      skMap.on('click', (event: L.LeafletMouseEvent) => {
+        if (!placingDirectionRef.current) return;
+        placeDirectionMarker(skMap, directionLayer, placingDirectionRef.current, event.latlng, 0);
+        placingDirectionRef.current = null;
+        setPlacingDirection(null);
+      });
 
       skMap.invalidateSize();
       skMap.fitBounds(bounds.pad(0.08), { animate: false });
@@ -858,16 +944,6 @@ export default function MiniMap({
             <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
               <button
                 type="button"
-                onClick={getLiveLocation}
-                disabled={locating}
-                className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-teal-600 px-3.5 text-[10px] font-extrabold text-white shadow-[0_8px_22px_rgba(37,99,235,0.3)] transition-all hover:-translate-y-0.5 hover:bg-teal-500 disabled:cursor-wait disabled:bg-slate-400"
-                aria-label="Go to my current location"
-              >
-                {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
-                <span className="hidden sm:inline">{locating ? 'Locating...' : 'My Location'}</span>
-              </button>
-              <button
-                type="button"
                 onClick={toggleFullScreen}
                 className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-700 shadow-md backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-slate-50"
                 aria-label={isExpanded ? 'Exit full screen map' : 'Open full screen map'}
@@ -875,31 +951,6 @@ export default function MiniMap({
               >
                 <Fullscreen className="h-[18px] w-[18px]" />
               </button>
-            </div>
-
-            {/* Manual direction-label placement: pick a side, then tap the map to drop it there. */}
-            <div className="absolute bottom-3 left-3 z-10 flex flex-col gap-2">
-              {placingDirection && (
-                <span className="w-fit rounded-xl border border-blue-200 bg-blue-600/95 px-3 py-1.5 text-[10px] font-extrabold text-white shadow-md backdrop-blur-md">
-                  Riix meesha mapka ka mid ah si aad ugu dhigto &quot;{DIRECTION_LABELS[placingDirection]}&quot;
-                </span>
-              )}
-              <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-md backdrop-blur-md">
-                {(Object.keys(DIRECTION_LABELS) as CompassDirection[]).map((dir) => (
-                  <button
-                    key={dir}
-                    type="button"
-                    onClick={() => setPlacingDirection((prev) => (prev === dir ? null : dir))}
-                    className={`flex h-9 cursor-pointer items-center justify-center rounded-xl px-3 text-[10px] font-extrabold transition-all ${
-                      placingDirection === dir
-                        ? 'bg-teal-600 text-white shadow-[0_6px_16px_rgba(37,99,235,0.3)]'
-                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    {DIRECTION_LABELS[dir]}
-                  </button>
-                ))}
-              </div>
             </div>
 
           </div>
@@ -939,12 +990,41 @@ export default function MiniMap({
             </div>
           </div>
           <div className="bg-white p-4 sm:p-5">
-            <div className="sketch-map-shell overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-inner shadow-slate-100">
-              <div ref={sketchContainerRef} className="sketch-map-canvas h-[420px] w-full rounded-xl bg-white" />
+            <div className="sketch-map-shell relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-inner shadow-slate-100">
+              {/* relative + z-0 gives this its own stacking context so Leaflet's internal
+                  panes/controls (z-index up to 1000) can't cover the direction-button
+                  overlay below, which sits in the shell's stacking context at z-10. */}
+              <div ref={sketchContainerRef} className="sketch-map-canvas relative z-0 h-[420px] w-full rounded-xl bg-white" />
+
+              {/* Manual direction-label placement: pick a side, then tap the sketch to
+                  drop it there. A small handle on each placed label lets you rotate it. */}
+              <div className="absolute bottom-4 left-4 z-10 flex flex-col gap-2">
+                {placingDirection && (
+                  <span className="w-fit rounded-xl border border-blue-200 bg-blue-600/95 px-3 py-1.5 text-[10px] font-extrabold text-white shadow-md backdrop-blur-md">
+                    Riix meesha sketch-ka si aad ugu dhigto &quot;{DIRECTION_LABELS[placingDirection]}&quot;
+                  </span>
+                )}
+                <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-md backdrop-blur-md">
+                  {(Object.keys(DIRECTION_LABELS) as CompassDirection[]).map((dir) => (
+                    <button
+                      key={dir}
+                      type="button"
+                      onClick={() => setPlacingDirection((prev) => (prev === dir ? null : dir))}
+                      className={`flex h-9 cursor-pointer items-center justify-center rounded-xl px-3 text-[10px] font-extrabold transition-all ${
+                        placingDirection === dir
+                          ? 'bg-teal-600 text-white shadow-[0_6px_16px_rgba(37,99,235,0.3)]'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {DIRECTION_LABELS[dir]}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="mt-3 flex items-center justify-center gap-2 text-[9px] font-semibold text-slate-400">
               <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-              Isticmaal + / − ama mouse wheel si aad u zoom-gareyso.
+              Isticmaal + / − ama mouse wheel si aad u zoom-gareyso. Riix laba mar (double-click) si aad u tirtirto label-ka jihada.
             </div>
           </div>
         </div>

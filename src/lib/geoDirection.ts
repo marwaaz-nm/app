@@ -60,16 +60,17 @@ export function buildDirectionLabel(direction: CompassDirection, side?: Boundary
 
 // Serialization for manually-placed direction labels (a surveyor clicks a direction
 // button, then clicks the map to drop that label there) — stored as
-// "N:lat,lng;E:lat,lng;..." in `surveys.boundary_label_positions`. Only directions the
-// user has actually placed are included, so a record with none stored falls back to the
-// automatic bearing calculation elsewhere.
-export type LatLngPoint = { lat: number; lng: number };
+// "N:lat,lng,rotation;E:lat,lng,rotation;..." in `surveys.boundary_label_positions`.
+// `rotation` is degrees, 0 = upright text. Only directions the user has actually placed
+// are included, so a record with none stored falls back to the automatic bearing
+// calculation elsewhere.
+export type LatLngPoint = { lat: number; lng: number; rotation?: number };
 export type DirectionPositions = Partial<Record<CompassDirection, LatLngPoint>>;
 
 export function serializeDirectionPositions(positions: DirectionPositions): string {
   return (Object.keys(positions) as CompassDirection[])
     .filter((dir) => positions[dir])
-    .map((dir) => `${dir}:${positions[dir]!.lat.toFixed(6)},${positions[dir]!.lng.toFixed(6)}`)
+    .map((dir) => `${dir}:${positions[dir]!.lat.toFixed(6)},${positions[dir]!.lng.toFixed(6)},${Math.round(positions[dir]!.rotation ?? 0)}`)
     .join(';');
 }
 
@@ -80,10 +81,11 @@ export function parseDirectionPositions(raw: string | null | undefined): Directi
     const [dirRaw, coordRaw] = entry.split(':');
     const dir = dirRaw?.trim().toUpperCase() as CompassDirection;
     if (!coordRaw || !['N', 'E', 'S', 'W'].includes(dir)) continue;
-    const [latStr, lngStr] = coordRaw.split(',');
+    const [latStr, lngStr, rotStr] = coordRaw.split(',');
     const lat = parseFloat(latStr);
     const lng = parseFloat(lngStr);
-    if (!Number.isNaN(lat) && !Number.isNaN(lng)) result[dir] = { lat, lng };
+    const rotation = rotStr !== undefined ? parseFloat(rotStr) : 0;
+    if (!Number.isNaN(lat) && !Number.isNaN(lng)) result[dir] = { lat, lng, rotation: Number.isNaN(rotation) ? 0 : rotation };
   }
   return result;
 }

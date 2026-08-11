@@ -208,14 +208,14 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
   // Renders a single direction label marker at an exact position — either a manually
   // placed spot (from `boundary_label_positions`) or the automatic fallback computed
   // above.
-  const renderDirectionLabel = (direction: CompassDirection, position: L.LatLng, map: L.Map, boundaryInfo: BoundaryInfo) => {
+  const renderDirectionLabel = (direction: CompassDirection, position: L.LatLng, map: L.Map, boundaryInfo: BoundaryInfo, rotation = 0) => {
     const label = buildDirectionLabel(direction, boundaryInfo[direction]);
     L.marker(position, {
       icon: L.divIcon({
         className: 'boundary-direction-label',
-        html: `<div class="boundary-direction-box">${label}</div>`,
-        iconSize: [150, 36],
-        iconAnchor: [75, 18],
+        html: `<div class="boundary-direction-box" style="transform: translate(-50%, -50%) rotate(${rotation}deg);">${label}</div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
       }),
     }).addTo(map);
   };
@@ -236,7 +236,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
     for (const direction of directions) {
       const manual = manualPositions[direction];
       if (manual) {
-        renderDirectionLabel(direction, L.latLng(manual.lat, manual.lng), map, boundaryInfo);
+        renderDirectionLabel(direction, L.latLng(manual.lat, manual.lng), map, boundaryInfo, manual.rotation ?? 0);
         continue;
       }
       for (const idx of mainBoundaryIndices) {
