@@ -130,11 +130,14 @@ function fuzzyKeyword(word: string): string {
 
 function boundaryRegex(): RegExp {
   // "damiinul maal" (guarantor) is sometimes typed with a stray space in the middle of
-  // the word, same as other artifacts handled elsewhere.
+  // the word (including right after the initial "D", e.g. "D amiinulmaal"), same as other
+  // artifacts handled elsewhere. The connector before it is usually "oo" ("... oo uu
+  // damiinulmaal ka yahay ...") but "in" ("... in uu damiinulmaal ka yahay ...") has also
+  // been seen, so both are accepted.
   // "in <noun> kaan/kaas uu/ay leeyahay/leedahay" ("which this <plot/house/...> belongs
   // to") is another connector phrase introducing the owner's name, seen right before it
   // with no other punctuation separating the two.
-  return /(?:\biyo\b|Dhinaca\s+(?:koowaad|labaad)\s*\([^)]{0,30}\)|\(\s*\d+\s*\)|\b\d+\.\s|kana\s+wakiil\s+ah|oo\s+uu\s+wakiil\s+ka\s*y\s*ahay|wuxuu\s+wakiil\s+u\s+yahay|oo\s+u{1,2}\s+damiinul\s?maal\s+ka\s*y\s*ah\s*ay?|oo\s+ay\s+damiinul\s?maal\s+ka\s*y\s*ih\s*iin|\bin\s+\S+\s+ka[ai]n\s+(?:u{1,2}|ay)\s+lee[yd]ahay)/gi;
+  return /(?:\biyo\b|Dhinaca\s+(?:koowaad|labaad)\s*\([^)]{0,30}\)|\(\s*\d+\s*\)|\b\d+\.\s|kana\s+wakiil\s+ah|oo\s+uu\s+wakiil\s+ka\s*y\s*ahay|wuxuu\s+wakiil\s+u\s+yahay|(?:oo|in)\s+u{1,2}\s+d\s*amiinul\s?maal\s+ka\s*y\s*ah\s*ay?|(?:oo|in)\s+ay\s+d\s*amiinul\s?maal\s+ka\s*y\s*ih\s*iin|\bin\s+\S+\s+ka[ai]n\s+(?:u{1,2}|ay)\s+lee[yd]ahay)/gi;
 }
 
 // Chained sentences ("... iyo Person B ina Mother B dhashay ...") describe multiple
@@ -158,7 +161,13 @@ function findMother(clausePrefix: string, token: string, maxExtra: number): { te
   // unrelated earlier person's "Ina mother" mention (e.g. a witness list preceded by a
   // completely different party's ownership clause), and the one closest to the actual
   // match is the relevant one.
-  const re = new RegExp(`\\b[Ii]\\s*na?\\b\\s+(${token}(?:\\s+${token}){0,${maxExtra}})`, 'g');
+  //
+  // The "a" in "Ina" is required (not "na?"/optional) — making it optional meant this
+  // also matched the ordinary Somali conjunction "in" ("that/which"), which appears
+  // constantly in legal prose ("... in uu damiinulmaal ka yahay ...", "waxaan rabaa in
+  // ...") and was winning as the "last match" over the real "Ina <mother>" earlier in the
+  // same clause, corrupting the captured mother name with unrelated sentence fragments.
+  const re = new RegExp(`\\b[Ii]\\s*na\\b\\s+(${token}(?:\\s+${token}){0,${maxExtra}})`, 'g');
   let m: RegExpExecArray | null = null;
   let last: RegExpExecArray | null = null;
   while ((m = re.exec(clausePrefix))) last = m;
@@ -172,6 +181,14 @@ function findMother(clausePrefix: string, token: string, maxExtra: number): { te
   if (/^\s*(shay|latay|lay|hay)/i.test(tail) && /^dha?$/i.test(words[words.length - 1])) {
     words = words.slice(0, -1);
   }
+  // "ku" (a preposition, "at/in") is never part of a name and reliably starts the
+  // following birth clause ("... Ahmed ku dhashay Muqdisho ..."). The capture above is
+  // deliberately generous (allows several extra words, needed to bridge names broken
+  // across multiple stray spaces), so on a lowercase-typed mother name it can otherwise
+  // keep matching straight through "ku dhashay ..." since those words fit the same
+  // any-case token shape as a name would.
+  const kuIndex = words.findIndex((w) => /^ku$/i.test(w));
+  if (kuIndex > 0) words = words.slice(0, kuIndex);
   return { text: words.join(' '), index: m.index };
 }
 
@@ -185,6 +202,13 @@ function extractMother(clausePrefix: string): { text: string; index: number } | 
 
 function extractName(clausePrefix: string, motherIndex: number | null): string | null {
   let prefixEnd = motherIndex;
+  // Whether a real anchor (an "Ina <mother>" clause, or a "dhashay/dhalatay" birth
+  // clause) was found nearby — as opposed to this being an incidental phone number in a
+  // signature block or unrelated sentence with no actual person-description clause
+  // around it (e.g. an engineer's or witness's number). Only ever attempted the lenient,
+  // case-insensitive fallback below when there's a genuine anchor: without one, that
+  // fallback has nothing reliable to stop at and ends up capturing arbitrary prose.
+  let hasAnchor = prefixEnd != null;
   if (prefixEnd == null) {
     // Same reasoning as extractMother: prefer the LAST "dhashay"/"dhalatay" in the
     // window, closest to the match, over an unrelated earlier person's.
@@ -192,7 +216,8 @@ function extractName(clausePrefix: string, motherIndex: number | null): string |
     let dm: RegExpExecArray | null = null;
     let lastDm: RegExpExecArray | null = null;
     while ((dm = dashRe.exec(clausePrefix))) lastDm = dm;
-    prefixEnd = lastDm ? lastDm.index : clausePrefix.length;
+    if (lastDm) { prefixEnd = lastDm.index; hasAnchor = true; }
+    else prefixEnd = clausePrefix.length;
   }
   const rawSlice = clausePrefix.slice(0, prefixEnd);
 
@@ -222,11 +247,27 @@ function extractName(clausePrefix: string, motherIndex: number | null): string |
   // Sheikh...") that the uppercase anchor would have correctly excluded.
   if (candidateWordCount > 1) return candidate;
 
+  // No "Ina <mother>" or "dhashay" clause anywhere nearby means this almost certainly
+  // isn't a person-description clause at all (e.g. an engineer's or witness's phone
+  // number in a signature block) — the lenient fallback has no real anchor to work from
+  // in that case, so it's better to report no name than to guess at surrounding prose.
+  if (!hasAnchor) return candidate;
+
   // Without a capital letter to anchor on, a lenient case-insensitive match would
   // otherwise run backward into the previous sentence's lowercase prose ("... sawirkiisuna
   // warqadan ku dhegan yahay . mohamed ahmed..."), so it's scoped to text after the last
-  // sentence boundary first.
-  const lastStop = Math.max(rawSlice.lastIndexOf('.'), rawSlice.lastIndexOf(';'), rawSlice.lastIndexOf(':'));
+  // sentence boundary first. "(xafiiska) (ii) (gu) yimid" ("came to (my office)") is
+  // another such boundary — the standard phrase introducing a party's name right after
+  // it — needed because these office-boilerplate sentences often have no punctuation of
+  // their own before the name.
+  const yimidMatches = [...rawSlice.matchAll(/y\s*imid\b/gi)];
+  const lastYimid = yimidMatches[yimidMatches.length - 1];
+  const lastStop = Math.max(
+    rawSlice.lastIndexOf('.'),
+    rawSlice.lastIndexOf(';'),
+    rawSlice.lastIndexOf(':'),
+    lastYimid ? lastYimid.index + lastYimid[0].length - 1 : -1,
+  );
   const lenientSlice = (lastStop === -1 ? rawSlice : rawSlice.slice(lastStop + 1))
     .replace(/Anigoo\s+ah/gi, ' ').replace(/,/g, ' ').trim();
   const lenient = lenientSlice.match(new RegExp(`(${NAME_TOKEN_ANY_CASE}(?:\\s+${NAME_TOKEN_ANY_CASE}){1,5})\\s*$`));
