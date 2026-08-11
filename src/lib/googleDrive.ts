@@ -310,6 +310,10 @@ export async function getStartPageToken(conn: DriveConnection): Promise<string> 
   return res.data.startPageToken;
 }
 
+// Drive's maximum channel lifetime is 7 days; the daily renewal cron re-registers
+// anything within 48h of this.
+const MAX_CHANNEL_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
+
 export async function watchDriveChanges(
   conn: DriveConnection,
   opts: { channelId: string; address: string; token: string; pageToken: string },
@@ -319,7 +323,16 @@ export async function watchDriveChanges(
     pageToken: opts.pageToken,
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
-    requestBody: { id: opts.channelId, type: 'web_hook', address: opts.address, token: opts.token },
+    // Without an explicit `expiration`, Drive defaults to a much shorter channel
+    // lifetime than the documented 7-day maximum (observed: well under an hour) — this
+    // request body field is what actually asks for the full 7 days.
+    requestBody: {
+      id: opts.channelId,
+      type: 'web_hook',
+      address: opts.address,
+      token: opts.token,
+      expiration: String(Date.now() + MAX_CHANNEL_LIFETIME_MS),
+    },
   });
   if (!res.data.resourceId || !res.data.expiration) throw new Error('Drive did not confirm the watch channel.');
   return { resourceId: res.data.resourceId, expiration: res.data.expiration };

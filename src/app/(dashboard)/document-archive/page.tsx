@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Reference } from '@/types';
 import { useModal } from '@/context/ModalContext';
@@ -14,6 +14,9 @@ import {
   X,
 } from 'lucide-react';
 
+const LIST_FIELDS = 'id, ref_number, subject, status, issue_date, archive_drive_file_id, archive_file_name, archive_uploaded_at';
+const PAGE_SIZE = 100;
+
 async function accessToken() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Fadlan dib u gal.');
@@ -24,30 +27,37 @@ export default function DocumentArchivePage() {
   const { showAlert } = useModal();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Reference[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [searched, setSearched] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
 
-  const runSearch = async (raw: string) => {
+  // Reloads whatever's currently on screen — the default full list, or the active
+  // search — so results stay in sync after an upload without losing the user's context.
+  const reload = async (raw: string) => {
     const trimmed = raw.trim();
-    if (!trimmed) { setResults([]); setSearched(false); return; }
-    setSearching(true);
+    setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('references')
-        .select('id, ref_number, subject, status, issue_date, archive_drive_file_id, archive_file_name, archive_uploaded_at')
-        .ilike('ref_number', `%${trimmed}%`)
-        .order('created_at', { ascending: false })
-        .limit(30);
+      let builder = supabase.from('references').select(LIST_FIELDS).order('created_at', { ascending: false });
+      builder = trimmed ? builder.ilike('ref_number', `%${trimmed}%`) : builder.limit(PAGE_SIZE);
+      const { data, error } = await builder;
       if (error) throw error;
       setResults(data || []);
-      setSearched(true);
     } catch (err) {
-      showAlert('Cillad', err instanceof Error ? err.message : 'Raadinta way fashilantay.', 'error');
+      showAlert('Cillad', err instanceof Error ? err.message : 'Lama soo qaadi karin.', 'error');
     } finally {
-      setSearching(false);
+      setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const timer = setTimeout(() => void reload(''), 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => void reload(query), 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   const handleUpload = async (reference: Reference, file: File) => {
     if (file.type !== 'application/pdf') {
@@ -68,7 +78,7 @@ export default function DocumentArchivePage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Upload-ku wuu fashilmay.');
       showAlert('Guul', 'PDF-ka waa la keydiyey!', 'success');
-      await runSearch(query);
+      await reload(query);
     } catch (err) {
       showAlert('Cillad', err instanceof Error ? err.message : 'Upload-ku wuu fashilmay.', 'error');
     } finally {
@@ -92,14 +102,13 @@ export default function DocumentArchivePage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') void runSearch(query); }}
-            placeholder="Raadi Reference number..."
+            placeholder="Raadi Reference number... (banaan ka dhig si aad u aragto dhammaan)"
             className="w-full bg-slate-50/60 border border-slate-200/80 rounded-xl md:rounded-2xl py-2.5 md:py-3.5 pl-10 md:pl-11 pr-11 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all"
           />
           {query && (
             <button
               type="button"
-              onClick={() => { setQuery(''); setResults([]); setSearched(false); }}
+              onClick={() => setQuery('')}
               className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
               aria-label="Tirtir raadinta"
             >
@@ -107,20 +116,17 @@ export default function DocumentArchivePage() {
             </button>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => void runSearch(query)}
-          disabled={searching}
-          className="mt-3 flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-4 py-2.5 cursor-pointer transition-colors disabled:opacity-50"
-        >
-          {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />} Raadi
-        </button>
+        {!loading && (
+          <p className="mt-3 text-xs font-semibold text-slate-500">
+            {query ? `Natiijooyinka "${query}" (${results.length})` : `Dhammaan References-ka ugu dambeeyay (${results.length})`}
+          </p>
+        )}
       </div>
 
-      {!searched ? (
-        <div className="bg-white border border-slate-200/60 rounded-2xl md:rounded-3xl p-10 flex flex-col items-center gap-2 text-center">
-          <Archive className="h-8 w-8 text-slate-300" />
-          <p className="text-sm font-bold text-slate-500">Ku bilow raadinta Reference number si aad u aragto ama u soo darto PDF-ka.</p>
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-16 text-slate-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm font-semibold">Soo raraya...</span>
         </div>
       ) : results.length === 0 ? (
         <div className="bg-white border border-slate-200/60 rounded-2xl md:rounded-3xl p-10 flex flex-col items-center gap-2 text-center">

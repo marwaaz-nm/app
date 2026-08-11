@@ -291,6 +291,29 @@ export default function MiniMap({
       generateSketch(latlngs, layer.getBounds());
     });
 
+    // Dragging an existing polygon's vertices with the Edit toolbar only fires
+    // draw:edited (on Save) — CREATED above only covers a brand-new shape, so without
+    // this the segment-length labels, onPolygonChange, and the sketch/area all stayed
+    // frozen at whatever they were when the polygon was first drawn.
+    map.on((L as any).Draw.Event.EDITED, (event: L.LeafletEvent) => {
+      const editedLayers = (event as L.LeafletEvent & { layers: L.LayerGroup }).layers;
+      editedLayers.eachLayer((layer: L.Layer) => {
+        if (typeof (layer as L.Polygon).getLatLngs !== 'function') return;
+        const polygonLayer = layer as L.Polygon;
+        const latlngs = polygonLayer.getLatLngs()[0] as L.LatLng[];
+        drawSegmentMeasurements(latlngs, true);
+        const polyString = latlngs.map((c: L.LatLng) => `${c.lat.toFixed(6)},${c.lng.toFixed(6)}`).join('; ');
+        onPolygonChange(polyString);
+
+        const center = polygonLayer.getBounds().getCenter();
+        setIsAtCurrentLocation(false);
+        setLocationAccuracy(null);
+        onGpsChange(`${center.lat.toFixed(6)}, ${center.lng.toFixed(6)}`);
+
+        generateSketch(latlngs, polygonLayer.getBounds());
+      });
+    });
+
     // Invalidate size on container resize
     const resizeObserver = new ResizeObserver(() => {
       map.invalidateSize();

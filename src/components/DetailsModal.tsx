@@ -265,6 +265,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           scrollWheelZoom: false, // Use our custom wheel handler instead
           zoomControl: false,
           dragging: !L.Browser.mobile,
+          touchZoom: true,
           preferCanvas: true,
           zoomSnap: 0.5, // allows half-level zoom increments for finer framing control
           // Both off so programmatic setZoom() (used during PDF export to grab
@@ -292,6 +293,15 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
         L.control.zoom({ position: 'bottomright' }).addTo(satMap);
 
+        // Single-finger dragging is intentionally off on mobile (so the modal can still
+        // be scrolled by swiping over the map) — but Leaflet ties its CSS touch-action
+        // to whichever handlers are enabled, and with dragging off it only ever applies
+        // `touch-action: pan-x pan-y` (no pinch-zoom keyword), which makes the browser
+        // suppress the two-finger pinch gesture before Leaflet's own TouchZoom handler
+        // ever sees it. Overriding the inline style (which wins over the class rule)
+        // restores pinch while still blocking single-finger pan.
+        satMap.getContainer().style.touchAction = 'pan-y pinch-zoom';
+
         satelliteMapRef.current = satMap;
         satelliteMapContainerRef.current.addEventListener('wheel', handleSatWheel, { passive: false });
       }
@@ -302,10 +312,14 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           zoomControl: false,
           attributionControl: false,
           dragging: !L.Browser.mobile,
+          touchZoom: true,
           scrollWheelZoom: false, // Use our custom wheel handler instead
           preferCanvas: true,
         });
         skMap.getContainer().style.backgroundColor = '#ffffff';
+        // See the matching comment on the satellite map above — this override is what
+        // actually lets pinch-zoom work on mobile despite single-finger drag being off.
+        skMap.getContainer().style.touchAction = 'pan-y pinch-zoom';
 
         L.polygon(coords, {
           color: '#090d16',
