@@ -13,14 +13,26 @@ const getAdminClient = () => {
   });
 };
 
-// Public, unauthenticated — used by the login page and public /verify pages,
-// so this only ever selects branding/contact fields, never anything internal.
+// Public, unauthenticated — used by the login page, public /verify pages, and
+// (via the shared SettingsContext) by every logged-in page that needs to
+// preview or apply the numbering format, including the Settings page's own
+// edit form. The numbering columns are just formatting metadata (prefix/
+// pattern/digit-padding/next sequence), not sensitive, so they're included
+// here too — leaving them out meant SettingsContext never saw the real saved
+// values, and the Settings page's numbering section reset to defaults right
+// after every save.
 export async function GET() {
   try {
     const supabaseAdmin = getAdminClient();
     const { data, error } = await supabaseAdmin
       .from('app_settings')
-      .select('org_name_so, org_name_en, logo_url, contact_email, contact_phone, contact_address, reference_subjects, land_types')
+      .select(`
+        org_name_so, org_name_en, logo_url, contact_email, contact_phone, contact_address, reference_subjects, land_types,
+        ref_number_prefix, ref_number_next_seq, ref_number_format, ref_number_digits,
+        survey_number_prefix, survey_number_next_seq, survey_number_format, survey_number_digits,
+        receipt_number_prefix, receipt_number_next_seq, receipt_number_format, receipt_number_digits,
+        expense_number_prefix, expense_number_next_seq, expense_number_format, expense_number_digits
+      `)
       .eq('id', 1)
       .single();
 
