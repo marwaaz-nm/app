@@ -9,6 +9,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import { formatReferenceNumber } from '@/lib/numbering';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
+import { ListLoadingSkeleton } from '@/components/Skeleton';
 import {
   TrendingUp,
   TrendingDown,
@@ -22,7 +23,9 @@ import {
   FileText,
   CreditCard,
   AlertCircle,
-  Calendar
+  Calendar,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 
 export default function FinancialsPage() {
@@ -76,6 +79,17 @@ export default function FinancialsPage() {
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
   const [updatingCredit, setUpdatingCredit] = useState(false);
 
+  // Receipt Edit Mode (toggled within the same view-receipt modal)
+  const [receiptEditMode, setReceiptEditMode] = useState(false);
+  const [editReceiptNo, setEditReceiptNo] = useState('');
+  const [editReceiptAmount, setEditReceiptAmount] = useState('');
+  const [editReceiptStatus, setEditReceiptStatus] = useState<'Paid' | 'Credit'>('Paid');
+  const [editReceiptMode, setEditReceiptMode] = useState<'EVC Plus' | 'eDahab' | 'Jeeb' | 'Cash'>('EVC Plus');
+  const [editReceiptDate, setEditReceiptDate] = useState('');
+  const [editReceiptDetails, setEditReceiptDetails] = useState('');
+  const [savingReceiptEdit, setSavingReceiptEdit] = useState(false);
+  const [deletingReceipt, setDeletingReceipt] = useState(false);
+
   // Pay Debt Modal State (Partial or Full Payment)
   const [showPayDebtModal, setShowPayDebtModal] = useState(false);
   const [payDebtRef, setPayDebtRef] = useState<any | null>(null);
@@ -92,12 +106,14 @@ export default function FinancialsPage() {
   const [selectedRefIds, setSelectedRefIds] = useState<number[]>([]);
   const [bulkAmounts, setBulkAmounts] = useState<Record<number, string>>({});
 
-  // Add Expense Modal State
+  // Add/Edit Expense Modal State
   const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [expDescription, setExpDescription] = useState('');
   const [expQty, setExpQty] = useState('1');
   const [expAmount, setExpAmount] = useState('');
   const [expDate, setExpDate] = useState('');
+  const [deletingExpenseId, setDeletingExpenseId] = useState<number | null>(null);
 
   // Fetch Financial Data
   const fetchData = async () => {
@@ -526,6 +542,7 @@ export default function FinancialsPage() {
 
   // Add Expense Dialog
   const openExpenseDialog = () => {
+    setEditingExpense(null);
     setExpDescription('');
     setExpQty('1');
     setExpAmount('');
@@ -533,14 +550,24 @@ export default function FinancialsPage() {
     setShowExpenseModal(true);
   };
 
+  const openExpenseEditDialog = (expense: Expense) => {
+    setEditingExpense(expense);
+    setExpDescription(expense.description);
+    setExpQty(String(expense.qty));
+    setExpAmount(String(expense.amount));
+    setExpDate(expense.expense_date ? expense.expense_date.slice(0, 10) : '');
+    setShowExpenseModal(true);
+  };
+
   const closeExpenseDialog = () => {
     setShowExpenseModal(false);
+    setEditingExpense(null);
     setExpDescription('');
     setExpQty('1');
     setExpAmount('');
   };
 
-  // Save Office Expense
+  // Save (or update) Office Expense
   const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingExpense(true);
@@ -550,6 +577,19 @@ export default function FinancialsPage() {
     const total = qty * amount;
 
     try {
+      if (editingExpense) {
+        const { error } = await supabase
+          .from('expenses')
+          .update({ description: expDescription, qty, amount, total, expense_date: expDate })
+          .eq('id', editingExpense.id);
+        if (error) throw error;
+
+        showAlert('Guul', 'Kharashka si guul leh ayaa loo cusboonaysiiyey!', 'success');
+        closeExpenseDialog();
+        fetchData();
+        return;
+      }
+
       const payload = {
         description: expDescription,
         qty,
@@ -576,6 +616,30 @@ export default function FinancialsPage() {
     }
   };
 
+  const handleDeleteExpense = async (expense: Expense) => {
+    const isConfirmed = await showConfirm(
+      'Tirtir Kharashka',
+      `Ma hubtaa inaad tirtirto kharashka "${expense.description}"? Tallaabadan lama soo celin karo.`,
+      'Haa, tirtir',
+      'Maya'
+    );
+    if (!isConfirmed) return;
+
+    setDeletingExpenseId(expense.id);
+    try {
+      const { error } = await supabase.from('expenses').delete().eq('id', expense.id);
+      if (error) throw error;
+      showAlert('Guul', 'Kharashka waa la tirtiray.', 'success');
+      // Refetch (not a local patch) so the Total Expenses summary card stays accurate.
+      fetchData();
+    } catch (err) {
+      console.error('Error deleting expense:', err);
+      showAlert('Cillad', err instanceof Error ? err.message : 'Tirtiridda wuu fashilmay.', 'error');
+    } finally {
+      setDeletingExpenseId(null);
+    }
+  };
+
   // Render receipt details popup
   const openReceiptDetails = (receipt: any, ref: any) => {
     const refNum = typeof ref === 'string' ? ref : ref?.ref_number;
@@ -585,6 +649,72 @@ export default function FinancialsPage() {
       reference_id: refId || receipt?.reference_id,
       ref_number: refNum
     });
+    setReceiptEditMode(false);
+  };
+
+  const openReceiptEditMode = () => {
+    if (!selectedReceipt) return;
+    setEditReceiptNo(selectedReceipt.receipt_no || '');
+    setEditReceiptAmount(String(selectedReceipt.amount ?? ''));
+    setEditReceiptStatus(selectedReceipt.status === 'Credit' ? 'Credit' : 'Paid');
+    setEditReceiptMode(selectedReceipt.payment_mode || 'Cash');
+    setEditReceiptDate(selectedReceipt.payment_date ? String(selectedReceipt.payment_date).slice(0, 10) : '');
+    setEditReceiptDetails(selectedReceipt.details || '');
+    setReceiptEditMode(true);
+  };
+
+  const handleSaveReceiptEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedReceipt) return;
+    setSavingReceiptEdit(true);
+    try {
+      const payload = {
+        receipt_no: editReceiptNo,
+        amount: parseFloat(editReceiptAmount) || 0,
+        status: editReceiptStatus,
+        payment_mode: editReceiptMode,
+        payment_date: editReceiptDate,
+        details: editReceiptDetails || null,
+      };
+      const { error } = await supabase.from('receipts').update(payload).eq('id', selectedReceipt.id);
+      if (error) throw error;
+
+      showAlert('Guul', 'Resiidhka si guul leh ayaa loo cusboonaysiiyey!', 'success');
+      setSelectedReceipt(null);
+      setReceiptEditMode(false);
+      fetchData();
+    } catch (err) {
+      console.error('Error updating receipt:', err);
+      showAlert('Cillad', err instanceof Error ? err.message : 'Cillad ayaa dhacday xilliga cusboonaysiinta.', 'error');
+    } finally {
+      setSavingReceiptEdit(false);
+    }
+  };
+
+  const handleDeleteReceipt = async () => {
+    if (!selectedReceipt) return;
+    const isConfirmed = await showConfirm(
+      'Tirtir Resiidhka',
+      `Ma hubtaa inaad tirtirto resiidhka "${selectedReceipt.receipt_no}"? Tallaabadan waxay saameyn doontaa xisaabinta guud (revenue/credit). Lama soo celin karo.`,
+      'Haa, tirtir',
+      'Maya'
+    );
+    if (!isConfirmed) return;
+
+    setDeletingReceipt(true);
+    try {
+      const { error } = await supabase.from('receipts').delete().eq('id', selectedReceipt.id);
+      if (error) throw error;
+      showAlert('Guul', 'Resiidhka waa la tirtiray.', 'success');
+      setSelectedReceipt(null);
+      setReceiptEditMode(false);
+      fetchData();
+    } catch (err) {
+      console.error('Error deleting receipt:', err);
+      showAlert('Cillad', err instanceof Error ? err.message : 'Tirtiridda wuu fashilmay.', 'error');
+    } finally {
+      setDeletingReceipt(false);
+    }
   };
 
   return (
@@ -810,9 +940,7 @@ export default function FinancialsPage() {
 
       {/* Table & Dashboard view */}
       {loading ? (
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-        </div>
+        <ListLoadingSkeleton />
       ) : activeTab === 'payments' ? (
         /* Client Payments list */
         <>
@@ -1088,12 +1216,13 @@ export default function FinancialsPage() {
                     <th className="px-6 py-4">Amount</th>
                     <th className="px-6 py-4">Total</th>
                     <th className="px-6 py-4">Created By</th>
+                    <th className="px-6 py-4 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100/60 bg-white">
                   {sortedExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-slate-400 italic">
+                      <td colSpan={8} className="px-6 py-12 text-center text-slate-400 italic">
                         Kharashyo lama hayo.
                       </td>
                     </tr>
@@ -1102,7 +1231,7 @@ export default function FinancialsPage() {
                       <React.Fragment key={group.key}>
                         {expenseGroupBy !== 'none' && (
                           <tr>
-                            <td colSpan={7} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                            <td colSpan={8} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                               {group.label}
                             </td>
                           </tr>
@@ -1131,6 +1260,25 @@ export default function FinancialsPage() {
                               <span className="inline-flex px-2.5 py-0.5 rounded-full bg-slate-50 border border-slate-150 text-slate-500 text-[10px] font-extrabold">
                                 {e.created_by || 'Admin'}
                               </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => openExpenseEditDialog(e)}
+                                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 cursor-pointer"
+                                  aria-label="Edit"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteExpense(e)}
+                                  disabled={deletingExpenseId === e.id}
+                                  className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 cursor-pointer disabled:opacity-50"
+                                  aria-label="Delete"
+                                >
+                                  {deletingExpenseId === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1165,7 +1313,11 @@ export default function FinancialsPage() {
                   )}
                   <div className="divide-y divide-slate-100/60">
                     {group.items.map((e) => (
-                      <div key={e.id} className="grid grid-cols-[36px_1fr_auto] items-center gap-3 px-1 py-3.5">
+                      <div
+                        key={e.id}
+                        onClick={() => openExpenseEditDialog(e)}
+                        className="grid grid-cols-[36px_1fr_auto] items-center gap-3 px-1 py-3.5 cursor-pointer active:bg-slate-50"
+                      >
                         <span className="truncate text-xs font-black text-slate-400">{expenseSerial.get(e.id)}</span>
                         <div className="min-w-0">
                           <h4 className="truncate text-xs font-extrabold text-slate-800">{e.description}</h4>
@@ -1176,9 +1328,19 @@ export default function FinancialsPage() {
                             <span>{e.qty} × ${parseFloat(e.amount.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                           </p>
                         </div>
-                        <span className="justify-self-end whitespace-nowrap text-xs font-black text-rose-600">
-                          ${parseFloat(e.total.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="whitespace-nowrap text-xs font-black text-rose-600">
+                            ${parseFloat(e.total.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </span>
+                          <button
+                            onClick={(ev) => { ev.stopPropagation(); void handleDeleteExpense(e); }}
+                            disabled={deletingExpenseId === e.id}
+                            className="rounded-lg p-1 text-rose-500 hover:bg-rose-50 cursor-pointer disabled:opacity-50"
+                            aria-label="Delete"
+                          >
+                            {deletingExpenseId === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1191,16 +1353,16 @@ export default function FinancialsPage() {
 
       {/* Pay Modal (Create Receipt) */}
       {showPayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-lg bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center px-6 py-4 bg-slate-50 border-b border-slate-200">
-              <h3 className="font-extrabold text-slate-800 flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-emerald-600" />
-                Diiwaangeli Resiidhka (Pay Receipt)
+            <div className="flex items-center justify-between gap-3 px-6 py-4 bg-slate-50 border-b border-slate-200">
+              <h3 className="min-w-0 font-extrabold text-slate-800 flex items-center gap-2">
+                <CreditCard className="h-5 w-5 shrink-0 text-emerald-600" />
+                <span className="truncate">Diiwaangeli Resiidhka (Pay Receipt)</span>
               </h3>
               <button
                 onClick={closePayDialog}
-                className="text-slate-400 hover:text-slate-650 p-2 rounded-xl hover:bg-slate-105 transition-colors cursor-pointer"
+                className="shrink-0 text-slate-400 hover:text-slate-650 p-2 rounded-xl hover:bg-slate-105 transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1357,7 +1519,7 @@ export default function FinancialsPage() {
       )}
       {/* View Receipt Details Modal */}
       {selectedReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md overflow-y-auto">
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md overflow-y-auto">
           <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
             
             {/* Header Accent Bar & Close Button */}
@@ -1406,132 +1568,243 @@ export default function FinancialsPage() {
               </div>
             </div>
 
-            {/* Receipt Digital Card Body */}
-            <div className="px-6 py-5 space-y-4">
-              {/* Receipt Ticket Structure */}
-              <div className="bg-slate-50 border border-slate-200/90 rounded-3xl p-5 shadow-xs relative overflow-hidden">
-                
-                {/* Visual Top Pattern */}
-                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-teal-500 via-amber-500 to-emerald-500 opacity-30"></div>
-
-                {/* Amount Row */}
-                <div className="text-center py-3 border-b border-dashed border-slate-300">
-                  <span className="block text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">
-                    Wadarta Lacagta (Amount USD)
-                  </span>
-                  <div className={`text-4xl font-black tracking-tight ${
-                    selectedReceipt.status === 'Credit' ? 'text-amber-600' : 'text-emerald-600'
-                  }`}>
-                    ${parseFloat(selectedReceipt.amount.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </div>
+            {receiptEditMode ? (
+              /* Edit Mode: Receipt Fields */
+              <form onSubmit={handleSaveReceiptEdit} className="px-6 py-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Receipt No</span>
+                    <input
+                      type="text"
+                      required
+                      value={editReceiptNo}
+                      onChange={(e) => setEditReceiptNo(e.target.value)}
+                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Amount (USD)</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={editReceiptAmount}
+                      onChange={(e) => setEditReceiptAmount(e.target.value)}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Status</span>
+                    <select
+                      value={editReceiptStatus}
+                      onChange={(e) => setEditReceiptStatus(e.target.value as 'Paid' | 'Credit')}
+                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-900 focus:outline-none cursor-pointer"
+                    >
+                      <option value="Paid">Paid</option>
+                      <option value="Credit">Credit</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Paid Via</span>
+                    <select
+                      value={editReceiptMode}
+                      onChange={(e) => setEditReceiptMode(e.target.value as typeof editReceiptMode)}
+                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-900 focus:outline-none cursor-pointer"
+                    >
+                      <option value="EVC Plus">EVC Plus</option>
+                      <option value="eDahab">eDahab</option>
+                      <option value="Jeeb">Jeeb</option>
+                      <option value="Cash">Cash</option>
+                    </select>
+                  </label>
+                  <label className="col-span-2 block">
+                    <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Payment Date</span>
+                    <input
+                      type="date"
+                      required
+                      value={editReceiptDate}
+                      onChange={(e) => setEditReceiptDate(e.target.value)}
+                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                    />
+                  </label>
+                  <label className="col-span-2 block">
+                    <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Details</span>
+                    <textarea
+                      rows={3}
+                      value={editReceiptDetails}
+                      onChange={(e) => setEditReceiptDetails(e.target.value)}
+                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                    />
+                  </label>
                 </div>
 
-                {/* Receipt Fields Grid */}
-                <div className="space-y-3 pt-4 text-xs">
-                  <div className="flex justify-between items-center gap-4">
-                    <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Receipt No</span>
-                    <span className="font-mono font-black text-slate-800 bg-white border border-slate-200 px-3 py-1 rounded-xl shadow-2xs">
-                      {selectedReceipt.receipt_no}
-                    </span>
-                  </div>
+                <div className="flex gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setReceiptEditMode(false)}
+                    className="flex-1 rounded-xl bg-white border border-slate-200 text-slate-700 font-extrabold text-xs px-3.5 py-2.5 cursor-pointer hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingReceiptEdit}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-extrabold text-xs px-3.5 py-2.5 cursor-pointer"
+                  >
+                    {savingReceiptEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                {/* Receipt Digital Card Body */}
+                <div className="px-6 py-5 space-y-4">
+                  {/* Receipt Ticket Structure */}
+                  <div className="bg-slate-50 border border-slate-200/90 rounded-3xl p-5 shadow-xs relative overflow-hidden">
 
-                  <div className="flex justify-between items-center gap-4">
-                    <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Sumad (Ref)</span>
-                    <span className="font-mono font-black text-teal-650 bg-teal-50/80 border border-teal-200/70 px-3 py-1 rounded-xl shadow-2xs">
-                      {selectedReceipt.ref_number || 'N/A'}
-                    </span>
-                  </div>
+                    {/* Visual Top Pattern */}
+                    <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-teal-500 via-amber-500 to-emerald-500 opacity-30"></div>
 
-                  <div className="flex justify-between items-center gap-4">
-                    <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Payment Date</span>
-                    <span className="font-bold text-slate-700 bg-white border border-slate-200 px-3 py-1 rounded-xl shadow-2xs">
-                      {selectedReceipt.payment_date ? new Date(selectedReceipt.payment_date).toLocaleDateString('so-SO') : '-'}
-                    </span>
-                  </div>
+                    {/* Amount Row */}
+                    <div className="text-center py-3 border-b border-dashed border-slate-300">
+                      <span className="block text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">
+                        Wadarta Lacagta (Amount USD)
+                      </span>
+                      <div className={`text-4xl font-black tracking-tight ${
+                        selectedReceipt.status === 'Credit' ? 'text-amber-600' : 'text-emerald-600'
+                      }`}>
+                        ${parseFloat(selectedReceipt.amount.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
 
-                  <div className="flex justify-between items-center gap-4">
-                    <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Paid Via</span>
-                    <span className="inline-flex px-3 py-1 rounded-xl bg-slate-900 text-white font-black uppercase text-[10px] shadow-xs">
-                      {selectedReceipt.payment_mode || 'Cash'}
-                    </span>
-                  </div>
+                    {/* Receipt Fields Grid */}
+                    <div className="space-y-3 pt-4 text-xs">
+                      <div className="flex justify-between items-center gap-4">
+                        <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Receipt No</span>
+                        <span className="font-mono font-black text-slate-800 bg-white border border-slate-200 px-3 py-1 rounded-xl shadow-2xs">
+                          {selectedReceipt.receipt_no}
+                        </span>
+                      </div>
 
-                  <div className="border-t border-slate-200/80 pt-3 mt-2">
-                    <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-extrabold mb-1.5">
-                      Faahfaahinta (Details)
-                    </span>
-                    <div className="font-bold text-slate-700 bg-white border border-slate-200 p-3.5 rounded-2xl text-xs leading-relaxed text-left shadow-2xs">
-                      {selectedReceipt.details || 'Bixinta lacagta'}
+                      <div className="flex justify-between items-center gap-4">
+                        <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Sumad (Ref)</span>
+                        <span className="font-mono font-black text-teal-650 bg-teal-50/80 border border-teal-200/70 px-3 py-1 rounded-xl shadow-2xs">
+                          {selectedReceipt.ref_number || 'N/A'}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center gap-4">
+                        <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Payment Date</span>
+                        <span className="font-bold text-slate-700 bg-white border border-slate-200 px-3 py-1 rounded-xl shadow-2xs">
+                          {selectedReceipt.payment_date ? new Date(selectedReceipt.payment_date).toLocaleDateString('so-SO') : '-'}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center gap-4">
+                        <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Paid Via</span>
+                        <span className="inline-flex px-3 py-1 rounded-xl bg-slate-900 text-white font-black uppercase text-[10px] shadow-xs">
+                          {selectedReceipt.payment_mode || 'Cash'}
+                        </span>
+                      </div>
+
+                      <div className="border-t border-slate-200/80 pt-3 mt-2">
+                        <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-extrabold mb-1.5">
+                          Faahfaahinta (Details)
+                        </span>
+                        <div className="font-bold text-slate-700 bg-white border border-slate-200 p-3.5 rounded-2xl text-xs leading-relaxed text-left shadow-2xs">
+                          {selectedReceipt.details || 'Bixinta lacagta'}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Footer Actions */}
-            <div className="p-4 sm:px-6 sm:py-4.5 border-t border-slate-150 bg-slate-50/80 flex flex-col sm:flex-row gap-2.5">
-              <button
-                onClick={() => window.print()}
-                className="flex items-center justify-center gap-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-2xs border border-slate-200 transition-all active:scale-95"
-              >
-                <Printer className="h-3.5 w-3.5 text-slate-500" />
-                <span>PRINT RECEIPT</span>
-              </button>
+                {/* Footer Actions */}
+                <div className="p-4 sm:px-6 sm:py-4.5 border-t border-slate-150 bg-slate-50/80 flex flex-col gap-2.5">
+                  <div className="flex flex-col sm:flex-row gap-2.5">
+                    <button
+                      onClick={() => window.print()}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-2xs border border-slate-200 transition-all active:scale-95"
+                    >
+                      <Printer className="h-3.5 w-3.5 text-slate-500" />
+                      <span>PRINT RECEIPT</span>
+                    </button>
 
-              {selectedReceipt.status === 'Credit' && (
-                <button
-                  onClick={() => {
-                    const currentSelected = selectedReceipt;
-                    setSelectedReceipt(null);
-                    const parentRef = referencesWithReceipts.find(
-                      r => r.id === currentSelected.reference_id || r.ref_number === currentSelected.ref_number
-                    );
-                    if (parentRef) {
-                      openPayDebtDialog(parentRef);
-                    } else {
-                      openPayDebtDialog({
-                        id: currentSelected.reference_id,
-                        ref_number: currentSelected.ref_number,
-                        subject: currentSelected.details || 'Bixinta deynta',
-                        receipts: [currentSelected]
-                      });
-                    }
-                  }}
-                  disabled={updatingCredit}
-                  className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-sm shadow-amber-500/20 transition-all hover:-translate-y-0.5 active:scale-95 disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-400"
-                >
-                  <CreditCard className="h-3.5 w-3.5" />
-                  <span>BIXI DEYNTA (PAY DEBT)</span>
-                </button>
-              )}
-            </div>
+                    {selectedReceipt.status === 'Credit' && (
+                      <button
+                        onClick={() => {
+                          const currentSelected = selectedReceipt;
+                          setSelectedReceipt(null);
+                          const parentRef = referencesWithReceipts.find(
+                            r => r.id === currentSelected.reference_id || r.ref_number === currentSelected.ref_number
+                          );
+                          if (parentRef) {
+                            openPayDebtDialog(parentRef);
+                          } else {
+                            openPayDebtDialog({
+                              id: currentSelected.reference_id,
+                              ref_number: currentSelected.ref_number,
+                              subject: currentSelected.details || 'Bixinta deynta',
+                              receipts: [currentSelected]
+                            });
+                          }
+                        }}
+                        disabled={updatingCredit}
+                        className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-sm shadow-amber-500/20 transition-all hover:-translate-y-0.5 active:scale-95 disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-400"
+                      >
+                        <CreditCard className="h-3.5 w-3.5" />
+                        <span>BIXI DEYNTA (PAY DEBT)</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2.5">
+                    <button
+                      onClick={openReceiptEditMode}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-2xs border border-slate-200 transition-all active:scale-95"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      <span>EDIT</span>
+                    </button>
+                    <button
+                      onClick={handleDeleteReceipt}
+                      disabled={deletingReceipt}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-white hover:bg-rose-50 text-rose-600 font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-2xs border border-rose-200 transition-all active:scale-95 disabled:opacity-50"
+                    >
+                      {deletingReceipt ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      <span>DELETE</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
 
       {/* Pay Debt Modal (Partial or Full Payment) */}
       {showPayDebtModal && payDebtRef && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-lg bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
             
             {/* Header */}
-            <div className="flex justify-between items-center px-6 py-4 bg-amber-50 border-b border-amber-200/60">
-              <div className="flex items-center gap-2.5">
-                <div className="bg-amber-500 text-white p-2 rounded-xl shadow-xs">
+            <div className="flex items-center justify-between gap-3 px-6 py-4 bg-amber-50 border-b border-amber-200/60">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <div className="bg-amber-500 text-white p-2 rounded-xl shadow-xs shrink-0">
                   <AlertCircle className="h-5 w-5" />
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-base">
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-slate-800 text-base truncate">
                     Bixinta Deynta (Pay Debt)
                   </h3>
-                  <p className="text-[11px] font-semibold text-slate-500">
+                  <p className="text-[11px] font-semibold text-slate-500 truncate">
                     Sumad: <span className="text-teal-600 font-extrabold">{payDebtRef.ref_number}</span>
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowPayDebtModal(false)}
-                className="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-white/60 transition-colors cursor-pointer"
+                className="shrink-0 text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-white/60 transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1652,16 +1925,16 @@ export default function FinancialsPage() {
 
       {/* Add Expense Modal */}
       {showExpenseModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-lg bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center px-6 py-4 bg-slate-50 border-b border-slate-200">
-              <h3 className="font-extrabold text-slate-800 flex items-center gap-2">
-                <TrendingDown className="h-5 w-5 text-rose-500" />
-                Ku Dar Kharash Cusub (Add Expense)
+            <div className="flex items-center justify-between gap-3 px-6 py-4 bg-slate-50 border-b border-slate-200">
+              <h3 className="min-w-0 font-extrabold text-slate-800 flex items-center gap-2">
+                <TrendingDown className="h-5 w-5 shrink-0 text-rose-500" />
+                <span className="truncate">{editingExpense ? 'Edit Expense' : 'Add New Expense'}</span>
               </h3>
               <button
                 onClick={closeExpenseDialog}
-                className="text-slate-400 hover:text-slate-650 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                className="shrink-0 text-slate-400 hover:text-slate-650 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1736,7 +2009,7 @@ export default function FinancialsPage() {
                 {savingExpense ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <span>KEYDI KHARASHKA</span>
+                  <span>{editingExpense ? 'CUSBOONAYSII KHARASHKA' : 'KEYDI KHARASHKA'}</span>
                 )}
               </button>
             </form>

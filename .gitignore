@@ -20,6 +20,9 @@
 # production
 /build
 
+# electron desktop app build output
+/dist-electron
+
 # misc
 .DS_Store
 *.pem

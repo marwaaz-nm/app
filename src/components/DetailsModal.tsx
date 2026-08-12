@@ -1056,18 +1056,18 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center md:p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-[1300] flex items-center justify-center md:p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
       <div className="relative w-full h-full md:h-auto md:max-w-6xl bg-white border-0 md:border md:border-slate-100 md:rounded-3xl overflow-hidden shadow-2xl flex flex-col my-0 md:my-8 animate-in fade-in md:zoom-in-95 duration-200 text-slate-800">
         
         {/* Modal Header */}
-        <div className="flex justify-between items-center px-4 md:px-6 py-4 bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
-          <div className="flex items-center gap-3">
-            <div className="bg-teal-50 text-teal-600 p-2 rounded-xl border border-teal-100">
+        <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6 bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="bg-teal-50 text-teal-600 p-2 rounded-xl border border-teal-100 shrink-0">
               <FileSpreadsheet className="h-5 w-5" />
             </div>
-            <div>
-              <h3 className="font-extrabold text-sm text-slate-800">Warbixinta Sahanka Dhulka</h3>
-              <p className="text-xs text-slate-500 font-semibold">Record details and spatial parameters</p>
+            <div className="min-w-0">
+              <h3 className="font-extrabold text-sm text-slate-800 truncate">Warbixinta Sahanka Dhulka</h3>
+              <p className="text-xs text-slate-500 font-semibold truncate">Record details and spatial parameters</p>
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
@@ -1349,6 +1349,17 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
           </div>
         </div>
+
+        {/* Mobile: the ref panel covers the full card width there, so tapping anywhere
+            outside it (not just its own close button) should dismiss it. */}
+        {showRefPanel && (
+          <button
+            type="button"
+            onClick={() => setShowRefPanel(false)}
+            aria-label="Xir Ref Numbers"
+            className="absolute inset-0 z-10 bg-slate-900/30 backdrop-blur-[1px] md:hidden"
+          />
+        )}
 
         {/* Reference-numbers side panel: every Nootaayo reference (Document Archive
             entry) issued against this specific land parcel, linked via

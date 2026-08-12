@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { ListLoadingSkeleton } from '@/components/Skeleton';
 import {
   AlertTriangle,
   Cake,
@@ -11,7 +12,6 @@ import {
   Copy,
   FileText,
   IdCard,
-  Loader2,
   Phone,
   Search,
   User,
@@ -174,10 +174,7 @@ export default function CustomersPage() {
       </div>
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <p className="text-sm font-semibold">Raadinaya dukumintiyada Drive...</p>
-        </div>
+        <ListLoadingSkeleton rows={4} />
       ) : error ? (
         <div className="bg-white border border-slate-200/60 rounded-2xl md:rounded-3xl p-6 flex flex-col items-center gap-3 text-center">
           <AlertTriangle className="h-8 w-8 text-amber-500" />

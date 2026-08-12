@@ -12,6 +12,8 @@ import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import { formatReferenceNumber } from '@/lib/numbering';
 import { generateVerificationToken } from '@/lib/verificationToken';
 import DetailsModal from '@/components/DetailsModal';
+import { ListLoadingSkeleton } from '@/components/Skeleton';
+import { useProfileNames, resolveCreatorName } from '@/lib/useProfileNames';
 import {
   Plus,
   Search,
@@ -28,7 +30,9 @@ import {
   QrCode,
   Copy,
   Check,
-  Download
+  Download,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 
 export default function ReferencesPage() {
@@ -36,12 +40,15 @@ export default function ReferencesPage() {
   const { showAlert, showConfirm } = useModal();
   const { settings } = useSettings();
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
+  const profileNames = useProfileNames();
 
   const [references, setReferences] = useState<Reference[]>([]);
   const [filteredReferences, setFilteredReferences] = useState<Reference[]>([]);
   const [surveys, setSurveys] = useState<{ id: number; serial_no: number; owner_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [editingRef, setEditingRef] = useState<Reference | null>(null);
 
   // Search/Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -235,13 +242,37 @@ export default function ReferencesPage() {
     const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 16);
+    setEditingRef(null);
     setIssueDate(localDateTime);
     setRefNumber('');
+    setSubject('');
+    setDetails('');
+    setSelectedSurveyId('');
+    setSurveySearchQuery('');
+    setShowAddForm(true);
+  };
+
+  // Reuses the add form for editing — the ref number itself stays locked (see the
+  // read-only field below) since it's sequential and issued once, but everything else
+  // is editable.
+  const handleOpenEditForm = (reference: Reference) => {
+    setEditingRef(reference);
+    setRefNumber(reference.ref_number);
+    setSubject(reference.subject);
+    setDetails(reference.details || '');
+    setSelectedSurveyId(reference.survey_id ? String(reference.survey_id) : '');
+    setSurveySearchQuery('');
+    if (reference.issue_date) {
+      const d = new Date(reference.issue_date);
+      setIssueDate(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    }
+    setSelectedRef(null);
     setShowAddForm(true);
   };
 
   const handleCloseAddForm = () => {
     setShowAddForm(false);
+    setEditingRef(null);
     setRefNumber('');
     setSubject('');
     setDetails('');
@@ -286,6 +317,24 @@ export default function ReferencesPage() {
     setSaving(true);
 
     try {
+      // Editing an existing reference: the ref number is locked (sequential, issued
+      // once), so only the descriptive fields and the linked survey can change.
+      if (editingRef) {
+        const updatePayload = {
+          subject,
+          details: details || null,
+          issue_date: issueDate ? new Date(issueDate).toISOString() : editingRef.issue_date,
+          survey_id: isSurveyLinkVisible() && selectedSurveyId ? parseInt(selectedSurveyId) : null,
+        };
+        const { error } = await supabase.from('references').update(updatePayload).eq('id', editingRef.id);
+        if (error) throw error;
+
+        showAlert('Guul', `Sumadda (${editingRef.ref_number}) si guul leh ayaa loo cusboonaysiiyey!`, 'success');
+        handleCloseAddForm();
+        fetchReferences();
+        return;
+      }
+
       let finalRefNumber = refNumber.trim();
 
       // If user left reference number blank (auto-generate on save)
@@ -344,6 +393,37 @@ export default function ReferencesPage() {
       showAlert('Cillad', err.message || 'Cillad ayaa dhacday xilliga keydinta.', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteReference = async (reference: Reference) => {
+    const isConfirmed = await showConfirm(
+      'Tirtir Reference-ka',
+      `Ma hubtaa inaad tirtirto sumadda "${reference.ref_number}"? Tallaabadan lama soo celin karo.`,
+      'Haa, tirtir',
+      'Maya'
+    );
+    if (!isConfirmed) return;
+
+    setDeleting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Fadlan dib u gal.');
+      const response = await fetch(`/api/references/${reference.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Tirtiridda wuu fashilmay.');
+
+      setReferences((prev) => prev.filter((r) => r.id !== reference.id));
+      setSelectedRef(null);
+      showAlert('Guul', 'Reference-ka waa la tirtiray.', 'success');
+    } catch (err) {
+      console.error('Error deleting reference:', err);
+      showAlert('Cillad', err instanceof Error ? err.message : 'Tirtiridda wuu fashilmay.', 'error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -414,7 +494,7 @@ export default function ReferencesPage() {
             >
               ← Back to references
             </button>
-            <h2 className="text-2xl font-black text-slate-800 mt-1.5">New reference</h2>
+            <h2 className="text-2xl font-black text-slate-800 mt-1.5">{editingRef ? `Edit reference — ${editingRef.ref_number}` : 'New reference'}</h2>
           </div>
 
           {/* Form card */}
@@ -520,7 +600,7 @@ export default function ReferencesPage() {
               {saving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <span>SAVE REFERENCE</span>
+                <span>{editingRef ? 'UPDATE REFERENCE' : 'SAVE REFERENCE'}</span>
               )}
             </button>
             <button
@@ -595,9 +675,7 @@ export default function ReferencesPage() {
           </div>
 
           {loading ? (
-            <div className="flex h-64 items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-            </div>
+            <ListLoadingSkeleton />
           ) : sortedReferences.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-12 border border-dashed border-slate-200 rounded-3xl bg-white">
               <HelpCircle className="h-8 w-8 text-slate-400 mb-2" />
@@ -611,9 +689,9 @@ export default function ReferencesPage() {
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase">
                       <th className="px-6 py-4">Sumad (Ref)</th>
-                      <th className="px-6 py-4">Survey Lr</th>
                       <th className="px-6 py-4">Ujeedo</th>
                       <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Record Creator</th>
                       <th className="px-6 py-4 text-center">Action</th>
                     </tr>
                   </thead>
@@ -636,21 +714,21 @@ export default function ReferencesPage() {
                             <td className="px-6 py-4 font-black text-teal-600 group-hover:text-teal-600">
                               {r.ref_number}
                             </td>
-                            <td className="px-6 py-4 text-slate-700 font-semibold">
-                              {r.surveys ? `${r.surveys.serial_no} — ${r.surveys.owner_name}` : 'N/A'}
-                            </td>
                             <td className="px-6 py-4">
-                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-655 text-[10px] font-extrabold">
+                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-655 text-xs font-extrabold">
                                 {r.subject}
                               </span>
                             </td>
                             <td className="px-6 py-4">
-                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 border rounded-full text-[10px] font-extrabold tracking-wide uppercase ${getStatusBadgeClass(r.status)}`}>
+                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 border rounded-full text-xs font-extrabold tracking-wide uppercase ${getStatusBadgeClass(r.status)}`}>
                                 {r.status}
                               </span>
                             </td>
+                            <td className="px-6 py-4 text-slate-600 font-bold">
+                              {resolveCreatorName(r.created_by, profileNames) || '-'}
+                            </td>
                             <td className="px-6 py-4 text-center">
-                              <button className="bg-slate-50 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 text-slate-600 text-[10px] font-extrabold py-1.5 px-4 rounded-xl cursor-pointer transition-colors shadow-sm">
+                              <button className="bg-slate-50 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 text-slate-600 text-xs font-extrabold py-1.5 px-4 rounded-xl cursor-pointer transition-colors shadow-sm">
                                 View
                               </button>
                             </td>
@@ -664,7 +742,7 @@ export default function ReferencesPage() {
 
               {/* MOBILE LIST */}
               <div className="md:hidden mb-12">
-                <div className="grid grid-cols-[64px_1fr_auto_20px] items-center gap-3 border-b border-slate-200 px-1 py-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+                <div className="grid grid-cols-[64px_1fr_auto_20px] items-center gap-3 border-b border-slate-200 px-1 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
                   <span>Ref No.</span>
                   <span>Title</span>
                   <span>Status</span>
@@ -673,7 +751,7 @@ export default function ReferencesPage() {
                 {(groupedReferences ?? [{ key: 'all', label: '', items: sortedReferences }]).map((group) => (
                   <div key={group.key}>
                     {groupBy !== 'none' && (
-                      <div className="px-1 pb-1.5 pt-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
+                      <div className="px-1 pb-1.5 pt-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                         {group.label}
                       </div>
                     )}
@@ -688,12 +766,17 @@ export default function ReferencesPage() {
                       <div className="min-w-0">
                         <h4 className="truncate text-xs font-extrabold text-slate-800">{r.subject}</h4>
                         {r.surveys && (
-                          <p className="mt-0.5 truncate text-[9px] font-semibold text-slate-500">
+                          <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-500">
                             Sahan {r.surveys.serial_no} — {r.surveys.owner_name}
                           </p>
                         )}
+                        {resolveCreatorName(r.created_by, profileNames) && (
+                          <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">
+                            Added by {resolveCreatorName(r.created_by, profileNames)}
+                          </p>
+                        )}
                       </div>
-                      <span className={`inline-flex items-center justify-self-end whitespace-nowrap px-2 py-0.5 rounded-full border text-[8px] font-extrabold uppercase ${getStatusBadgeClass(r.status)}`}>
+                      <span className={`inline-flex items-center justify-self-end whitespace-nowrap px-2 py-0.5 rounded-full border text-[10px] font-extrabold uppercase ${getStatusBadgeClass(r.status)}`}>
                         {r.status}
                       </span>
                       <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
@@ -710,25 +793,40 @@ export default function ReferencesPage() {
 
       {/* Reference Details Modal with Status Stepper */}
       {selectedRef && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-[1300] flex items-start justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-4xl bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
             {/* Header */}
-            <div className="flex justify-between items-center px-6 py-4 bg-slate-50 border-b border-slate-200">
-              <div className="flex items-center gap-3">
-                <div className="bg-teal-50 text-teal-600 p-2 rounded-xl border border-teal-100">
+            <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6 bg-slate-50 border-b border-slate-200">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="bg-teal-50 text-teal-600 p-2 rounded-xl border border-teal-100 shrink-0">
                   <FileText className="h-5 w-5" />
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800">Official Reference Record</h3>
-                  <p className="text-xs text-slate-500 font-semibold">Verified document tracking parameters</p>
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-slate-800 truncate">Official Reference Record</h3>
+                  <p className="text-xs text-slate-500 font-semibold truncate">Verified document tracking parameters</p>
                 </div>
               </div>
-              <button
-                onClick={() => setSelectedRef(null)}
-                className="text-slate-450 hover:text-slate-800 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => handleOpenEditForm(selectedRef)}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </button>
+                <button
+                  onClick={() => handleDeleteReference(selectedRef)}
+                  disabled={deleting}
+                  className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-[11px] font-bold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Delete
+                </button>
+                <button
+                  onClick={() => setSelectedRef(null)}
+                  className="text-slate-450 hover:text-slate-800 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             {/* Body */}
@@ -842,7 +940,7 @@ export default function ReferencesPage() {
               </div>
 
               {/* Right Side: Status Progress Stepper */}
-              <div className="md:col-span-5 bg-slate-50/50 border border-slate-150 rounded-3xl p-5 flex flex-col justify-between">
+              <div className="md:col-span-5 bg-slate-50/50 border border-slate-150 rounded-3xl p-5 flex flex-col self-start">
                 <div className="space-y-6">
                   <div className="flex justify-between items-center border-b border-slate-200 pb-3">
                     <h5 className="font-extrabold text-sm text-slate-800">Workflow Status</h5>

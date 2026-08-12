@@ -3,10 +3,9 @@ import { apiError, requireViewer } from '@/lib/server-auth';
 import { getArchiveDriveConfig } from '@/lib/archiveDriveConfig';
 import { deleteArchiveFile, uploadArchivePdf } from '@/lib/driveArchive';
 
-// Kept well under typical serverless request-body limits — the incoming upload to this
-// route is multipart (no size inflation), but stays conservative since real scans
-// average ~2MB per the notary's own volume estimate.
-const MAX_SIZE = 10 * 1024 * 1024;
+// Real scans should compress down well under this — kept tight so the archive stays
+// cheap to store and fast to open over a weak connection.
+const MAX_SIZE = 1 * 1024 * 1024;
 
 // Uploads (or replaces) the scanned PDF for one reference. Any authenticated user who
 // can reach the Document Archive menu may upload — same access level as creating a
@@ -21,7 +20,7 @@ export async function POST(req: NextRequest) {
     if (!Number.isFinite(referenceId)) return NextResponse.json({ error: 'referenceId waa loo baahan yahay.' }, { status: 400 });
     if (!(file instanceof File)) return NextResponse.json({ error: 'Fayl PDF ah waa loo baahan yahay.' }, { status: 400 });
     if (file.type !== 'application/pdf') return NextResponse.json({ error: 'Kaliya faylasha PDF ayaa la ogol yahay.' }, { status: 415 });
-    if (file.size > MAX_SIZE) return NextResponse.json({ error: 'Faylku waa inuusan ka weynayn 10 MB.' }, { status: 413 });
+    if (file.size > MAX_SIZE) return NextResponse.json({ error: 'Faylku waa inuusan ka weynayn 1 MB.' }, { status: 413 });
 
     const { data: reference, error: refError } = await viewer.admin
       .from('references')

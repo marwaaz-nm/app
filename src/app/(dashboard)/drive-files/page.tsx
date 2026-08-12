@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { ListLoadingSkeleton } from '@/components/Skeleton';
 import {
   AlertTriangle,
   ArrowDownAZ,
@@ -12,11 +13,16 @@ import {
   Cloud,
   Download,
   File,
+  FileAudio,
+  FileImage,
+  FileText,
+  FileVideo,
   FolderClosed,
   LayoutGrid,
   List,
   Loader2,
   RefreshCw,
+  RotateCw,
   Search,
   X,
 } from 'lucide-react';
@@ -32,6 +38,7 @@ type DriveItem = {
 };
 
 type ConnectionSummary = { id: number; name: string };
+type Quota = { usageBytes: number };
 type BrowseResponse = { mode: 'browse'; folderId: string; path: { id: string; name: string }[]; items: DriveItem[] };
 type SearchResponse = { mode: 'search'; query: string; items: DriveItem[] };
 type SortKey = 'name-asc' | 'name-desc' | 'date-desc' | 'date-oldest';
@@ -53,6 +60,32 @@ async function accessToken() {
 function formatDate(value?: string) {
   if (!value) return '';
   return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
+}
+
+function formatBytes(bytes: number) {
+  if (bytes <= 0) return '0 MB';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const power = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** power).toFixed(power === 0 ? 0 : 1)} ${units[power]}`;
+}
+
+// What kind of in-app viewer (if any) a file's mime type supports — everything else
+// falls back to opening Google's own webViewLink in a new tab.
+function previewKind(mimeType: string): 'pdf' | 'image' | 'video' | 'audio' | null {
+  if (mimeType === 'application/pdf') return 'pdf';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  return null;
+}
+
+function FileTypeIcon({ mimeType, className }: { mimeType: string; className?: string }) {
+  const kind = previewKind(mimeType);
+  if (kind === 'pdf') return <FileText className={className} />;
+  if (kind === 'image') return <FileImage className={className} />;
+  if (kind === 'video') return <FileVideo className={className} />;
+  if (kind === 'audio') return <FileAudio className={className} />;
+  return <File className={className} />;
 }
 
 function sortItems(items: DriveItem[], sortKey: SortKey): DriveItem[] {
@@ -81,6 +114,7 @@ export default function DriveFilesPage() {
   const [connectionsLoading, setConnectionsLoading] = useState(true);
   const [connectionsError, setConnectionsError] = useState<string | null>(null);
   const [connectionId, setConnectionId] = useState<number | null>(null);
+  const [quotas, setQuotas] = useState<Record<number, Quota | 'loading' | 'error' | undefined>>({});
 
   // Browsing/search state, scoped to whichever connection is selected
   const [folderId, setFolderId] = useState<string | null>(null);
@@ -95,6 +129,16 @@ export default function DriveFilesPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
+  // In-app preview (PDF/image/video/audio) instead of forcing a download for these types.
+  const [previewItem, setPreviewItem] = useState<DriveItem | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  // Manual correction for photos whose orientation the browser can't infer (no EXIF tag,
+  // or the pixels themselves were saved rotated) — CSS-level auto-correction has nothing
+  // to read in that case, so a rotate button is the only reliable fix.
+  const [previewRotation, setPreviewRotation] = useState(0);
+
   const loadConnections = useCallback(async () => {
     setConnectionsLoading(true);
     setConnectionsError(null);
@@ -108,6 +152,10 @@ export default function DriveFilesPage() {
       // Skip the picker screen entirely when there's only one connection — same
       // one-account experience as before this feature existed.
       if (list.length === 1) setConnectionId(list[0].id);
+      // Storage size is computed on demand (tap "Hubi booska") rather than automatically
+      // here — it's a full folder-tree walk, the same cost the background sync job pays
+      // deliberately off the request path. Doing that for every room on every page load
+      // was making Drive Files itself feel slower, for a number nobody had asked to see yet.
     } catch (loadError) {
       setConnectionsError(loadError instanceof Error ? loadError.message : 'Xidhiidhyada Drive lama soo qaadi karin.');
     } finally {
@@ -119,6 +167,19 @@ export default function DriveFilesPage() {
     const timer = setTimeout(() => void loadConnections(), 0);
     return () => clearTimeout(timer);
   }, [loadConnections]);
+
+  const loadQuota = async (connId: number) => {
+    setQuotas((prev) => ({ ...prev, [connId]: 'loading' }));
+    try {
+      const token = await accessToken();
+      const response = await fetch(`/api/drive-connections/${connId}/quota`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) throw new Error();
+      const quota: Quota = await response.json();
+      setQuotas((prev) => ({ ...prev, [connId]: quota }));
+    } catch {
+      setQuotas((prev) => ({ ...prev, [connId]: 'error' }));
+    }
+  };
 
   const load = useCallback(async (opts: { folderId?: string | null; query?: string }) => {
     if (connectionId == null) return;
@@ -238,6 +299,40 @@ export default function DriveFilesPage() {
     }
   };
 
+  const openPreview = async (item: DriveItem) => {
+    if (connectionId == null) return;
+    setPreviewItem(item);
+    setPreviewUrl(null);
+    setPreviewError(null);
+    setPreviewRotation(0);
+    setPreviewLoading(true);
+    try {
+      const token = await accessToken();
+      const params = new URLSearchParams({ connectionId: String(connectionId), fileId: item.id });
+      const response = await fetch(`/api/drive-files/download?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || 'File-ka lama soo bandhigi karin.');
+      }
+      const blob = await response.blob();
+      setPreviewUrl(URL.createObjectURL(blob));
+    } catch (previewErr) {
+      setPreviewError(previewErr instanceof Error ? previewErr.message : 'File-ka lama soo bandhigi karin.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const closePreview = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewItem(null);
+    setPreviewUrl(null);
+    setPreviewError(null);
+    setPreviewRotation(0);
+  };
+
   const isSearching = activeQuery.length > 0;
   const notConfigured = error?.includes('lama dejin') || connectionsError?.includes('lama dejin');
   const sortedItems = useMemo(() => sortItems(items, sortKey), [items, sortKey]);
@@ -253,10 +348,7 @@ export default function DriveFilesPage() {
       </div>
 
       {connectionsLoading ? (
-        <div className="bg-white border border-slate-200/60 rounded-2xl md:rounded-3xl flex flex-col items-center justify-center gap-3 py-16 text-slate-400 shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <p className="text-sm font-semibold">Soo raraya xidhiidhyada...</p>
-        </div>
+        <ListLoadingSkeleton rows={3} />
       ) : connectionsError ? (
         <div className="bg-white border border-slate-200/60 rounded-2xl md:rounded-3xl flex flex-col items-center gap-3 py-16 px-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
           <AlertTriangle className="h-8 w-8 text-amber-500" />
@@ -284,20 +376,48 @@ export default function DriveFilesPage() {
         <div className="bg-white border border-slate-200/60 rounded-2xl md:rounded-3xl p-4 md:p-6 space-y-4 shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
           <p className="text-xs font-bold uppercase tracking-[0.08em] text-slate-400">Dooro xidhiidhka Drive</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {connections.map((conn) => (
-              <button
-                key={conn.id}
-                type="button"
-                onClick={() => setConnectionId(conn.id)}
-                className="flex items-center gap-3 rounded-2xl border border-slate-200 p-4 text-left hover:border-teal-200 hover:bg-teal-50/40 transition-colors cursor-pointer"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-600">
-                  <Cloud className="h-5 w-5" />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-800">{conn.name}</span>
-                <ChevronRight className="h-4 w-4 text-slate-300 shrink-0" />
-              </button>
-            ))}
+            {connections.map((conn) => {
+              const quota = quotas[conn.id];
+              return (
+                <div
+                  key={conn.id}
+                  className="flex items-center gap-3 rounded-2xl border border-slate-200 p-4 hover:border-teal-200 hover:bg-teal-50/40 transition-colors"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setConnectionId(conn.id)}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left cursor-pointer"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-600">
+                      <Cloud className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-bold text-slate-800">{conn.name}</span>
+                      <span className="mt-0.5 block text-[10px] font-semibold text-slate-400">
+                        {!quota || quota === 'error' ? (
+                          'Booska lama hubin'
+                        ) : quota === 'loading' ? (
+                          'Xisaabinaya...'
+                        ) : (
+                          <>Isticmaalka guud: <span className="text-slate-600">{formatBytes(quota.usageBytes)}</span></>
+                        )}
+                      </span>
+                    </span>
+                  </button>
+                  {(!quota || quota === 'error') && (
+                    <button
+                      type="button"
+                      onClick={(event) => { event.stopPropagation(); void loadQuota(conn.id); }}
+                      className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] font-bold text-slate-500 hover:bg-white hover:text-teal-700 transition-colors cursor-pointer"
+                    >
+                      Hubi booska
+                    </button>
+                  )}
+                  {quota === 'loading' && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" />}
+                  <ChevronRight className="h-4 w-4 text-slate-300 shrink-0" />
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -305,12 +425,12 @@ export default function DriveFilesPage() {
           <button
             type="button"
             onClick={changeConnection}
-            className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-teal-700 cursor-pointer"
+            className="flex max-w-full items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-teal-700 cursor-pointer"
           >
-            <Cloud className="h-3.5 w-3.5" />
-            {selectedConnectionName}
-            <span className="text-slate-300">&middot;</span>
-            <span className="underline">Bedel xidhiidhka</span>
+            <Cloud className="h-3.5 w-3.5 shrink-0" />
+            <span className="min-w-0 truncate">{selectedConnectionName}</span>
+            <span className="shrink-0 text-slate-300">&middot;</span>
+            <span className="shrink-0 underline">Bedel xidhiidhka</span>
           </button>
 
           <div className="bg-white border border-slate-200/60 rounded-2xl md:rounded-3xl p-3 md:p-6 space-y-4 shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
@@ -416,10 +536,7 @@ export default function DriveFilesPage() {
 
           <div className="bg-white border border-slate-200/60 rounded-2xl md:rounded-3xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
             {loading ? (
-              <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
-                <Loader2 className="h-6 w-6 animate-spin" />
-                <p className="text-sm font-semibold">Soo raraya...</p>
-              </div>
+              <ListLoadingSkeleton rows={5} />
             ) : error ? (
               <div className="flex flex-col items-center justify-center gap-3 py-16 px-6 text-center">
                 <AlertTriangle className="h-8 w-8 text-amber-500" />
@@ -457,24 +574,44 @@ export default function DriveFilesPage() {
                       </button>
                     ) : (
                       <div className="flex w-full items-center gap-3 px-4 md:px-6 py-3.5 hover:bg-slate-50 transition-colors">
-                        <Link
-                          href={item.webViewLink || '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex min-w-0 flex-1 items-center gap-3"
-                        >
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-600">
-                            <File className="h-4.5 w-4.5" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-bold text-slate-800">{item.name}</span>
-                            {item.modifiedTime && (
-                              <span className="block text-[11px] font-semibold text-slate-400">
-                                La bedelay {formatDate(item.modifiedTime)}
-                              </span>
-                            )}
-                          </span>
-                        </Link>
+                        {previewKind(item.mimeType) ? (
+                          <button
+                            type="button"
+                            onClick={() => openPreview(item)}
+                            className="flex min-w-0 flex-1 items-center gap-3 text-left cursor-pointer"
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-600">
+                              <FileTypeIcon mimeType={item.mimeType} className="h-4.5 w-4.5" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-bold text-slate-800">{item.name}</span>
+                              {item.modifiedTime && (
+                                <span className="block text-[11px] font-semibold text-slate-400">
+                                  La bedelay {formatDate(item.modifiedTime)}
+                                </span>
+                              )}
+                            </span>
+                          </button>
+                        ) : (
+                          <Link
+                            href={item.webViewLink || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex min-w-0 flex-1 items-center gap-3"
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-600">
+                              <FileTypeIcon mimeType={item.mimeType} className="h-4.5 w-4.5" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-bold text-slate-800">{item.name}</span>
+                              {item.modifiedTime && (
+                                <span className="block text-[11px] font-semibold text-slate-400">
+                                  La bedelay {formatDate(item.modifiedTime)}
+                                </span>
+                              )}
+                            </span>
+                          </Link>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleDownload(item)}
@@ -505,15 +642,27 @@ export default function DriveFilesPage() {
                       </button>
                     ) : (
                       <>
-                        <Link href={item.webViewLink || '#'} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-2 w-full">
-                          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-600">
-                            <File className="h-6 w-6" />
-                          </span>
-                          <span className="w-full truncate text-xs font-bold text-slate-800">{item.name}</span>
-                          {item.modifiedTime && (
-                            <span className="text-[10px] font-semibold text-slate-400">{formatDate(item.modifiedTime)}</span>
-                          )}
-                        </Link>
+                        {previewKind(item.mimeType) ? (
+                          <button type="button" onClick={() => openPreview(item)} className="flex flex-col items-center gap-2 w-full cursor-pointer">
+                            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-600">
+                              <FileTypeIcon mimeType={item.mimeType} className="h-6 w-6" />
+                            </span>
+                            <span className="w-full truncate text-xs font-bold text-slate-800">{item.name}</span>
+                            {item.modifiedTime && (
+                              <span className="text-[10px] font-semibold text-slate-400">{formatDate(item.modifiedTime)}</span>
+                            )}
+                          </button>
+                        ) : (
+                          <Link href={item.webViewLink || '#'} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-2 w-full">
+                            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-600">
+                              <FileTypeIcon mimeType={item.mimeType} className="h-6 w-6" />
+                            </span>
+                            <span className="w-full truncate text-xs font-bold text-slate-800">{item.name}</span>
+                            {item.modifiedTime && (
+                              <span className="text-[10px] font-semibold text-slate-400">{formatDate(item.modifiedTime)}</span>
+                            )}
+                          </Link>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleDownload(item)}
@@ -531,6 +680,87 @@ export default function DriveFilesPage() {
             )}
           </div>
         </>
+      )}
+
+      {previewItem && (
+        <div
+          className="fixed inset-0 z-[1300] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm md:p-6"
+          onMouseDown={(event) => event.target === event.currentTarget && closePreview()}
+        >
+          <div className="flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl md:h-[85vh]">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 md:px-6">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-600">
+                  <FileTypeIcon mimeType={previewItem.mimeType} className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 truncate text-sm font-bold text-slate-800">{previewItem.name}</span>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {previewUrl && previewKind(previewItem.mimeType) === 'image' && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewRotation((prev) => (prev + 90) % 360)}
+                    className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                    aria-label="Wareeji sawirka"
+                    title="Wareeji sawirka"
+                  >
+                    <RotateCw className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleDownload(previewItem)}
+                  disabled={downloadingId === previewItem.id}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {downloadingId === previewItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                  <span className="hidden sm:inline">Soo deji</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={closePreview}
+                  className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors cursor-pointer"
+                  aria-label="Xir"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-100 p-3 md:p-6">
+              {previewLoading ? (
+                <div className="flex flex-col items-center gap-3 text-slate-400">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <span className="text-xs font-semibold">Loading...</span>
+                </div>
+              ) : previewError ? (
+                <div className="flex flex-col items-center gap-3 text-center text-rose-600">
+                  <AlertTriangle className="h-8 w-8" />
+                  <span className="max-w-sm text-xs font-bold">{previewError}</span>
+                </div>
+              ) : previewUrl && previewKind(previewItem.mimeType) === 'pdf' ? (
+                <iframe src={previewUrl} title={previewItem.name} className="h-full w-full rounded-xl border border-slate-200 bg-white" />
+              ) : previewUrl && previewKind(previewItem.mimeType) === 'image' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={previewUrl}
+                  alt={previewItem.name}
+                  style={{ imageOrientation: 'from-image', transform: `rotate(${previewRotation}deg)` }}
+                  className="max-h-[70vh] max-w-[90%] rounded-xl object-contain transition-transform duration-200"
+                />
+              ) : previewUrl && previewKind(previewItem.mimeType) === 'video' ? (
+                <video src={previewUrl} controls autoPlay className="max-h-full max-w-full rounded-xl bg-black" />
+              ) : previewUrl && previewKind(previewItem.mimeType) === 'audio' ? (
+                <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white p-8">
+                  <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-50 text-teal-600">
+                    <FileAudio className="h-8 w-8" />
+                  </span>
+                  <audio src={previewUrl} controls autoPlay className="w-full" />
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

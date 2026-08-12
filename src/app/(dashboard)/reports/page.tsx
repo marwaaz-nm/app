@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Archive, BarChart3, Download, FileJson, FileSpreadsheet, Loader2, Printer, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { CardLoadingSkeleton } from '@/components/Skeleton';
 
 type ReportData = {
   schemaReady: boolean;
@@ -97,7 +98,7 @@ export default function ReportsPage() {
       </section>
 
       {error && <div className="flex items-center justify-between rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs font-bold text-rose-700"><span>{error}</span><button onClick={load} className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-2"><RefreshCw className="h-3.5 w-3.5" /> Isku day</button></div>}
-      {loading ? <div className="flex min-h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div> : summary && <>
+      {loading ? <CardLoadingSkeleton /> : summary && <>
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
             { label: 'Surveys', value: summary.surveys.toLocaleString(), detail: `${summary.statusCounts['Pending Review'] || 0} sugaya ansixin`, color: 'bg-blue-50 text-blue-600' },

@@ -35,7 +35,16 @@ export async function requireViewer(req: NextRequest, action?: string): Promise<
 
   const admin = getAdminClient();
   const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) throw Object.assign(new Error('Invalid or expired session.'), { status: 401 });
+  if (error) {
+    const status = typeof error.status === 'number' ? error.status : 0;
+    // Network/provider failures are not invalid credentials. Reporting them as 401
+    // makes the client repeatedly retry or sign out a perfectly valid local session.
+    if (status >= 500 || status === 0) {
+      throw Object.assign(new Error('Authentication service is temporarily unavailable.'), { status: 503, cause: error });
+    }
+    throw Object.assign(new Error('Invalid or expired session.'), { status: 401, cause: error });
+  }
+  if (!user) throw Object.assign(new Error('Invalid or expired session.'), { status: 401 });
 
   let { data: profile, error: profileError } = await admin
     .from('profiles')

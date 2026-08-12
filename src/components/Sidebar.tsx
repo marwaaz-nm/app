@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -15,12 +16,15 @@ import {
   Lock,
   LogOut,
   MapPinned,
+  MoreHorizontal,
   Settings,
   Users,
   Wallet,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
+import { supabase } from '@/lib/supabase';
 
 type NavItem = { href: string; label: string; mobileLabel: string; icon: typeof ChartNoAxesCombined; alwaysVisible?: boolean };
 
@@ -66,11 +70,16 @@ const navigationGroups: { label: string; items: NavItem[] }[] = [
   },
 ];
 
+// Only the top few destinations get a permanent slot in the mobile tab bar; the rest live
+// behind "More" so the bar stays readable instead of squeezing in 8-11 tiny icons.
+const PRIMARY_MOBILE_HREFS = ['/dashboard', '/explorer', '/records', '/references'];
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { profile, logout } = useAuth();
   const { settings } = useSettings();
   const isAdmin = profile?.role === 'Admin' || profile?.role === 'SuperAdmin';
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const isPermitted = (item: NavItem) =>
     item.href === '/users'
@@ -85,8 +94,42 @@ export default function Sidebar() {
     .filter((group) => group.items.length > 0);
 
   const permittedNavigation = permittedGroups.flatMap((group) => group.items);
+  const canSeeDriveFiles = permittedNavigation.some((item) => item.href === '/drive-files');
+
+  // Drive Files' first load is a live Google Drive API call (connections list, then the
+  // root folder listing) — both cached server-side, but the cache starts cold every time.
+  // Warming it here, right after login, means it's already hot by the time someone
+  // actually clicks into Drive Files instead of them watching it load from scratch.
+  const drivePrefetchedRef = useRef(false);
+  useEffect(() => {
+    if (!canSeeDriveFiles || drivePrefetchedRef.current) return;
+    drivePrefetchedRef.current = true;
+    void (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        const headers = { Authorization: `Bearer ${session.access_token}` };
+        const response = await fetch('/api/drive-connections', { headers });
+        if (!response.ok) return;
+        const result = await response.json();
+        const connections: { id: number }[] = result.connections || [];
+        if (connections.length === 1) {
+          void fetch(`/api/drive-files?connectionId=${connections[0].id}`, { headers });
+        }
+      } catch {
+        // Best-effort warm-up only — Drive Files will simply load from cold if this fails.
+      }
+    })();
+  }, [canSeeDriveFiles]);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
+  const primaryMobileNav = PRIMARY_MOBILE_HREFS
+    .map((href) => permittedNavigation.find((item) => item.href === href))
+    .filter((item): item is NavItem => Boolean(item));
+  const moreMobileNav = permittedNavigation.filter((item) => !PRIMARY_MOBILE_HREFS.includes(item.href));
+  const moreActive = moreMobileNav.some((item) => isActive(item.href));
+
   const initials = (profile?.fullname || 'GeoSurvey User')
     .split(/\s+/)
     .slice(0, 2)
@@ -97,9 +140,6 @@ export default function Sidebar() {
   return (
     <>
       <aside className="relative hidden h-screen w-[252px] shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white text-slate-900 shadow-[4px_0_24px_rgba(15,23,42,0.03)] md:flex">
-        <div className="pointer-events-none absolute -left-24 -top-28 h-64 w-64 rounded-full bg-teal-100/70 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-32 -right-28 h-72 w-72 rounded-full bg-amber-50 blur-3xl" />
-
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div className="flex items-center gap-2.5 px-5 pb-5 pt-5">
             <div
@@ -210,11 +250,11 @@ export default function Sidebar() {
       </aside>
 
       <nav
-        className="fixed bottom-[calc(0.75rem_+_env(safe-area-inset-bottom))] left-3 right-3 z-50 grid h-[68px] overflow-x-auto rounded-[22px] border border-slate-200 bg-white/95 px-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.15)] backdrop-blur-xl md:hidden"
-        style={{ gridTemplateColumns: `repeat(${permittedNavigation.length}, minmax(68px, 1fr))` }}
+        className="fixed bottom-[calc(0.75rem_+_env(safe-area-inset-bottom))] left-3 right-3 z-50 grid h-[68px] rounded-[22px] border border-slate-200 bg-white/95 px-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.15)] backdrop-blur-xl md:hidden"
+        style={{ gridTemplateColumns: `repeat(${primaryMobileNav.length + (moreMobileNav.length > 0 ? 1 : 0)}, minmax(0, 1fr))` }}
         aria-label="Mobile navigation"
       >
-        {permittedNavigation.map((item) => {
+        {primaryMobileNav.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
 
@@ -241,7 +281,85 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        {moreMobileNav.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setMoreOpen(true)}
+            aria-label="More menu"
+            className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl transition-colors ${
+              moreActive ? 'text-teal-700' : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            {moreActive && <span className="absolute top-0 h-[3px] w-6 rounded-b-full bg-teal-400" />}
+            <span
+              className={`flex h-8 w-9 items-center justify-center rounded-xl transition-all ${
+                moreActive ? 'bg-teal-500 text-white shadow-[0_6px_16px_rgba(59,130,246,0.35)]' : ''
+              }`}
+            >
+              <MoreHorizontal className="h-[17px] w-[17px]" strokeWidth={moreActive ? 2.4 : 2} />
+            </span>
+            <span className="w-full truncate px-0.5 text-center text-[8px] font-extrabold uppercase tracking-[0.08em]">
+              More
+            </span>
+          </button>
+        )}
       </nav>
+
+      {moreOpen && (
+        <div className="fixed inset-0 z-[1100] md:hidden">
+          <button
+            type="button"
+            aria-label="Xir liiska"
+            onClick={() => setMoreOpen(false)}
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+          />
+          <div className="absolute inset-x-3 bottom-[calc(0.75rem_+_env(safe-area-inset-bottom))] max-h-[70vh] overflow-y-auto rounded-[26px] border border-slate-200 bg-white p-3 shadow-[0_-18px_45px_rgba(15,23,42,0.2)]">
+            <div className="mb-2 flex items-center justify-between px-2 pt-1">
+              <p className="text-xs font-black text-slate-800">Dhammaan Menu-yada</p>
+              <button
+                type="button"
+                onClick={() => setMoreOpen(false)}
+                aria-label="Xir"
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2 p-1">
+              {moreMobileNav.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.href);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMoreOpen(false)}
+                    aria-current={active ? 'page' : undefined}
+                    className={`flex flex-col items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 transition-colors ${
+                      active
+                        ? 'border-teal-200 bg-teal-50 text-teal-700'
+                        : 'border-slate-200 bg-slate-50/60 text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span
+                      className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+                        active ? 'bg-teal-500 text-white' : 'bg-white text-slate-500'
+                      }`}
+                    >
+                      <Icon className="h-[17px] w-[17px]" strokeWidth={2.2} />
+                    </span>
+                    <span className="text-center text-[9px] font-extrabold uppercase tracking-[0.06em]">
+                      {item.mobileLabel}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

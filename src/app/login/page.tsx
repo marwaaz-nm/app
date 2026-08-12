@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSettings } from '@/context/SettingsContext';
 import { ShieldAlert, Shield, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import ThemeToggle from '@/components/ThemeToggle';
 
 export default function LoginPage() {
   const { settings } = useSettings();
@@ -41,6 +42,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4 text-slate-800">
+      <ThemeToggle className="fixed right-4 top-4 z-10 shadow-sm" />
       <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white p-8 shadow-xl border border-slate-100">
         <div className="text-center mb-8">
           <div

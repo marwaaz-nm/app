@@ -6,6 +6,7 @@ import { Profile } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
 import { useRouter } from 'next/navigation';
+import { ListLoadingSkeleton } from '@/components/Skeleton';
 import {
   UserPlus,
   Trash2, 
@@ -285,9 +286,7 @@ export default function UsersPage() {
 
       {/* User Profiles Table */}
       {loading ? (
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-        </div>
+        <ListLoadingSkeleton />
       ) : (
         <>
         <div className="hidden md:block overflow-hidden border border-slate-200/80 rounded-3xl bg-white shadow-sm">
@@ -437,19 +436,19 @@ export default function UsersPage() {
 
       {/* Add / Edit User Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-[1300] flex items-start justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-md md:max-w-3xl bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center px-6 py-4 bg-slate-50 border-b border-slate-200">
-              <h3 className="font-extrabold text-slate-800 flex items-center gap-2">
-                <UserPlus className="h-5 w-5 text-teal-600" />
-                {editingUser ? `Edit User Account (@${editingUser.username})` : 'Add New User Account'}
+            <div className="flex items-center justify-between gap-3 px-6 py-4 bg-slate-50 border-b border-slate-200">
+              <h3 className="min-w-0 font-extrabold text-slate-800 flex items-center gap-2">
+                <UserPlus className="h-5 w-5 shrink-0 text-teal-600" />
+                <span className="truncate">{editingUser ? `Edit User Account (@${editingUser.username})` : 'Add New User Account'}</span>
               </h3>
               <button
                 onClick={() => {
                   setShowAddModal(false);
                   setEditingUser(null);
                 }}
-                className="text-slate-450 hover:text-slate-800 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                className="shrink-0 text-slate-450 hover:text-slate-800 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>

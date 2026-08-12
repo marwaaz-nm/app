@@ -6,6 +6,26 @@ const WORD_MIME_TYPES = [
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
+// Browsing a room shows these in addition to Word files, so PDFs/photos/recordings can be
+// opened and previewed in-app. Search and the customer-data index stay scoped to Word docs
+// only (searchWordFiles/listAllWordFilesInTree) since those parse document text — nothing
+// here changes what a folder search or the background index considers.
+const PREVIEWABLE_MIME_TYPES = [
+  ...WORD_MIME_TYPES,
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'audio/mpeg',
+  'audio/wav',
+  'audio/ogg',
+  'audio/mp4',
+  'audio/webm',
+];
 const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
 const FIELDS = 'files(id, name, mimeType, modifiedTime, webViewLink, iconLink, size, parents), nextPageToken';
 
@@ -163,7 +183,7 @@ export async function browseFolder(conn: DriveConnection, folderId: string): Pro
   const files = await listAllPages(conn, `'${folderId}' in parents and trashed = false`);
   const items = files
     .map(toDriveItem)
-    .filter((item) => !isJunkFileName(item.name) && (item.kind === 'folder' || WORD_MIME_TYPES.includes(item.mimeType)));
+    .filter((item) => !isJunkFileName(item.name) && (item.kind === 'folder' || PREVIEWABLE_MIME_TYPES.includes(item.mimeType)));
   items.sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
     return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
@@ -246,7 +266,17 @@ export async function searchWordFiles(conn: DriveConnection, rawQuery: string): 
   return results;
 }
 
+// Walking to the root is a chain of sequential Drive API calls (one per folder level),
+// unlike browseFolder's single listing call — and folder names/parents change rarely, so
+// this is cached the same way to avoid paying that latency on every navigation.
+const folderPathCache = new Map<string, { path: { id: string; name: string }[]; expiresAt: number }>();
+const FOLDER_PATH_CACHE_MS = 3 * 60 * 1000;
+
 export async function getFolderPath(conn: DriveConnection, folderId: string): Promise<{ id: string; name: string }[]> {
+  const cacheKey = `${conn.id}::${folderId}`;
+  const cached = folderPathCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.path;
+
   const drive = getClient(conn);
   const path: { id: string; name: string }[] = [];
   let currentId: string | undefined = folderId;
@@ -259,6 +289,8 @@ export async function getFolderPath(conn: DriveConnection, folderId: string): Pr
     if (data.id === conn.rootFolderId) break;
     currentId = data.parents?.[0];
   }
+
+  folderPathCache.set(cacheKey, { path, expiresAt: Date.now() + FOLDER_PATH_CACHE_MS });
   return path;
 }
 
@@ -292,6 +324,44 @@ export async function downloadFile(conn: DriveConnection, fileId: string): Promi
     name: metaResponse.data.name || 'document',
     mimeType: metaResponse.data.mimeType || 'application/octet-stream',
   };
+}
+
+export type StorageQuota = { usageBytes: number };
+
+// about.get's storageQuota reports the *service account's own* Drive quota — for a
+// service account that only has a shared folder handed to it (the normal setup here),
+// that's meaningless (typically reads back as 0 used / no limit, as confirmed against
+// the real rooms). What actually answers "how much space is this room using" is the
+// real size of every file inside its folder tree, summed up — so that's what this does,
+// reusing the same tree-walk as listAllWordFilesInTree but across every file, not just
+// Word docs. There's no reliable "total capacity" for a shared folder living inside
+// someone else's Drive, so only usage is reported (no free-space figure to show).
+const quotaCache = new Map<number, { quota: StorageQuota; expiresAt: number }>();
+const QUOTA_CACHE_MS = 10 * 60 * 1000;
+
+export async function getStorageQuota(conn: DriveConnection): Promise<StorageQuota> {
+  const cached = quotaCache.get(conn.id);
+  if (cached && cached.expiresAt > Date.now()) return cached.quota;
+
+  const folderIds = await getFolderTreeIds(conn);
+  const chunks: string[][] = [];
+  for (let i = 0; i < folderIds.length; i += TREE_LEVEL_CHUNK) chunks.push(folderIds.slice(i, i + TREE_LEVEL_CHUNK));
+  const results = await Promise.all(chunks.map((chunk) => {
+    const parentClause = chunk.map((id) => `'${id}' in parents`).join(' or ');
+    return listAllPages(conn, `(${parentClause}) and mimeType != '${FOLDER_MIME_TYPE}' and trashed = false`);
+  }));
+
+  const seen = new Set<string>();
+  let usageBytes = 0;
+  for (const file of results.flat()) {
+    if (!file.id || seen.has(file.id)) continue;
+    seen.add(file.id);
+    usageBytes += file.size ? Number(file.size) : 0;
+  }
+
+  const quota: StorageQuota = { usageBytes };
+  quotaCache.set(conn.id, { quota, expiresAt: Date.now() + QUOTA_CACHE_MS });
+  return quota;
 }
 
 // --- Drive push notifications (webhooks) ---

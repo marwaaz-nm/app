@@ -8,19 +8,23 @@ import DetailsModal from '@/components/DetailsModal';
 import SurveyManagementModal from '@/components/SurveyManagementModal';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
+import { ListLoadingSkeleton } from '@/components/Skeleton';
+import { useProfileNames, resolveCreatorName } from '@/lib/useProfileNames';
+import { displayStatus } from '@/lib/surveyCompleteness';
 import {
   Plus,
   Search,
   ChevronRight,
   Calendar,
   Info,
-  Loader2,
   Sliders,
   Settings2,
 } from 'lucide-react';
 
 export default function RecordsPage() {
   const [records, setRecords] = useState<Survey[]>([]);
+  const profileNames = useProfileNames();
+  const [usedSurveyIds, setUsedSurveyIds] = useState<Set<number>>(new Set());
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
   const [filteredRecords, setFilteredRecords] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,6 +83,17 @@ export default function RecordsPage() {
 
   useEffect(() => {
     fetchRecords();
+  }, []);
+
+  // Which surveys already have at least one reference issued against them — drives the
+  // "Used / Not Used" badge so staff can spot land that's never had a reference at a glance.
+  useEffect(() => {
+    const fetchUsedSurveys = async () => {
+      const { data, error } = await supabase.from('references').select('survey_id').not('survey_id', 'is', null);
+      if (error) return;
+      setUsedSurveyIds(new Set((data || []).map((r) => r.survey_id as number)));
+    };
+    fetchUsedSurveys();
   }, []);
 
   // Filter application
@@ -143,9 +158,9 @@ export default function RecordsPage() {
   const groupedRecords = useMemo(() => {
     if (groupBy === 'none') return null;
     return groupItems(sortedRecords, (r) =>
-      groupBy === 'date' ? dateGroupKey(r.created_at).key : (r.status || 'Draft'),
+      groupBy === 'date' ? dateGroupKey(r.created_at).key : displayStatus(r),
     ).map((group) => {
-      const baseLabel = groupBy === 'date' ? dateGroupKey(group.items[0].created_at).label : (group.items[0].status || 'Draft');
+      const baseLabel = groupBy === 'date' ? dateGroupKey(group.items[0].created_at).label : displayStatus(group.items[0]);
       const label = groupAggregate === 'count' ? `${baseLabel} · ${group.items.length}` : baseLabel;
       return { ...group, label };
     });
@@ -159,7 +174,7 @@ export default function RecordsPage() {
           className="flex items-center gap-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-600 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-lg shadow-teal-600/15 hover:shadow-teal-600/25 cursor-pointer transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95 shrink-0 select-none"
         >
           <Plus className="h-4 w-4" />
-          <span>Ku Dar Sahan Cusub</span>
+          <span>Add New Survey</span>
         </Link>
       </div>
 
@@ -319,12 +334,7 @@ export default function RecordsPage() {
 
       {/* Records Listing */}
       {loading ? (
-        <div className="flex h-64 w-full items-center justify-center">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-            <p className="text-xs text-slate-500 font-semibold">Soo raryaa liiska records-ka...</p>
-          </div>
-        </div>
+        <ListLoadingSkeleton />
       ) : sortedRecords.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 border border-dashed border-slate-200 rounded-3xl bg-white">
           <Info className="h-8 w-8 text-slate-400 mb-2" />
@@ -346,6 +356,8 @@ export default function RecordsPage() {
                     <th className="px-6 py-4">Soohdimaha</th>
                     <th className="px-6 py-4">Location</th>
                     <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Record Creator</th>
+                    <th className="px-6 py-4">Reference</th>
                     <th className="px-6 py-4 text-right">Maamul</th>
                   </tr>
                 </thead>
@@ -354,7 +366,7 @@ export default function RecordsPage() {
                     <React.Fragment key={group.key}>
                       {groupBy !== 'none' && (
                         <tr>
-                          <td colSpan={8} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                          <td colSpan={10} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                             {group.label}
                           </td>
                         </tr>
@@ -378,7 +390,7 @@ export default function RecordsPage() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-200/60 text-slate-600 text-[10px] font-extrabold">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-200/60 text-slate-600 text-xs font-extrabold">
                               {record.neighborhood}
                             </span>
                           </td>
@@ -393,10 +405,22 @@ export default function RecordsPage() {
                             </code>
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`inline-flex rounded-full px-2.5 py-1 text-[9px] font-black ${statusClass(record.status)}`}>{record.status || 'Draft'}</span>
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${statusClass(displayStatus(record))}`}>{displayStatus(record)}</span>
+                          </td>
+                          <td className="px-6 py-4 text-slate-600 font-bold">
+                            {resolveCreatorName(record.created_by, profileNames) || '-'}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black ${
+                                usedSurveyIds.has(record.id) ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                              }`}
+                            >
+                              {usedSurveyIds.has(record.id) ? 'Used' : 'Not Used'}
+                            </span>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <button onClick={(event) => { event.stopPropagation(); setManagedRecord(record); }} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
+                            <button onClick={(event) => { event.stopPropagation(); setManagedRecord(record); }} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
                               <Settings2 className="h-3.5 w-3.5" /> Maamul
                             </button>
                           </td>
@@ -411,7 +435,7 @@ export default function RecordsPage() {
 
           {/* MOBILE LIST VIEW */}
           <div className="md:hidden mb-12">
-            <div className="grid grid-cols-[52px_1fr_auto_40px] items-center gap-3 border-b border-slate-200 px-1 py-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+            <div className="grid grid-cols-[52px_1fr_auto_40px] items-center gap-3 border-b border-slate-200 px-1 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
               <span>No.</span>
               <span>Milkiile</span>
               <span>Status</span>
@@ -420,7 +444,7 @@ export default function RecordsPage() {
             {(groupedRecords ?? [{ key: 'all', label: '', items: sortedRecords }]).map((group) => (
               <div key={group.key}>
                 {groupBy !== 'none' && (
-                  <div className="px-1 pb-1.5 pt-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
+                  <div className="px-1 pb-1.5 pt-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                     {group.label}
                   </div>
                 )}
@@ -434,14 +458,26 @@ export default function RecordsPage() {
                       <span className="truncate text-xs font-black text-slate-500">{record.serial_no}</span>
                       <div className="min-w-0">
                         <h4 className="truncate text-xs font-extrabold text-slate-800">{record.owner_name}</h4>
-                        <p className="mt-0.5 flex items-center gap-1 truncate text-[9px] text-slate-500">
+                        <p className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-slate-500">
                           <Calendar className="h-3 w-3 shrink-0" />
                           <span>{record.created_at ? new Date(record.created_at).toLocaleDateString('so-SO') : '-'}</span>
                           <span>•</span>
                           <span className="font-bold text-slate-600">{record.neighborhood}</span>
                         </p>
+                        <p className="mt-1 flex items-center gap-1.5 truncate text-[10px] font-semibold text-slate-400">
+                          {resolveCreatorName(record.created_by, profileNames) && (
+                            <span>Added by {resolveCreatorName(record.created_by, profileNames)}</span>
+                          )}
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-black ${
+                              usedSurveyIds.has(record.id) ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                            }`}
+                          >
+                            {usedSurveyIds.has(record.id) ? 'Used' : 'Not Used'}
+                          </span>
+                        </p>
                       </div>
-                      <span className={`inline-flex items-center justify-self-end whitespace-nowrap rounded-full px-2 py-0.5 text-[8px] font-black ${statusClass(record.status)}`}>{record.status || 'Draft'}</span>
+                      <span className={`inline-flex items-center justify-self-end whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-black ${statusClass(displayStatus(record))}`}>{displayStatus(record)}</span>
                       <button
                         onClick={(event) => { event.stopPropagation(); setManagedRecord(record); }}
                         className="flex h-8 w-8 items-center justify-center justify-self-center rounded-lg border border-slate-200 text-slate-500 hover:bg-blue-50 hover:text-blue-700"
@@ -478,7 +514,7 @@ export default function RecordsPage() {
       <Link
         href="/records/new"
         className="fixed bottom-[calc(6rem_+_env(safe-area-inset-bottom))] right-6 z-40 md:hidden flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 hover:bg-teal-500 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
-        aria-label="Ku Dar Sahan Cusub"
+        aria-label="Add New Survey"
       >
         <Plus className="h-7 w-7" />
       </Link>

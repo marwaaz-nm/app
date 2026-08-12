@@ -132,3 +132,33 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: resolved.message }, { status: resolved.status });
   }
 }
+
+// Permanently deletes a survey — restricted to Admin (stricter than every other action
+// on this route) since it's the one operation here with no undo, unlike restore_revision.
+// survey_revisions/survey_documents rows cascade-delete via their FK, but the actual
+// uploaded files in Storage don't, so those are cleaned up first, best-effort.
+export async function DELETE(req: NextRequest, context: RouteContext) {
+  try {
+    const viewer = await requireViewer(req);
+    if (viewer.role !== 'Admin') {
+      return NextResponse.json({ error: 'Kaliya Admin ayaa survey-ga tirtiri kara.' }, { status: 403 });
+    }
+    const id = Number((await context.params).id);
+    if (!Number.isInteger(id)) return NextResponse.json({ error: 'Invalid survey id.' }, { status: 400 });
+
+    await getSurvey(viewer, id);
+
+    const { data: documents } = await viewer.admin.from('survey_documents').select('storage_path').eq('survey_id', id);
+    if (documents && documents.length > 0) {
+      await viewer.admin.storage.from('survey-documents').remove(documents.map((d) => d.storage_path));
+    }
+
+    const { error } = await viewer.admin.from('surveys').delete().eq('id', id);
+    if (error) throw error;
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const resolved = apiError(error);
+    return NextResponse.json({ error: resolved.message }, { status: resolved.status });
+  }
+}

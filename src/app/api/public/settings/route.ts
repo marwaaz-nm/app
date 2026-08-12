@@ -24,8 +24,15 @@ export async function GET() {
       .eq('id', 1)
       .single();
 
-    if (error || !data) {
-      return NextResponse.json({ error: 'Settings not found' }, { status: 404 });
+    // Branding settings are optional. The client merges this object over its built-in
+    // defaults, so a fresh database (or one without the migration yet) should not turn
+    // a normal login-page request into a noisy 404.
+    if (error?.code === 'PGRST116' || error?.code === '42P01' || error?.code === 'PGRST205' || (!error && !data)) {
+      return NextResponse.json({ settings: {} });
+    }
+
+    if (error) {
+      throw error;
     }
 
     return NextResponse.json({ settings: data });

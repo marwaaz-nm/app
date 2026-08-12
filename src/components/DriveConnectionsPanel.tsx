@@ -334,7 +334,7 @@ export default function DriveConnectionsPanel() {
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-10 text-slate-400">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm font-semibold">Soo raraya...</span>
+            <span className="text-sm font-semibold">Loading...</span>
           </div>
         ) : error ? (
           <p className="text-sm font-bold text-rose-600 py-4">{error}</p>

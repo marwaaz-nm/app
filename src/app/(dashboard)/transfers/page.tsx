@@ -7,6 +7,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
+import { ListLoadingSkeleton } from '@/components/Skeleton';
+import { useProfileNames, resolveCreatorName } from '@/lib/useProfileNames';
 import {
   Plus,
   Search,
@@ -18,19 +20,24 @@ import {
   Loader2,
   ChevronRight,
   Info,
-  Check
+  Check,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 
 export default function TransfersPage() {
   const { user } = useAuth();
   const { showAlert, showConfirm } = useModal();
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
+  const profileNames = useProfileNames();
 
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [filteredTransfers, setFilteredTransfers] = useState<Transfer[]>([]);
   const [surveys, setSurveys] = useState<{ id: number; serial_no: number; owner_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
 
   // Search/Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -136,12 +143,38 @@ export default function TransfersPage() {
 
   const handleOpenAddForm = () => {
     const today = new Date().toISOString().split('T')[0];
+    setEditingTransfer(null);
+    setSellers([{ name: '', tel: '' }]);
+    setBuyers([{ name: '', tel: '' }]);
+    setSelectedSurveyId('');
+    setPrice('');
     setTransferDate(today);
+    setShowAddForm(true);
+  };
+
+  // Reuses the add form for editing — seller/buyer names & phones are stored as
+  // comma-joined strings on the record, so they're split back into per-person rows here
+  // (matches how handleSaveTransfer re-joins them on save).
+  const handleOpenEditForm = (transfer: Transfer) => {
+    const sellerNames = transfer.seller_name.split(',').map((s) => s.trim());
+    const sellerTels = transfer.seller_tel.split(',').map((s) => s.trim());
+    const buyerNames = transfer.buyer_name.split(',').map((s) => s.trim());
+    const buyerTels = transfer.buyer_tel.split(',').map((s) => s.trim());
+    const rowCount = Math.max(sellerNames.length, sellerTels.length);
+    const buyerRowCount = Math.max(buyerNames.length, buyerTels.length);
+
+    setEditingTransfer(transfer);
+    setSellers(Array.from({ length: rowCount || 1 }, (_, i) => ({ name: sellerNames[i] || '', tel: sellerTels[i] || '' })));
+    setBuyers(Array.from({ length: buyerRowCount || 1 }, (_, i) => ({ name: buyerNames[i] || '', tel: buyerTels[i] || '' })));
+    setSelectedSurveyId(String(transfer.survey_id));
+    setPrice(String(transfer.price));
+    setTransferDate(transfer.transfer_date ? transfer.transfer_date.slice(0, 10) : '');
     setShowAddForm(true);
   };
 
   const handleCloseAddForm = () => {
     setShowAddForm(false);
+    setEditingTransfer(null);
     setSellers([{ name: '', tel: '' }]);
     setBuyers([{ name: '', tel: '' }]);
     setSelectedSurveyId('');
@@ -153,7 +186,30 @@ export default function TransfersPage() {
     setSaving(true);
 
     try {
-      // 1. Fetch next serial number (max + 1)
+      const payload = {
+        seller_name: sellers.map(s => s.name.trim()).filter(Boolean).join(', '),
+        seller_tel: sellers.map(s => s.tel.trim()).filter(Boolean).join(', '),
+        buyer_name: buyers.map(b => b.name.trim()).filter(Boolean).join(', '),
+        buyer_tel: buyers.map(b => b.tel.trim()).filter(Boolean).join(', '),
+        survey_id: parseInt(selectedSurveyId),
+        price: parseFloat(price),
+        transfer_date: transferDate,
+      };
+
+      if (editingTransfer) {
+        const { error: updateError } = await supabase
+          .from('transfers')
+          .update(payload)
+          .eq('id', editingTransfer.id);
+        if (updateError) throw updateError;
+
+        showAlert('Guul', 'Wareejinta si guul leh ayaa loo cusboonaysiiyey!', 'success');
+        handleCloseAddForm();
+        fetchTransfers();
+        return;
+      }
+
+      // Fetch next serial number (max + 1)
       const { data: maxData, error: maxError } = await supabase
         .from('transfers')
         .select('serial_no')
@@ -163,21 +219,9 @@ export default function TransfersPage() {
       if (maxError) throw maxError;
       const nextSerialNo = maxData && maxData.length > 0 ? maxData[0].serial_no + 1 : 1;
 
-      const payload = {
-        serial_no: nextSerialNo,
-        seller_name: sellers.map(s => s.name.trim()).filter(Boolean).join(', '),
-        seller_tel: sellers.map(s => s.tel.trim()).filter(Boolean).join(', '),
-        buyer_name: buyers.map(b => b.name.trim()).filter(Boolean).join(', '),
-        buyer_tel: buyers.map(b => b.tel.trim()).filter(Boolean).join(', '),
-        survey_id: parseInt(selectedSurveyId),
-        price: parseFloat(price),
-        transfer_date: transferDate,
-        created_by: user?.id
-      };
-
       const { error: insertError } = await supabase
         .from('transfers')
-        .insert([payload]);
+        .insert([{ ...payload, serial_no: nextSerialNo, created_by: user?.id }]);
 
       if (insertError) throw insertError;
 
@@ -192,6 +236,29 @@ export default function TransfersPage() {
     }
   };
 
+  const handleDeleteTransfer = async (transfer: Transfer) => {
+    const isConfirmed = await showConfirm(
+      'Tirtir Wareejinta',
+      `Ma hubtaa inaad tirtirto wareejinta ${transfer.serial_no} (${transfer.seller_name} → ${transfer.buyer_name})? Tallaabadan lama soo celin karo.`,
+      'Haa, tirtir',
+      'Maya'
+    );
+    if (!isConfirmed) return;
+
+    setDeletingId(transfer.id);
+    try {
+      const { error } = await supabase.from('transfers').delete().eq('id', transfer.id);
+      if (error) throw error;
+      setTransfers((prev) => prev.filter((t) => t.id !== transfer.id));
+      showAlert('Guul', 'Wareejinta waa la tirtiray.', 'success');
+    } catch (err) {
+      console.error('Error deleting transfer:', err);
+      showAlert('Cillad', err instanceof Error ? err.message : 'Tirtiridda wuu fashilmay.', 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className={`p-4 md:p-8 mx-auto space-y-3.5 md:space-y-6 text-slate-800 transition-all duration-300 ${showAddForm ? 'form-card' : 'w-full'}`}>
       
@@ -202,7 +269,7 @@ export default function TransfersPage() {
             className="flex items-center gap-2 bg-teal-600 hover:bg-teal-705 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-md cursor-pointer transition-all active:scale-95 shrink-0"
           >
             <Plus className="h-4 w-4" />
-            <span>Wareejin Cusub</span>
+            <span>New Transfer</span>
           </button>
         </div>
       )}
@@ -218,7 +285,7 @@ export default function TransfersPage() {
             >
               ← Back to transfers
             </button>
-            <h2 className="text-2xl font-black text-slate-800 mt-1.5">New transfer</h2>
+            <h2 className="text-2xl font-black text-slate-800 mt-1.5">{editingTransfer ? `Edit transfer — ${editingTransfer.serial_no}` : 'New transfer'}</h2>
           </div>
 
           {/* Form card */}
@@ -235,7 +302,7 @@ export default function TransfersPage() {
                     className="flex items-center gap-1 text-teal-600 hover:text-teal-700 text-xs font-black cursor-pointer select-none"
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    <span>Ku Dar Iibiye Kale</span>
+                    <span>Add Another Seller</span>
                   </button>
                 </div>
 
@@ -300,7 +367,7 @@ export default function TransfersPage() {
                     className="flex items-center gap-1 text-teal-600 hover:text-teal-700 text-xs font-black cursor-pointer select-none"
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    <span>Ku Dar Iibsadaha Kale</span>
+                    <span>Add Another Buyer</span>
                   </button>
                 </div>
 
@@ -426,7 +493,7 @@ export default function TransfersPage() {
               ) : (
                 <>
                   <Check className="h-4 w-4" />
-                  <span>Save</span>
+                  <span>{editingTransfer ? 'Update' : 'Save'}</span>
                 </>
               )}
             </button>
@@ -485,9 +552,7 @@ export default function TransfersPage() {
           </div>
 
           {loading ? (
-            <div className="flex h-64 items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-            </div>
+            <ListLoadingSkeleton />
           ) : sortedTransfers.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-12 border border-dashed border-slate-200 rounded-3xl bg-white">
               <Info className="h-8 w-8 text-slate-400 mb-2" />
@@ -506,6 +571,8 @@ export default function TransfersPage() {
                       <th className="px-6 py-4">Survey Lr</th>
                       <th className="px-6 py-4">Lacagta (Price)</th>
                       <th className="px-6 py-4">Taariikhda</th>
+                      <th className="px-6 py-4">Record Creator</th>
+                      <th className="px-6 py-4 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100/60 bg-white">
@@ -513,7 +580,7 @@ export default function TransfersPage() {
                       <React.Fragment key={group.key}>
                         {groupBy !== 'none' && (
                           <tr>
-                            <td colSpan={6} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                            <td colSpan={8} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                               {group.label}
                             </td>
                           </tr>
@@ -528,14 +595,14 @@ export default function TransfersPage() {
                             </td>
                             <td className="px-6 py-4 font-bold text-slate-800">
                               <div>{t.seller_name}</div>
-                              <div className="text-[10px] text-slate-450 mt-0.5">{t.seller_tel}</div>
+                              <div className="text-xs text-slate-450 mt-0.5">{t.seller_tel}</div>
                             </td>
                             <td className="px-6 py-4 font-bold text-teal-600">
                               <div>{t.buyer_name}</div>
-                              <div className="text-[10px] text-slate-450 mt-0.5">{t.buyer_tel}</div>
+                              <div className="text-xs text-slate-450 mt-0.5">{t.buyer_tel}</div>
                             </td>
                             <td className="px-6 py-4">
-                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-650 text-[10px] font-bold">
+                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-650 text-xs font-bold">
                                 {t.surveys ? `${t.surveys.serial_no} — ${t.surveys.owner_name}` : 'N/A'}
                               </span>
                             </td>
@@ -548,6 +615,28 @@ export default function TransfersPage() {
                                 {t.transfer_date ? new Date(t.transfer_date).toLocaleDateString('so-SO') : '-'}
                               </span>
                             </td>
+                            <td className="px-6 py-4 text-slate-600 font-bold">
+                              {resolveCreatorName(t.created_by, profileNames) || '-'}
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => handleOpenEditForm(t)}
+                                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 cursor-pointer"
+                                  aria-label="Edit"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteTransfer(t)}
+                                  disabled={deletingId === t.id}
+                                  className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 cursor-pointer disabled:opacity-50"
+                                  aria-label="Delete"
+                                >
+                                  {deletingId === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </React.Fragment>
@@ -558,7 +647,7 @@ export default function TransfersPage() {
 
               {/* MOBILE LIST */}
               <div className="md:hidden mb-12">
-                <div className="grid grid-cols-[44px_1fr_auto] items-center gap-3 border-b border-slate-200 px-1 py-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+                <div className="grid grid-cols-[44px_1fr_auto] items-center gap-3 border-b border-slate-200 px-1 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
                   <span>S/N</span>
                   <span>Iibiye → Iibsade</span>
                   <span>Qiimo</span>
@@ -566,28 +655,47 @@ export default function TransfersPage() {
                 {(groupedTransfers ?? [{ key: 'all', label: '', items: sortedTransfers }]).map((group) => (
                   <div key={group.key}>
                     {groupBy !== 'none' && (
-                      <div className="px-1 pb-1.5 pt-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
+                      <div className="px-1 pb-1.5 pt-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                         {group.label}
                       </div>
                     )}
                     <div className="divide-y divide-slate-100/60">
                       {group.items.map(t => (
-                        <div key={t.id} className="grid grid-cols-[44px_1fr_auto] items-center gap-3 px-1 py-3.5">
+                        <div
+                          key={t.id}
+                          onClick={() => handleOpenEditForm(t)}
+                          className="grid grid-cols-[44px_1fr_auto] items-center gap-3 px-1 py-3.5 cursor-pointer active:bg-slate-50"
+                        >
                           <span className="truncate text-xs font-black text-slate-500">{t.serial_no}</span>
                           <div className="min-w-0">
                             <p className="truncate text-xs font-extrabold text-slate-800">
                               {t.seller_name} <span className="text-slate-300">→</span> <span className="text-teal-600">{t.buyer_name}</span>
                             </p>
-                            <p className="mt-0.5 flex items-center gap-1 truncate text-[9px] text-slate-500">
+                            <p className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-slate-500">
                               <Calendar className="h-3 w-3 shrink-0" />
                               <span>{t.transfer_date ? new Date(t.transfer_date).toLocaleDateString('so-SO') : '-'}</span>
                               <span>•</span>
                               <span>{t.surveys ? `Sahan ${t.surveys.serial_no}` : 'N/A'}</span>
                             </p>
+                            {resolveCreatorName(t.created_by, profileNames) && (
+                              <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">
+                                Added by {resolveCreatorName(t.created_by, profileNames)}
+                              </p>
+                            )}
                           </div>
-                          <span className="justify-self-end whitespace-nowrap text-xs font-black text-emerald-600">
-                            ${parseFloat(t.price.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="whitespace-nowrap text-xs font-black text-emerald-600">
+                              ${parseFloat(t.price.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); void handleDeleteTransfer(t); }}
+                              disabled={deletingId === t.id}
+                              className="rounded-lg p-1 text-rose-500 hover:bg-rose-50 cursor-pointer disabled:opacity-50"
+                              aria-label="Delete"
+                            >
+                              {deletingId === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>

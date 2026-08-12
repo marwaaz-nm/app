@@ -51,6 +51,11 @@ export default function DashboardLayout({
     return null;
   }
 
+  // The map explorer manages its own full-bleed viewport (no scroll, no bottom-nav
+  // clearance needed) — the shared scrollable/padded main would otherwise push part
+  // of the map out of view behind the fixed mobile nav.
+  const isFullBleed = pathname.startsWith('/explorer');
+
   return (
     <div className="flex h-dvh w-screen overflow-hidden bg-slate-50 text-slate-900">
       {/* Navigation Shell */}
@@ -60,8 +65,14 @@ export default function DashboardLayout({
       <MobileSearchProvider>
         <div className="flex-1 flex flex-col min-w-0 h-full relative bg-slate-50">
           <WorkspaceHeader />
-          <main className="flex-1 min-h-0 overflow-y-auto pb-[calc(6rem_+_env(safe-area-inset-bottom))] md:pb-0 bg-slate-50">
-            <div className="w-full min-h-full">
+          <main
+            className={
+              isFullBleed
+                ? 'flex-1 min-h-0 overflow-hidden bg-slate-50'
+                : 'flex-1 min-h-0 overflow-y-auto pb-[calc(6rem_+_env(safe-area-inset-bottom))] md:pb-0 bg-slate-50'
+            }
+          >
+            <div className={isFullBleed ? 'w-full h-full' : 'w-full min-h-full'}>
               {children}
             </div>
           </main>

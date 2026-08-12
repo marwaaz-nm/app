@@ -2,40 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useSettings } from '@/context/SettingsContext';
 import type { Survey, SurveyDocument, SurveyRevision, SurveyStatus } from '@/types';
-import type { BoundaryInfo } from '@/lib/geoDirection';
-import { Archive, CheckCircle2, Clock3, FileText, History, Loader2, RotateCcw, Save, Send, ShieldCheck, Trash2, Upload, X, XCircle } from 'lucide-react';
-
-const MiniMap = dynamic(() => import('@/components/MiniMap'), {
-  ssr: false,
-  loading: () => (
-    <div className="h-[400px] w-full bg-slate-50 border border-slate-200 rounded-3xl flex items-center justify-center text-xs text-slate-500">
-      <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-    </div>
-  ),
-});
+import { Clock3, FileText, History, Loader2, RotateCcw, Save, Trash2, Upload, X } from 'lucide-react';
+import SurveyFormFields from '@/components/SurveyFormFields';
 
 type Tab = 'edit' | 'workflow' | 'documents' | 'history';
 type Props = { record: Survey; onClose: () => void; onChanged: () => void };
 
-const fields: Array<{ key: keyof Survey; label: string; wide?: boolean }> = [
-  { key: 'owner_name', label: 'Magaca milkiilaha' },
-  { key: 'land_type', label: 'Nooca dhulka' },
-  { key: 'neighborhood', label: 'Xaafadda' },
-  { key: 'branch', label: 'Laanta' },
-  { key: 'vicinity', label: 'Nawaaxiga' },
-  { key: 'boundary_w_val', label: 'Waqooyi — cabbirka' },
-  { key: 'boundary_w_neighbor', label: 'Waqooyi — deriska' },
-  { key: 'boundary_b_val', label: 'Bari — cabbirka' },
-  { key: 'boundary_b_neighbor', label: 'Bari — deriska' },
-  { key: 'boundary_k_val', label: 'Koonfur — cabbirka' },
-  { key: 'boundary_k_neighbor', label: 'Koonfur — deriska' },
-  { key: 'boundary_g_val', label: 'Galbeed — cabbirka' },
-  { key: 'boundary_g_neighbor', label: 'Galbeed — deriska' },
-  { key: 'built_details', label: 'Faahfaahinta dhismaha', wide: true },
+const fields: Array<keyof Survey> = [
+  'owner_name', 'land_type', 'neighborhood', 'branch', 'vicinity',
+  'boundary_w_val', 'boundary_w_neighbor', 'boundary_b_val', 'boundary_b_neighbor',
+  'boundary_k_val', 'boundary_k_neighbor', 'boundary_g_val', 'boundary_g_neighbor',
+  'built_details',
 ];
 
 // Managed by the interactive map below, not the plain text-field grid above — kept as a
@@ -53,16 +34,16 @@ const subscribeToClient = () => () => {};
 
 export default function SurveyManagementModal({ record, onClose, onChanged }: Props) {
   const { profile } = useAuth();
+  const { settings } = useSettings();
   const schemaReady = Array.isArray(profile?.permitted_actions);
   const mounted = useSyncExternalStore(subscribeToClient, () => true, () => false);
-  const [tab, setTab] = useState<Tab>(schemaReady ? 'workflow' : 'edit');
+  const [tab, setTab] = useState<Tab>('edit');
   const [survey, setSurvey] = useState<Survey>(record);
   const [draft, setDraft] = useState<Partial<Survey>>(record);
   const [revisions, setRevisions] = useState<SurveyRevision[]>([]);
   const [documents, setDocuments] = useState<SurveyDocument[]>([]);
   const [busy, setBusy] = useState(schemaReady);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
-  const [category, setCategory] = useState('Ownership');
   const [file, setFile] = useState<File | null>(null);
   const loadedRecordRef = useRef<number | null>(null);
 
@@ -135,7 +116,7 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
 
   async function saveEdit() {
     const payload = Object.fromEntries(
-      [...fields.map(({ key }) => key), ...MAP_MANAGED_KEYS].map((key) => [key, draft[key] ?? null]),
+      [...fields, ...MAP_MANAGED_KEYS].map((key) => [key, draft[key] ?? null]),
     );
     if (!schemaReady) {
       setBusy(true);
@@ -161,7 +142,7 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
     try {
       const form = new FormData();
       form.append('file', file);
-      form.append('category', category);
+      form.append('category', file.type.startsWith('image/') ? 'Image' : 'Document');
       await request(`/api/surveys/${record.id}/documents`, { method: 'POST', body: form });
       setFile(null);
       setMessage({ type: 'success', text: 'Dukumentiga waa la geliyey.' });
@@ -185,8 +166,21 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
     }
   }
 
+  async function deleteSurvey() {
+    if (!window.confirm(`Ma hubtaa inaad tirtirto Survey ${survey.serial_no} (${survey.owner_name})? Tallaabadan lama soo celin karo — dukumentiyada iyo taariikhda oo dhanba way la tirmi doonaan.`)) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      await request(`/api/surveys/${record.id}`, { method: 'DELETE' });
+      onChanged();
+      onClose();
+    } catch (error) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Survey-ga lama tirtirin.' });
+      setBusy(false);
+    }
+  }
+
   const tabs = useMemo(() => schemaReady ? [
-    { id: 'workflow' as Tab, label: 'Ansixinta', icon: ShieldCheck },
     { id: 'edit' as Tab, label: 'Wax ka beddel', icon: Save },
     { id: 'documents' as Tab, label: `Dukumenti (${documents.length})`, icon: FileText },
     { id: 'history' as Tab, label: `Taariikh (${revisions.length})`, icon: History },
@@ -196,16 +190,27 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-        <header className="flex items-start justify-between border-b border-slate-100 px-5 py-4 md:px-7">
-          <div>
+        <header className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between md:px-7">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-black text-slate-900">Maamulka Survey {survey.serial_no}</h2>
+              <h2 className="text-lg font-black text-slate-900 truncate">Maamulka Survey {survey.serial_no}</h2>
               {schemaReady && <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${statusStyle[survey.status || 'Draft']}`}>{survey.status || 'Draft'}</span>}
               {schemaReady && <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-700">Version {survey.version || 1}</span>}
             </div>
-            <p className="mt-1 text-xs font-semibold text-slate-500">{survey.owner_name} · {survey.neighborhood}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500 truncate">{survey.owner_name} · {survey.neighborhood}</p>
           </div>
-          <button onClick={onClose} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50" aria-label="Xir"><X className="h-5 w-5" /></button>
+          <div className="flex items-center gap-2 shrink-0">
+            {isAdmin && (
+              <button
+                onClick={deleteSurvey}
+                disabled={busy}
+                className="flex items-center gap-1.5 rounded-xl border border-rose-200 px-3 py-2 text-xs font-black text-rose-600 hover:bg-rose-50 disabled:opacity-40"
+              >
+                <Trash2 className="h-4 w-4" /> Tirtir
+              </button>
+            )}
+            <button onClick={onClose} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50" aria-label="Xir"><X className="h-5 w-5" /></button>
+          </div>
         </header>
 
         <nav className="flex gap-1 overflow-x-auto border-b border-slate-100 bg-slate-50/60 px-4 py-2 md:px-7">
@@ -216,66 +221,21 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
           {message && <div className={`mb-5 rounded-2xl border p-3 text-xs font-bold ${message.type === 'error' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{message.text}</div>}
           {busy && <div className="mb-4 flex items-center gap-2 text-xs font-bold text-blue-600"><Loader2 className="h-4 w-4 animate-spin" /> Xogta waa la cusboonaysiinayaa...</div>}
 
-          {tab === 'workflow' && <div className="grid gap-5 md:grid-cols-[1fr_0.85fr]">
-            <div className="rounded-3xl border border-slate-200 bg-slate-50/60 p-5">
-              <h3 className="text-sm font-black text-slate-900">Socodka ansixinta</h3>
-              <p className="mt-1 text-xs leading-5 text-slate-500">Draft-ka waa la sixi karaa, kadibna waxaa loo diraa kormeer. Admin-ku wuxuu ansixin ama diidi karaa.</p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                {['Draft', 'Rejected'].includes(survey.status || 'Draft') && can('survey.submit') && <button disabled={busy} onClick={() => runAction('submit')} className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white hover:bg-blue-700 disabled:opacity-50"><Send className="h-4 w-4" /> U dir kormeer</button>}
-                {survey.status === 'Pending Review' && can('survey.approve') && <>
-                  <button disabled={busy} onClick={() => runAction('approve')} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white"><CheckCircle2 className="h-4 w-4" /> Ansixi</button>
-                  <button disabled={busy} onClick={() => { const reason = window.prompt('Sababta diidmada:'); if (reason) void runAction('reject', { reason }); }} className="flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-black text-white"><XCircle className="h-4 w-4" /> Diid</button>
-                </>}
-                {survey.status === 'Approved' && can('survey.archive') && <button disabled={busy} onClick={() => runAction('archive')} className="flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-black text-white"><Archive className="h-4 w-4" /> Kaydi archive</button>}
-              </div>
-              {survey.rejection_reason && <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700"><strong>Sababta diidmada:</strong> {survey.rejection_reason}</div>}
-            </div>
-            <div className="rounded-3xl border border-slate-200 p-5 text-xs">
-              <h3 className="mb-4 font-black text-slate-900">Xogta maamulka</h3>
-              <dl className="space-y-3 text-slate-500">
-                <div className="flex justify-between gap-3"><dt>Status</dt><dd className="font-black text-slate-800">{survey.status || 'Draft'}</dd></div>
-                <div className="flex justify-between gap-3"><dt>Version</dt><dd className="font-black text-slate-800">{survey.version || 1}</dd></div>
-                <div className="flex justify-between gap-3"><dt>La cusboonaysiiyey</dt><dd className="font-black text-slate-800">{survey.updated_at ? new Date(survey.updated_at).toLocaleString('so-SO') : '-'}</dd></div>
-                <div className="flex justify-between gap-3"><dt>La ansixiyey</dt><dd className="font-black text-slate-800">{survey.approved_at ? new Date(survey.approved_at).toLocaleString('so-SO') : '-'}</dd></div>
-              </dl>
-            </div>
-          </div>}
-
           {tab === 'edit' && <div>
             {!can('survey.edit') && <p className="mb-4 rounded-2xl bg-amber-50 p-4 text-xs font-bold text-amber-700">Ma lihid survey.edit permission.</p>}
-            <div className="grid gap-4 md:grid-cols-2">
-              {fields.map(({ key, label, wide }) => <label key={key} className={`block ${wide ? 'md:col-span-2' : ''}`}><span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</span>{wide ? <textarea rows={3} value={String(draft[key] ?? '')} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white" /> : <input value={String(draft[key] ?? '')} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white" />}</label>)}
-            </div>
-
-            <div className="mt-5">
-              <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-slate-500">Maabka &amp; Soohdinta (Map &amp; Boundary)</span>
-              <MiniMap
-                gpsValue={String(draft.gps_location ?? '')}
-                onGpsChange={(value) => setDraft((prev) => ({ ...prev, gps_location: value }))}
-                polygonValue={String(draft.polygon_boundary ?? '')}
-                onPolygonChange={(value) => setDraft((prev) => ({ ...prev, polygon_boundary: value }))}
-                labelPositionsValue={String(draft.boundary_label_positions ?? '')}
-                onLabelPositionsChange={(value) => setDraft((prev) => ({ ...prev, boundary_label_positions: value }))}
-                boundaryInfo={{
-                  N: { val: draft.boundary_w_val, neighbor: draft.boundary_w_neighbor },
-                  E: { val: draft.boundary_b_val, neighbor: draft.boundary_b_neighbor },
-                  S: { val: draft.boundary_k_val, neighbor: draft.boundary_k_neighbor },
-                  W: { val: draft.boundary_g_val, neighbor: draft.boundary_g_neighbor },
-                } as BoundaryInfo}
-                onSketchDetailsChange={(value) => setDraft((prev) => ({
-                  ...prev,
-                  sketch_dimensions: value || undefined,
-                  sketch_area: value.split(' | ')[0]?.replace(/Area:|Area/gi, '').trim() || undefined,
-                }))}
+            <fieldset disabled={!can('survey.edit')} className="disabled:opacity-60">
+              <SurveyFormFields
+                draft={draft}
+                onChange={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
+                landTypes={settings.land_types}
               />
-            </div>
+            </fieldset>
 
             <button disabled={busy || !can('survey.edit')} onClick={saveEdit} className="mt-5 flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-xs font-black text-white disabled:opacity-40"><Save className="h-4 w-4" /> Kaydi isbeddelka</button>
           </div>}
 
           {tab === 'documents' && <div className="space-y-5">
-            {can('survey.edit') && <div className="grid gap-3 rounded-3xl border border-dashed border-blue-200 bg-blue-50/40 p-5 md:grid-cols-[160px_1fr_auto] md:items-end">
-              <label className="text-[10px] font-black uppercase text-slate-500">Nooca<select value={category} onChange={(e) => setCategory(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800"><option>Ownership</option><option>ID</option><option>Survey Plan</option><option>Receipt</option><option>Other</option></select></label>
+            {can('survey.edit') && <div className="grid gap-3 rounded-3xl border border-dashed border-blue-200 bg-blue-50/40 p-5 md:grid-cols-[1fr_auto] md:items-end">
               <label className="text-[10px] font-black uppercase text-slate-500">File (PDF/Image, max 10 MB)<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setFile(e.target.files?.[0] || null)} className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs" /></label>
               <button disabled={busy || !file} onClick={uploadDocument} className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white disabled:opacity-40"><Upload className="h-4 w-4" /> Geli</button>
             </div>}
