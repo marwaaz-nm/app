@@ -11,6 +11,7 @@ export interface Profile {
 export interface Survey {
   id: number;
   serial_no: number;
+  survey_no?: string | null;
   owner_name: string;
   neighborhood: string;
   branch: string;
@@ -94,6 +95,7 @@ export interface Reference {
     id: number;
     owner_name: string;
     serial_no: number;
+    survey_no?: string | null;
   } | null;
 }
 
@@ -118,6 +120,7 @@ export interface Receipt {
 
 export interface Expense {
   id: number;
+  expense_no?: string | null;
   description: string;
   qty: number;
   amount: number;
@@ -142,6 +145,7 @@ export interface Transfer {
   // Expanded relation from join
   surveys?: {
     serial_no: number;
+    survey_no?: string | null;
     owner_name: string;
   } | null;
 }

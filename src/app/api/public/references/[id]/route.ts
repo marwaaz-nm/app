@@ -32,6 +32,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       archive_file_name,
       surveys (
         serial_no,
+        survey_no,
         owner_name,
         neighborhood,
         land_type,

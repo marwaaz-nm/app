@@ -35,6 +35,9 @@ export async function POST(req: NextRequest) {
       }, { status: 409 });
     }
 
+    const { data: surveyNo, error: surveyNoError } = await viewer.admin.rpc('next_survey_number');
+    if (surveyNoError) throw surveyNoError;
+
     const payload = {
       owner_name: ownerName,
       neighborhood,
@@ -55,6 +58,7 @@ export async function POST(req: NextRequest) {
       sketch_area: requiredText(body.sketch_area) || null,
       sketch_dimensions: requiredText(body.sketch_dimensions) || null,
       boundary_label_positions: requiredText(body.boundary_label_positions) || null,
+      survey_no: surveyNo || null,
       status: 'Draft',
       created_by: viewer.userId,
       updated_by: viewer.userId,

@@ -167,7 +167,7 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
   }
 
   async function deleteSurvey() {
-    if (!window.confirm(`Ma hubtaa inaad tirtirto Survey ${survey.serial_no} (${survey.owner_name})? Tallaabadan lama soo celin karo — dukumentiyada iyo taariikhda oo dhanba way la tirmi doonaan.`)) return;
+    if (!window.confirm(`Ma hubtaa inaad tirtirto Survey ${survey.survey_no || survey.serial_no} (${survey.owner_name})? Tallaabadan lama soo celin karo — dukumentiyada iyo taariikhda oo dhanba way la tirmi doonaan.`)) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -193,7 +193,7 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
         <header className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between md:px-7">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-black text-slate-900 truncate">Maamulka Survey {survey.serial_no}</h2>
+              <h2 className="text-lg font-black text-slate-900 truncate">Maamulka Survey {survey.survey_no || survey.serial_no}</h2>
               {schemaReady && <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${statusStyle[survey.status || 'Draft']}`}>{survey.status || 'Draft'}</span>}
               {schemaReady && <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-700">Version {survey.version || 1}</span>}
             </div>

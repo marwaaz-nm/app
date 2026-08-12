@@ -896,7 +896,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             ${headerHTML}
             
             <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:bold;margin-bottom:20px;color:#000000;">
-              <span>Ref No: ${record.serial_no}</span>
+              <span>Ref No: ${record.survey_no || record.serial_no}</span>
               <span>Date: ${issueDate}</span>
             </div>
 
@@ -904,7 +904,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
             <div style="font-size:12px;line-height:2.0;color:#000000;margin-bottom:24px;">
               <div><strong>Plot Location:</strong> ${record.neighborhood}${record.branch ? ' Laanta ' + record.branch : ''}</div>
-              <div><strong>Parcel Number:</strong> ${record.serial_no ? 'SRV-' + record.serial_no : 'N/A'}</div>
+              <div><strong>Parcel Number:</strong> ${record.survey_no || (record.serial_no ? 'SRV-' + record.serial_no : 'N/A')}</div>
               <div><strong>Owner's Full Name:</strong> ${record.owner_name}</div>
               <div><strong>Contact Number:</strong> ${(record as unknown as { phone_number?: string }).phone_number || '+252611122205'}</div>
               <div><strong>GPS Coordinates:</strong> Latitude: ${latVal} &nbsp;&nbsp;&nbsp;&nbsp; Longitude: ${lngVal}</div>
@@ -1119,7 +1119,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
                   </div>
                   <div className="text-sm font-bold text-slate-800 flex items-center gap-1.5 mt-auto">
                     <Hash className="h-4 w-4 text-teal-600" />
-                    <span>{record.serial_no}</span>
+                    <span>{record.survey_no || record.serial_no}</span>
                   </div>
                 </div>
                 <div className="p-4 border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between">

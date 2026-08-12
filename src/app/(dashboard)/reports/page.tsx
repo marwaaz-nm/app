@@ -12,7 +12,7 @@ type ReportData = {
     surveys: number; references: number; openReferences: number; transfers: number; transferValue: number;
     paidIncome: number; outstandingCredit: number; expenses: number; statusCounts: Record<string, number>;
   };
-  recentSurveys: Array<{ id: number; serial_no: number; owner_name: string; neighborhood: string; status: string; sketch_area?: string; created_at?: string }>;
+  recentSurveys: Array<{ id: number; serial_no: number; survey_no?: string | null; owner_name: string; neighborhood: string; status: string; sketch_area?: string; created_at?: string }>;
 };
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -115,7 +115,7 @@ export default function ReportsPage() {
           </section>
           <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 px-5 py-4"><h2 className="text-sm font-black text-slate-900">Surveys-kii ugu dambeeyey</h2><p className="mt-1 text-[10px] font-semibold text-slate-500">Diiwaannada cusub iyo status-kooda.</p></div>
-            <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-slate-50 text-[9px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">S/N</th><th className="px-5 py-3">Milkiile</th><th className="px-5 py-3">Xaafad</th><th className="px-5 py-3">Area</th><th className="px-5 py-3">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{data.recentSurveys.map((survey) => <tr key={survey.id}><td className="px-5 py-3 font-black text-slate-500">{survey.serial_no}</td><td className="px-5 py-3 font-black text-slate-800">{survey.owner_name}</td><td className="px-5 py-3 text-slate-500">{survey.neighborhood}</td><td className="px-5 py-3 text-slate-500">{survey.sketch_area || '-'}</td><td className="px-5 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-black text-slate-600">{survey.status || 'Draft'}</span></td></tr>)}</tbody></table></div>
+            <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-slate-50 text-[9px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3">S/N</th><th className="px-5 py-3">Milkiile</th><th className="px-5 py-3">Xaafad</th><th className="px-5 py-3">Area</th><th className="px-5 py-3">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{data.recentSurveys.map((survey) => <tr key={survey.id}><td className="px-5 py-3 font-black text-slate-500">{survey.survey_no || survey.serial_no}</td><td className="px-5 py-3 font-black text-slate-800">{survey.owner_name}</td><td className="px-5 py-3 text-slate-500">{survey.neighborhood}</td><td className="px-5 py-3 text-slate-500">{survey.sketch_area || '-'}</td><td className="px-5 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-black text-slate-600">{survey.status || 'Draft'}</span></td></tr>)}</tbody></table></div>
           </section>
         </div>
 

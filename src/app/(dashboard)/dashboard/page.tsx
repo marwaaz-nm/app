@@ -23,7 +23,7 @@ import type { Expense, Receipt, Reference, Survey, Transfer } from '@/types';
 
 type SurveyRow = Pick<
   Survey,
-  'id' | 'serial_no' | 'owner_name' | 'neighborhood' | 'land_type' | 'status' | 'created_at'
+  'id' | 'serial_no' | 'survey_no' | 'owner_name' | 'neighborhood' | 'land_type' | 'status' | 'created_at'
 >;
 type ReferenceRow = Pick<
   Reference,
@@ -101,7 +101,7 @@ export default function DashboardPage() {
           ? (async () => {
               const enhanced = await supabase
                 .from('surveys')
-                .select('id, serial_no, owner_name, neighborhood, land_type, status, created_at')
+                .select('id, serial_no, survey_no, owner_name, neighborhood, land_type, status, created_at')
                 .order('created_at', { ascending: false });
               if (enhanced.error?.code !== '42703') return { ...enhanced, schemaMissing: false };
               const legacy = await supabase
@@ -208,7 +208,7 @@ export default function DashboardPage() {
     const surveyActivity: ActivityItem[] = surveys.slice(0, 6).map((survey) => ({
       id: `survey-${survey.id}`,
       kind: 'survey',
-      title: `Survey ${survey.serial_no}`,
+      title: `Survey ${survey.survey_no || survey.serial_no}`,
       detail: `${survey.owner_name} · ${survey.neighborhood}`,
       date: survey.created_at,
       href: '/records',

@@ -44,7 +44,7 @@ export default function ReferencesPage() {
 
   const [references, setReferences] = useState<Reference[]>([]);
   const [filteredReferences, setFilteredReferences] = useState<Reference[]>([]);
-  const [surveys, setSurveys] = useState<{ id: number; serial_no: number; owner_name: string }[]>([]);
+  const [surveys, setSurveys] = useState<{ id: number; serial_no: number; survey_no?: string | null; owner_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -161,6 +161,7 @@ export default function ReferencesPage() {
           surveys (
             id,
             serial_no,
+            survey_no,
             owner_name
           )
         `)
@@ -181,7 +182,7 @@ export default function ReferencesPage() {
     try {
       const { data, error } = await supabase
         .from('surveys')
-        .select('id, serial_no, owner_name')
+        .select('id, serial_no, survey_no, owner_name')
         .order('serial_no', { ascending: false });
       if (error) throw error;
       setSurveys(data || []);
@@ -580,7 +581,7 @@ export default function ReferencesPage() {
                     <option value="">Dooro Sahanka (S/N & Magaca)...</option>
                     {filteredSurveys.map(s => (
                       <option key={s.id} value={s.id}>
-                        {s.serial_no} — {s.owner_name}
+                        {s.survey_no || s.serial_no} — {s.owner_name}
                       </option>
                     ))}
                   </select>
@@ -767,7 +768,7 @@ export default function ReferencesPage() {
                         <h4 className="truncate text-xs font-extrabold text-slate-800">{r.subject}</h4>
                         {r.surveys && (
                           <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-500">
-                            Sahan {r.surveys.serial_no} — {r.surveys.owner_name}
+                            Sahan {r.surveys.survey_no || r.surveys.serial_no} — {r.surveys.owner_name}
                           </p>
                         )}
                         {resolveCreatorName(r.created_by, profileNames) && (
@@ -865,7 +866,7 @@ export default function ReferencesPage() {
                       <div className="flex items-center gap-2 text-slate-855 font-extrabold text-sm">
                         <span className="h-2 w-2 rounded-full bg-teal-500" />
                         <span className="text-teal-700 underline decoration-teal-300 underline-offset-2">
-                          Sahan Lr: {selectedRef.surveys.serial_no} — {selectedRef.surveys.owner_name}
+                          Sahan Lr: {selectedRef.surveys.survey_no || selectedRef.surveys.serial_no} — {selectedRef.surveys.owner_name}
                         </span>
                       </div>
                       {loadingSurvey ? (

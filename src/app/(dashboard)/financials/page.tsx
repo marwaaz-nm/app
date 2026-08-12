@@ -344,8 +344,17 @@ export default function FinancialsPage() {
     setSavingReceipt(true);
 
     try {
+      // The receipt number shown in the dialog is only a preview computed from
+      // whatever `receipt_number_next_seq` happened to be in cached settings — it
+      // never advanced, so every receipt reused the same number and collided with
+      // receipts.receipt_no's UNIQUE constraint after the first save. Fetch a fresh,
+      // atomically-incremented number right before inserting instead.
+      const { data: freshReceiptNo, error: rpcError } = await supabase.rpc('next_receipt_number');
+      if (rpcError) throw rpcError;
+      const baseRecNo = (freshReceiptNo as string) || payReceiptNo;
+
       const payloads = selectedRefIds.map((refId, idx) => {
-        const recNo = selectedRefIds.length > 1 ? `${payReceiptNo}-${idx + 1}` : payReceiptNo;
+        const recNo = selectedRefIds.length > 1 ? `${baseRecNo}-${idx + 1}` : baseRecNo;
         const amountVal = parseFloat(bulkAmounts[refId]) || 0;
         
         return {
@@ -590,6 +599,11 @@ export default function FinancialsPage() {
         return;
       }
 
+      // Expenses previously had no number at all, despite the "Expense Records"
+      // numbering settings existing on the Settings page — nothing ever read them.
+      const { data: expenseNo, error: rpcError } = await supabase.rpc('next_expense_number');
+      if (rpcError) throw rpcError;
+
       const payload = {
         description: expDescription,
         qty,
@@ -597,6 +611,7 @@ export default function FinancialsPage() {
         total,
         expense_date: expDate,
         created_by: profile?.fullname || 'Unknown Admin',
+        expense_no: expenseNo || null,
       };
 
       const { error } = await supabase
@@ -1243,6 +1258,7 @@ export default function FinancialsPage() {
                             </td>
                             <td className="px-6 py-4 font-bold text-slate-800">
                               {e.description}
+                              {e.expense_no && <span className="block text-[10px] font-black text-teal-600">{e.expense_no}</span>}
                             </td>
                             <td className="px-6 py-4 text-slate-500">
                               {e.expense_date ? new Date(e.expense_date).toLocaleDateString('so-SO') : '-'}
@@ -1321,6 +1337,7 @@ export default function FinancialsPage() {
                         <span className="truncate text-xs font-black text-slate-400">{expenseSerial.get(e.id)}</span>
                         <div className="min-w-0">
                           <h4 className="truncate text-xs font-extrabold text-slate-800">{e.description}</h4>
+                          {e.expense_no && <p className="truncate text-[9px] font-black text-teal-600">{e.expense_no}</p>}
                           <p className="mt-0.5 flex items-center gap-1 truncate text-[9px] text-slate-500">
                             <Calendar className="h-3 w-3 shrink-0" />
                             <span>{e.expense_date ? new Date(e.expense_date).toLocaleDateString('so-SO') : '-'}</span>

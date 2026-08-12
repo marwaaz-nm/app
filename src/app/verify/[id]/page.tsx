@@ -19,6 +19,7 @@ const PublicLandMap = dynamic(() => import('@/components/PublicLandMap'), {
 
 type PublicSurvey = {
   serial_no: number;
+  survey_no?: string | null;
   owner_name: string;
   neighborhood: string;
   land_type: string;
@@ -164,7 +165,7 @@ export default function PublicReferencePage({ params }: { params: Promise<{ id: 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div>
                         <span className="block text-[10px] font-bold text-slate-400">Sahan Lr</span>
-                        <span className="text-sm font-extrabold text-slate-800">{reference.surveys.serial_no}</span>
+                        <span className="text-sm font-extrabold text-slate-800">{reference.surveys.survey_no || reference.surveys.serial_no}</span>
                       </div>
                       <div>
                         <span className="block text-[10px] font-bold text-slate-400">Milkiile</span>

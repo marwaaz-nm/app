@@ -44,8 +44,8 @@ export async function GET(req: NextRequest) {
     const expenses = expenseResult.data || [];
 
     if (format === 'csv') {
-      const headers = ['Serial', 'Owner', 'Neighborhood', 'Branch', 'Land Type', 'GPS', 'Status', 'Area m2', 'Created'];
-      const rows = surveys.map((survey) => [survey.serial_no, survey.owner_name, survey.neighborhood, survey.branch, survey.land_type, survey.gps_location, survey.status, survey.sketch_area, survey.created_at]);
+      const headers = ['Serial', 'Survey No', 'Owner', 'Neighborhood', 'Branch', 'Land Type', 'GPS', 'Status', 'Area m2', 'Created'];
+      const rows = surveys.map((survey) => [survey.serial_no, survey.survey_no, survey.owner_name, survey.neighborhood, survey.branch, survey.land_type, survey.gps_location, survey.status, survey.sketch_area, survey.created_at]);
       return download([headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n'), `geosurvey-surveys-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv; charset=utf-8');
     }
 
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
         features: surveys.map((survey) => ({
           type: 'Feature',
           geometry: { type: 'Polygon', coordinates: [polygonCoordinates(survey.polygon_boundary)] },
-          properties: { id: survey.id, serial_no: survey.serial_no, owner_name: survey.owner_name, neighborhood: survey.neighborhood, branch: survey.branch, land_type: survey.land_type, status: survey.status, area_m2: survey.sketch_area },
+          properties: { id: survey.id, serial_no: survey.serial_no, survey_no: survey.survey_no, owner_name: survey.owner_name, neighborhood: survey.neighborhood, branch: survey.branch, land_type: survey.land_type, status: survey.status, area_m2: survey.sketch_area },
         })).filter((feature) => feature.geometry.coordinates[0].length >= 4),
       };
       return download(JSON.stringify(collection, null, 2), `geosurvey-parcels-${new Date().toISOString().slice(0, 10)}.geojson`, 'application/geo+json; charset=utf-8');
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
         expenses: sum(expenses, 'total'),
         statusCounts,
       },
-      recentSurveys: surveys.slice(0, 8).map(({ id, serial_no, owner_name, neighborhood, status, sketch_area, created_at }) => ({ id, serial_no, owner_name, neighborhood, status, sketch_area, created_at })),
+      recentSurveys: surveys.slice(0, 8).map(({ id, serial_no, survey_no, owner_name, neighborhood, status, sketch_area, created_at }) => ({ id, serial_no, survey_no, owner_name, neighborhood, status, sketch_area, created_at })),
     });
   } catch (error) {
     const resolved = apiError(error);

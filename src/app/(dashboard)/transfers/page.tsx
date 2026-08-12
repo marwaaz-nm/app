@@ -33,7 +33,7 @@ export default function TransfersPage() {
 
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [filteredTransfers, setFilteredTransfers] = useState<Transfer[]>([]);
-  const [surveys, setSurveys] = useState<{ id: number; serial_no: number; owner_name: string }[]>([]);
+  const [surveys, setSurveys] = useState<{ id: number; serial_no: number; survey_no?: string | null; owner_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -68,6 +68,7 @@ export default function TransfersPage() {
           *,
           surveys (
             serial_no,
+            survey_no,
             owner_name
           )
         `)
@@ -88,7 +89,7 @@ export default function TransfersPage() {
     try {
       const { data, error } = await supabase
         .from('surveys')
-        .select('id, serial_no, owner_name')
+        .select('id, serial_no, survey_no, owner_name')
         .order('serial_no', { ascending: false });
       if (error) throw error;
       setSurveys(data || []);
@@ -435,7 +436,7 @@ export default function TransfersPage() {
                     <option value="">Dooro Sahanka...</option>
                     {surveys.map(s => (
                       <option key={s.id} value={s.id}>
-                        {s.serial_no} — {s.owner_name}
+                        {s.survey_no || s.serial_no} — {s.owner_name}
                       </option>
                     ))}
                   </select>
@@ -603,7 +604,7 @@ export default function TransfersPage() {
                             </td>
                             <td className="px-6 py-4">
                               <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-650 text-xs font-bold">
-                                {t.surveys ? `${t.surveys.serial_no} — ${t.surveys.owner_name}` : 'N/A'}
+                                {t.surveys ? `${t.surveys.survey_no || t.surveys.serial_no} — ${t.surveys.owner_name}` : 'N/A'}
                               </span>
                             </td>
                             <td className="px-6 py-4 font-black text-emerald-600 text-sm">
@@ -675,7 +676,7 @@ export default function TransfersPage() {
                               <Calendar className="h-3 w-3 shrink-0" />
                               <span>{t.transfer_date ? new Date(t.transfer_date).toLocaleDateString('so-SO') : '-'}</span>
                               <span>•</span>
-                              <span>{t.surveys ? `Sahan ${t.surveys.serial_no}` : 'N/A'}</span>
+                              <span>{t.surveys ? `Sahan ${t.surveys.survey_no || t.surveys.serial_no}` : 'N/A'}</span>
                             </p>
                             {resolveCreatorName(t.created_by, profileNames) && (
                               <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">

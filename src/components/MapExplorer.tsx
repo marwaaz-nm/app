@@ -227,7 +227,7 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
       popupContent.innerHTML = `
         <h6 class="font-extrabold text-sm border-b pb-1.5 mb-1.5 text-slate-800">${survey.owner_name}</h6>
         <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs mb-3 text-slate-600">
-          <div><span class="font-semibold">S/N:</span> ${survey.serial_no}</div>
+          <div><span class="font-semibold">S/N:</span> ${survey.survey_no || survey.serial_no}</div>
           <div><span class="font-semibold">Xaafadda:</span> ${survey.neighborhood}</div>
           <div><span class="font-semibold">Nooca:</span> ${survey.land_type}</div>
           <div class="truncate"><span class="font-semibold">GPS:</span> ${survey.gps_location || 'N/A'}</div>
