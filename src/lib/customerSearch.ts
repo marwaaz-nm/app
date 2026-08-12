@@ -78,8 +78,18 @@ async function searchCustomersIndexed(admin: SupabaseClient, connectionId: numbe
 }
 
 async function searchCustomersInConnection(admin: SupabaseClient, conn: DriveConnection, connectionName: string, query: string): Promise<CustomerSearchResult[]> {
+  // Always check the local index first — it's a single fast Postgres query — instead of
+  // deciding indexed-vs-live upfront from a separate existence probe. A query that's
+  // actually in the index now resolves straight from the database, full stop, without
+  // waiting on an extra round-trip to find out the index exists before using it.
+  const indexedResults = await searchCustomersIndexed(admin, conn.id, connectionName, query);
+  if (indexedResults.length > 0) return indexedResults;
+
+  // No match in the index. If this connection has been synced at all, trust that empty
+  // result (it means genuinely not found) rather than paying for a live Drive search on
+  // every miss. Only a connection that's never been synced falls through to live search.
   const indexed = await hasIndexedDocuments(admin, conn.id);
-  if (indexed) return searchCustomersIndexed(admin, conn.id, connectionName, query);
+  if (indexed) return [];
   return searchCustomersLive(conn, connectionName, query);
 }
 
