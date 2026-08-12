@@ -120,6 +120,7 @@ export default function MiniMap({
   const { showAlert } = useModal();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const sketchContainerRef = useRef<HTMLDivElement>(null);
+  const fullScreenWrapperRef = useRef<HTMLDivElement>(null);
 
   const mapRef = useRef<L.Map | null>(null);
   const sketchMapRef = useRef<L.Map | null>(null);
@@ -477,6 +478,22 @@ export default function MiniMap({
       }, 300);
     }
   }, [isExpanded]);
+
+  // Fullscreen uses the browser's real Fullscreen API rather than a manually
+  // positioned `fixed inset-0` div. Survey forms embed this map inside modals that
+  // have `overflow-hidden`/`backdrop-blur` ancestors — a plain `position: fixed`
+  // descendant of those gets clipped to the modal's bounds (backdrop-filter makes
+  // that ancestor the fixed-positioning containing block, and the intervening
+  // overflow-hidden/auto wrappers then clip it), so the "full screen" map appeared
+  // to vanish instead of expanding. The Fullscreen API renders in the browser's top
+  // layer, immune to any ancestor's overflow or stacking context.
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsExpanded(document.fullscreenElement === fullScreenWrapperRef.current);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   // Geodesic/Planar Area Calculation in Sq Meters
   const calculateArea = (coords: L.LatLng[]) => {
@@ -850,9 +867,15 @@ export default function MiniMap({
   const handleGpsInputChange = (value: string) => {
     setIsAtCurrentLocation(false);
     setLocationAccuracy(null);
-
+    // Only report the raw text while typing — reformatting to a fixed 6-decimal
+    // string on every keystroke (as this used to do) meant typing a single digit
+    // for longitude (e.g. "4") got instantly rewritten to "4.000000", making it
+    // impossible to keep typing. Reformatting now happens on blur instead.
     onGpsChange(value);
-    const parts = value.split(',').map((part) => part.trim());
+  };
+
+  const handleGpsInputBlur = () => {
+    const parts = gpsValue.split(',').map((part) => part.trim());
     if (parts.length !== 2) return;
 
     const lat = parseFloat(parts[0]);
@@ -866,7 +889,16 @@ export default function MiniMap({
   };
 
   const toggleFullScreen = () => {
-    setIsExpanded(!isExpanded);
+    if (!fullScreenWrapperRef.current) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      fullScreenWrapperRef.current.requestFullscreen().catch(() => {
+        // Fullscreen can be denied (e.g. not user-gesture, or unsupported) — fall
+        // back to the old in-page expanded state so the button still does something.
+        setIsExpanded(true);
+      });
+    }
   };
 
   return (
@@ -898,6 +930,7 @@ export default function MiniMap({
                 inputMode="decimal"
                 value={gpsValue}
                 onChange={(event) => handleGpsInputChange(event.target.value)}
+                onBlur={handleGpsInputBlur}
                 placeholder="3.119200, 43.649800"
                 aria-label="GPS latitude and longitude"
                 className="w-full rounded-2xl border border-slate-200/80 bg-white py-3.5 pl-11 pr-4 font-mono text-sm font-semibold text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
@@ -930,10 +963,9 @@ export default function MiniMap({
         
         {mapUnlocked ? (
           <div
+            ref={fullScreenWrapperRef}
             className={`relative z-0 overflow-hidden rounded-3xl border border-slate-200 bg-slate-100 shadow-[0_8px_28px_rgba(15,23,42,0.08)] transition-all duration-300 ${
-              isExpanded
-                ? 'fixed inset-0 z-40 pb-20 md:left-[252px] md:pb-0'
-                : 'h-[460px] w-full'
+              isExpanded ? 'fixed inset-0 z-[10050] h-screen w-screen rounded-none border-0' : 'h-[460px] w-full'
             }`}
           >
             {/* relative + z-0 here (not just on the outer wrapper) makes this div its

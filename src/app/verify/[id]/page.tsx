@@ -79,7 +79,7 @@ export default function PublicReferencePage({ params }: { params: Promise<{ id: 
   }, [id]);
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4 sm:py-12">
+    <div className="h-screen w-screen overflow-y-auto bg-slate-50 py-8 px-4 sm:py-12">
       <div className="mx-auto max-w-xl">
         <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-teal-600 via-teal-600 to-emerald-600 shadow-lg">
           <div className="flex flex-col items-center px-6 pb-6 pt-8 text-center">
