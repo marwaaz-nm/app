@@ -7,7 +7,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
 import { useSettings } from '@/context/SettingsContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
-import { formatReferenceNumber } from '@/lib/numbering';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
 import {
@@ -31,7 +30,7 @@ import {
 export default function FinancialsPage() {
   const { profile } = useAuth();
   const { showAlert, showConfirm } = useModal();
-  const { settings } = useSettings();
+  const { refetch: refetchSettings } = useSettings();
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
 
   useEffect(() => {
@@ -268,16 +267,13 @@ export default function FinancialsPage() {
     setSelectedRefIds([refId]);
     setPayRefNumber(refNum);
     setPayDetails(subject);
-    
-    // Auto-generate Receipt No using Settings pattern
-    const generatedRecNo = formatReferenceNumber({
-      prefix: settings.receipt_number_prefix || 'REC',
-      formatPattern: settings.receipt_number_format || 'PREFIX-YYYY-SEQ',
-      seq: settings.receipt_number_next_seq || 1,
-      digits: settings.receipt_number_digits || 3,
-    });
-    setPayReceiptNo(generatedRecNo);
-    
+
+    // Receipt No is only assigned once the receipt is actually saved (see
+    // handleSaveReceipt) — guessing it here from the cached next-seq showed a
+    // number that could go stale (or repeat) across dialog opens without ever
+    // matching what really got saved.
+    setPayReceiptNo('');
+
     // Set date to today
     setPayDate(new Date().toISOString().split('T')[0]);
     
@@ -304,16 +300,9 @@ export default function FinancialsPage() {
     
     setPayRefNumber(refNumsString);
     setPayDetails(subjectsString);
-    
-    // Auto-generate Receipt No using Settings pattern
-    const generatedBulkRecNo = formatReferenceNumber({
-      prefix: settings.receipt_number_prefix || 'REC',
-      formatPattern: settings.receipt_number_format || 'PREFIX-YYYY-SEQ',
-      seq: settings.receipt_number_next_seq || 1,
-      digits: settings.receipt_number_digits || 3,
-    });
-    setPayReceiptNo(generatedBulkRecNo);
-    
+
+    setPayReceiptNo('');
+
     // Set date to today
     setPayDate(new Date().toISOString().split('T')[0]);
     
@@ -344,14 +333,12 @@ export default function FinancialsPage() {
     setSavingReceipt(true);
 
     try {
-      // The receipt number shown in the dialog is only a preview computed from
-      // whatever `receipt_number_next_seq` happened to be in cached settings — it
-      // never advanced, so every receipt reused the same number and collided with
-      // receipts.receipt_no's UNIQUE constraint after the first save. Fetch a fresh,
-      // atomically-incremented number right before inserting instead.
+      // Receipt No is assigned here, atomically, right before inserting — not
+      // guessed ahead of time — so it always matches what's actually saved and
+      // never collides with receipts.receipt_no's UNIQUE constraint.
       const { data: freshReceiptNo, error: rpcError } = await supabase.rpc('next_receipt_number');
       if (rpcError) throw rpcError;
-      const baseRecNo = (freshReceiptNo as string) || payReceiptNo;
+      const baseRecNo = freshReceiptNo as string;
 
       const payloads = selectedRefIds.map((refId, idx) => {
         const recNo = selectedRefIds.length > 1 ? `${baseRecNo}-${idx + 1}` : baseRecNo;
@@ -374,9 +361,10 @@ export default function FinancialsPage() {
 
       if (error) throw error;
 
-      showAlert('Guul', 'Resiidhka/Resiidhada si guul leh ayaa loo keydiyey!', 'success');
+      showAlert('Guul', `Resiidhka (${baseRecNo}) si guul leh ayaa loo keydiyey!`, 'success');
       closePayDialog();
       fetchData();
+      refetchSettings();
     } catch (err: any) {
       console.error('Error saving receipt:', err);
       showAlert('Cillad', err.message || 'Cillad ayaa dhacday.', 'error');
@@ -620,9 +608,10 @@ export default function FinancialsPage() {
 
       if (error) throw error;
 
-      showAlert('Guul', 'Kharashka waa la keydiyey!', 'success');
+      showAlert('Guul', expenseNo ? `Kharashka (${expenseNo}) waa la keydiyey!` : 'Kharashka waa la keydiyey!', 'success');
       closeExpenseDialog();
       fetchData();
+      refetchSettings();
     } catch (err: any) {
       console.error('Error saving expense:', err);
       showAlert('Cillad', err.message || 'Cillad ayaa dhacday.', 'error');
@@ -1393,7 +1382,8 @@ export default function FinancialsPage() {
                     type="text"
                     readOnly
                     value={payReceiptNo}
-                    className="w-full rounded-xl bg-slate-100 border border-slate-200 px-4 py-3.5 text-sm text-slate-500 font-extrabold focus:outline-none"
+                    placeholder="Waxaa la sameyn doonaa marka la kaydiyo..."
+                    className="w-full rounded-xl bg-slate-100 border border-slate-200 px-4 py-3.5 text-sm text-slate-500 font-extrabold focus:outline-none placeholder:text-xs placeholder:font-semibold placeholder:normal-case"
                   />
                 </div>
                 <div>
