@@ -47,6 +47,7 @@ type PublicReference = {
   ref_number: string;
   subject: string;
   issue_date?: string;
+  archive_drive_file_id?: string | null;
   archive_file_name?: string | null;
   surveys: PublicSurvey | null;
 };
@@ -146,7 +147,7 @@ export default function PublicReferencePage({ params }: { params: Promise<{ id: 
                 </div>
               </div>
 
-              {reference.archive_file_name && (
+              {reference.archive_drive_file_id && (
                 <a
                   href={`/api/public/references/${id}/document`}
                   className="flex items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-xs font-extrabold text-teal-700 shadow-sm transition-all hover:bg-teal-100 active:scale-95"

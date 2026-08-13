@@ -64,6 +64,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
   } catch (err) {
     console.error('Error downloading archived reference document:', err);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    // getArchiveDriveConfig() throws a 503 with a specific "not configured yet"
+    // message when Document Archive hasn't been set up in Settings — that got
+    // collapsed into a generic, unhelpful "Server error" here before, making a
+    // perfectly diagnosable setup problem look like a broken download link.
+    const status = typeof err === 'object' && err && 'status' in err
+      ? Number((err as { status: unknown }).status)
+      : 500;
+    const resolvedStatus = Number.isFinite(status) && status >= 400 && status < 600 ? status : 500;
+    const message = resolvedStatus < 500 && err instanceof Error ? err.message : 'Server error';
+    return NextResponse.json({ error: message }, { status: resolvedStatus });
   }
 }
