@@ -120,6 +120,15 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
     const layer = L.tileLayer(url, {
       maxZoom: 22,
       subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+      // Zooming in/out swaps to a whole new tile grid, so some fresh downloading is
+      // unavoidable — but these two options cut down how much: keepBuffer holds on to
+      // more already-loaded tiles outside the viewport (so zooming back out re-shows
+      // them instantly instead of re-fetching), and updateWhenZooming defers requesting
+      // the new zoom level's tiles until the zoom gesture actually finishes, instead of
+      // firing a burst of now-wasted requests for every intermediate frame while pinching
+      // or scroll-zooming.
+      keepBuffer: 6,
+      updateWhenZooming: false,
     });
 
     layer.addTo(map);
