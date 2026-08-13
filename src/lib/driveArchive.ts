@@ -14,6 +14,17 @@ export type ArchiveDriveConfig = {
   sharedSecret: string;
 };
 
+// Tagged with .status = 502 (Bad Gateway) rather than left as a bare Error — callers
+// (see apiError()-style handling in the API routes) only surface an error's own message
+// to the client when it carries an explicit status, otherwise they fall back to a
+// generic "Server error" to avoid leaking unexpected internals. A failure of this
+// upstream Apps Script bridge is a known, diagnosable condition (bad secret, script
+// redeployed with a new URL, script quota, etc.), so it should reach the admin as a
+// readable message instead of a bare 500.
+function scriptError(message: string): Error {
+  return Object.assign(new Error(message), { status: 502 });
+}
+
 async function callScript(config: ArchiveDriveConfig, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
   const response = await fetch(config.scriptUrl, {
     method: 'POST',
@@ -21,10 +32,10 @@ async function callScript(config: ArchiveDriveConfig, payload: Record<string, un
     body: JSON.stringify({ ...payload, secret: config.sharedSecret }),
     redirect: 'follow',
   });
-  if (!response.ok) throw new Error(`Archive script request failed (HTTP ${response.status}).`);
+  if (!response.ok) throw scriptError(`Archive script request failed (HTTP ${response.status}).`);
   const json = await response.json();
   if (json && typeof json === 'object' && 'error' in json && json.error) {
-    throw new Error(String(json.error));
+    throw scriptError(String(json.error));
   }
   return json;
 }
@@ -35,7 +46,7 @@ export async function uploadArchivePdf(
   buffer: Buffer,
 ): Promise<{ fileId: string; webViewLink?: string }> {
   const result = await callScript(config, { action: 'upload', fileName, contentBase64: buffer.toString('base64') });
-  if (typeof result.fileId !== 'string') throw new Error('Archive script did not return a file id for the upload.');
+  if (typeof result.fileId !== 'string') throw scriptError('Archive script did not return a file id for the upload.');
   return { fileId: result.fileId, webViewLink: typeof result.webViewLink === 'string' ? result.webViewLink : undefined };
 }
 
@@ -51,6 +62,6 @@ export async function deleteArchiveFile(config: ArchiveDriveConfig, fileId: stri
 
 export async function downloadArchivePdf(config: ArchiveDriveConfig, fileId: string): Promise<Buffer> {
   const result = await callScript(config, { action: 'download', fileId });
-  if (typeof result.contentBase64 !== 'string') throw new Error('Archive script did not return file content.');
+  if (typeof result.contentBase64 !== 'string') throw scriptError('Archive script did not return file content.');
   return Buffer.from(result.contentBase64, 'base64');
 }
