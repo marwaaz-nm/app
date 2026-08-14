@@ -28,7 +28,7 @@ import {
 type Tab = 'account' | 'organization' | 'options' | 'drive' | 'archive' | 'desktop';
 
 const DESKTOP_INSTALLER_PARTS = 5;
-const DESKTOP_INSTALLER_SIZE = 188518686;
+const DESKTOP_INSTALLER_SIZE = 188475239;
 const DESKTOP_INSTALLER_PART_URL = '/downloads/desktop-parts';
 const DESKTOP_DOWNLOAD_CONCURRENCY = 2;
 const DESKTOP_DOWNLOAD_ATTEMPTS = 3;
