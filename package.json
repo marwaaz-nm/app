@@ -46,15 +46,18 @@
   },
   "build": {
     "appId": "com.marwaaz.notary.geosurveypro",
-    "productName": "Nootaayo Marwaaz",
+    "productName": "Marwaazpn App",
     "files": [
       "electron/**/*",
+      "build/icon.png",
+      "build/icon.ico",
       "package.json"
     ],
     "directories": {
       "output": "dist-electron"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "portable"

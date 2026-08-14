@@ -19,6 +19,10 @@
 
 # production
 /build
+!/build/
+/build/*
+!/build/icon.png
+!/build/icon.ico
 
 # electron desktop app build output
 /dist-electron

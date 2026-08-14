@@ -27,8 +27,9 @@ import {
 type Tab = 'account' | 'organization' | 'options' | 'drive' | 'archive' | 'desktop';
 
 const DESKTOP_INSTALLER_PARTS = 5;
+const DESKTOP_INSTALLER_SIZE = 188518686;
 const DESKTOP_INSTALLER_BASE_URL =
-  `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/desktop-releases/Marwaazpn-App-Setup.exe`;
+  `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/desktop-releases/Marwaazpn-App-Setup-v2.exe`;
 
 async function authenticatedFetch(path: string, options: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -137,6 +138,7 @@ export default function SettingsPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [downloadingDesktop, setDownloadingDesktop] = useState(false);
   const [desktopDownloadProgress, setDesktopDownloadProgress] = useState(0);
+  const [desktopDownloadEta, setDesktopDownloadEta] = useState<number | null>(null);
 
   useEffect(() => {
     setFullname(profile?.fullname || '');
@@ -176,14 +178,31 @@ export default function SettingsPage() {
   const handleDesktopDownload = async () => {
     setDownloadingDesktop(true);
     setDesktopDownloadProgress(0);
+    setDesktopDownloadEta(null);
     try {
+      const startedAt = performance.now();
+      let downloadedBytes = 0;
       const parts = await Promise.all(
         Array.from({ length: DESKTOP_INSTALLER_PARTS }, async (_, index) => {
           const response = await fetch(`${DESKTOP_INSTALLER_BASE_URL}.part${index + 1}`);
           if (!response.ok) throw new Error(`Qaybta ${index + 1} lama soo dejin karin.`);
-          const part = await response.arrayBuffer();
+          if (!response.body) throw new Error(`Qaybta ${index + 1} lama akhrin karin.`);
+          const reader = response.body.getReader();
+          const chunks: ArrayBuffer[] = [];
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value.slice().buffer as ArrayBuffer);
+            downloadedBytes += value.byteLength;
+            const elapsedSeconds = (performance.now() - startedAt) / 1000;
+            const bytesPerSecond = downloadedBytes / elapsedSeconds;
+            const secondsRemaining = Math.ceil(
+              Math.max(0, DESKTOP_INSTALLER_SIZE - downloadedBytes) / bytesPerSecond,
+            );
+            setDesktopDownloadEta(secondsRemaining);
+          }
           setDesktopDownloadProgress((completed) => completed + 1);
-          return part;
+          return new Blob(chunks, { type: 'application/octet-stream' });
         }),
       );
       const installer = new Blob(parts, { type: 'application/octet-stream' });
@@ -203,6 +222,7 @@ export default function SettingsPage() {
       );
     } finally {
       setDownloadingDesktop(false);
+      setDesktopDownloadEta(null);
     }
   };
 
@@ -616,6 +636,14 @@ export default function SettingsPage() {
               ? `Soo dejinaya (${desktopDownloadProgress}/${DESKTOP_INSTALLER_PARTS})`
               : 'Soo Deji (Windows .exe)'}
           </button>
+
+          {downloadingDesktop && (
+            <p className="text-xs font-bold text-teal-700" aria-live="polite">
+              {desktopDownloadEta === null
+                ? 'Waqtiga haray waa la xisaabinayaa…'
+                : `Qiyaastii ${desktopDownloadEta} seconds ayaa haray`}
+            </p>
+          )}
 
           <p className="text-[11px] text-slate-400 font-medium">
             Installer-kan wuxuu u shaqeeyaa Windows 10/11. Kadib install-ka, app-ka wuxuu ku xirnaan doonaa internet-ka isla xogta browser-ka aad isticmaasho.

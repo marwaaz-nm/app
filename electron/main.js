@@ -10,6 +10,7 @@ const path = require('node:path');
 // Overridable so the packaged app can point at a different environment (e.g. staging)
 // without a rebuild, and so `npm run electron:dev` can point at a local dev server.
 const APP_URL = process.env.GEOSURVEY_APP_URL || 'https://app.marwaazpn.com';
+const APP_ICON = path.join(__dirname, '..', 'build', 'icon.png');
 
 let mainWindow = null;
 
@@ -19,7 +20,8 @@ function createWindow() {
     height: 900,
     minWidth: 1024,
     minHeight: 640,
-    title: 'Nootaayo Marwaaz',
+    title: 'Marwaazpn App',
+    icon: APP_ICON,
     backgroundColor: '#0a0e1a',
     autoHideMenuBar: true,
     webPreferences: {
