@@ -67,6 +67,10 @@ export default function NewRecordPage() {
         throw new Error(`${result.error || 'Kaydinta waa fashilantay.'}${overlapMessage}`);
       }
 
+      if (response.status === 202 && result.queued) {
+        window.dispatchEvent(new CustomEvent('marwaazpn-offline-queued'));
+      }
+
       router.push('/records');
       router.refresh();
     } catch (err: unknown) {

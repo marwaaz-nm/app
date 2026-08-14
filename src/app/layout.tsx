@@ -6,6 +6,7 @@ import { ModalProvider } from "@/context/ModalContext";
 import { SettingsProvider } from "@/context/SettingsContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import FaviconUpdater from "@/components/FaviconUpdater";
+import OfflineManager from "@/components/OfflineManager";
 
 // Sets data-theme on <html> before React hydrates/paints, so there's no flash of the
 // wrong theme on load. Reads the same localStorage key ThemeContext writes to.
@@ -54,6 +55,7 @@ export default function RootLayout({
         <ThemeProvider>
           <SettingsProvider>
             <FaviconUpdater />
+            <OfflineManager />
             <AuthProvider>
               <ModalProvider>
                 {children}

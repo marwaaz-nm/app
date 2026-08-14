@@ -14,6 +14,8 @@ interface AuthContextType {
   refetchProfile: () => Promise<void>;
 }
 
+const offlineProfileKey = (userId: string) => `marwaazpn-profile:${userId}`;
+
 const AuthContext = createContext<AuthContextType>({
   user: null,
   profile: null,
@@ -55,8 +57,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
       if (cancelled || activeToken !== nextToken) return;
       if (error) console.error('[Auth] Profile fetch failed:', error.message);
+      const cachedProfile = (() => {
+        try {
+          const value = localStorage.getItem(offlineProfileKey(session.user.id));
+          return value ? JSON.parse(value) as Profile : null;
+        } catch {
+          return null;
+        }
+      })();
+      if (!error && data) localStorage.setItem(offlineProfileKey(session.user.id), JSON.stringify(data));
       setUser(session.user);
-      setProfile(error ? null : data as Profile);
+      setProfile(error ? cachedProfile : data as Profile);
       setLoading(false);
     };
 
@@ -97,7 +108,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refetchProfile = async () => {
     if (!user) return;
     const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-    if (!error) setProfile(data as Profile);
+    if (!error) {
+      setProfile(data as Profile);
+      localStorage.setItem(offlineProfileKey(user.id), JSON.stringify(data));
+    }
   };
 
   return (
