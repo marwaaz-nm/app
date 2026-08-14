@@ -716,7 +716,23 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       // 2. Capture Technical Sketch Map
       let sketchImage = '';
       if (sketchMapContainerRef.current) {
-        const restoreSketch = prepareMapForCapture(sketchMapContainerRef.current);
+        const sketchContainer = sketchMapContainerRef.current;
+        const sketchMap = sketchMapRef.current;
+        const originalSketchWidth = sketchContainer.style.width;
+        const originalSketchHeight = sketchContainer.style.height;
+        sketchContainer.style.width = '680px';
+        sketchContainer.style.height = '390px';
+        sketchMap?.invalidateSize({ animate: false });
+        const pdfSketchCoords = parsePolygonCoords(record.polygon_boundary);
+        if (pdfSketchCoords.length >= 3) {
+          const pdfSketchBounds = L.latLngBounds(pdfSketchCoords);
+          Object.values(parseDirectionPositions(record.boundary_label_positions)).forEach((position) => {
+            if (position) pdfSketchBounds.extend([position.lat, position.lng]);
+          });
+          sketchMap?.fitBounds(pdfSketchBounds, { animate: false, padding: [32, 32] });
+        }
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const restoreSketch = prepareMapForCapture(sketchContainer);
 
         const areaBox = sketchMapContainerRef.current.querySelector('.modal-area-box') as HTMLElement;
         const originalAreaHTML = areaBox ? areaBox.innerHTML : '';
@@ -774,6 +790,12 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             areaBox.innerHTML = originalAreaHTML;
           }
           restoreSketch();
+          sketchContainer.style.width = originalSketchWidth;
+          sketchContainer.style.height = originalSketchHeight;
+          sketchMap?.invalidateSize({ animate: false });
+          if (pdfSketchCoords.length >= 3) {
+            sketchMap?.fitBounds(L.polygon(pdfSketchCoords).getBounds(), { animate: false, padding: [60, 60] });
+          }
         }
       }
 
@@ -1025,7 +1047,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
               ${sideRows}
             </table>
             <div style="font-size:16px;font-weight:800;margin:0 4px 18px;">Jaantuska Cabbirka iyo Bedka Dhulka</div>
-            <div style="height:455px;border:2px solid #1683df;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+            <div style="height:355px;border:2px solid #1683df;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;">
               ${sketchImage ? `<img src="${sketchImage}" style="width:100%;height:100%;object-fit:contain;display:block;" />` : ''}
             </div>
           </div>
