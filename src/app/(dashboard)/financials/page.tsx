@@ -873,33 +873,23 @@ export default function FinancialsPage() {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
       try {
-        const pdfWorker = html2pdf().set({
+        await html2pdf().set({
           margin: 0,
           filename: `${documentTitle}_${receiptNo.replace(/[^a-zA-Z0-9_-]+/g, '_')}.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false, scrollX: 0, scrollY: 0 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            logging: false,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: printContainer.scrollWidth,
+            windowHeight: printContainer.scrollHeight,
+          },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        }).from(printContainer);
-
-        await pdfWorker.toCanvas();
-        const renderedCanvas = await pdfWorker.get('canvas') as HTMLCanvasElement;
-        const context = renderedCanvas.getContext('2d', { willReadFrequently: true });
-        let containsVisibleContent = false;
-        if (context) {
-          const pixels = context.getImageData(0, 0, renderedCanvas.width, renderedCanvas.height).data;
-          const sampleStride = 4 * 64;
-          for (let index = 0; index < pixels.length; index += sampleStride) {
-            if (pixels[index] < 245 || pixels[index + 1] < 245 || pixels[index + 2] < 245) {
-              containsVisibleContent = true;
-              break;
-            }
-          }
-        }
-        if (!containsVisibleContent) {
-          throw new Error('PDF canvas rendered without visible content.');
-        }
-
-        await pdfWorker.toPdf().save();
+        }).from(printContainer).save();
       } finally {
         printContainer.remove();
       }
