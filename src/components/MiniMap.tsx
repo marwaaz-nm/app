@@ -711,9 +711,17 @@ export default function MiniMap({
     L.DomEvent.on(fontSizeSelect, 'change', (event) => {
       L.DomEvent.stop(event);
       const nextSize = Number(fontSizeSelect.value) || 12;
-      labelBox.style.fontSize = `${nextSize}px`;
-      const previous = labelPositionsRef.current[direction];
-      labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: marker.getLatLng().lat, lng: marker.getLatLng().lng, rotation: previous?.rotation ?? rotation, size: nextSize } };
+      const nextPositions = { ...labelPositionsRef.current };
+      (Object.keys(nextPositions) as CompassDirection[]).forEach((currentDirection) => {
+        const previous = nextPositions[currentDirection];
+        if (previous) nextPositions[currentDirection] = { ...previous, size: nextSize };
+        const currentElement = directionMarkersRef.current[currentDirection]?.getElement();
+        const currentBox = currentElement?.querySelector('.boundary-direction-box') as HTMLElement | null;
+        const currentSelect = currentElement?.querySelector('.boundary-direction-font-size') as HTMLSelectElement | null;
+        if (currentBox) currentBox.style.fontSize = `${nextSize}px`;
+        if (currentSelect) currentSelect.value = String(nextSize);
+      });
+      labelPositionsRef.current = nextPositions;
       onLabelPositionsChange?.(serializeDirectionPositions(labelPositionsRef.current));
     });
   };
@@ -802,13 +810,14 @@ export default function MiniMap({
       const directionLayer = new L.LayerGroup().addTo(skMap);
       sketchDirectionLayerRef.current = directionLayer;
       directionMarkersRef.current = {};
+      const sharedDirectionFontSize = (Object.values(labelPositionsRef.current).find(Boolean)?.size ?? 12);
       (Object.keys(labelPositionsRef.current) as CompassDirection[]).forEach((direction) => {
         const pos = labelPositionsRef.current[direction];
-        if (pos) placeDirectionMarker(skMap, directionLayer, direction, L.latLng(pos.lat, pos.lng), pos.rotation ?? 0, pos.size ?? 12);
+        if (pos) placeDirectionMarker(skMap, directionLayer, direction, L.latLng(pos.lat, pos.lng), pos.rotation ?? 0, sharedDirectionFontSize);
       });
       skMap.on('click', (event: L.LeafletMouseEvent) => {
         if (!placingDirectionRef.current) return;
-        placeDirectionMarker(skMap, directionLayer, placingDirectionRef.current, event.latlng, 0);
+        placeDirectionMarker(skMap, directionLayer, placingDirectionRef.current, event.latlng, 0, sharedDirectionFontSize);
         placingDirectionRef.current = null;
         setPlacingDirection(null);
       });

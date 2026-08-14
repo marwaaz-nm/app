@@ -269,10 +269,13 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
     manualPositions: ReturnType<typeof parseDirectionPositions>,
   ) => {
     const directions: CompassDirection[] = ['N', 'E', 'S', 'W'];
+    const sharedDirectionFontSize = directions
+      .map((direction) => manualPositions[direction]?.size)
+      .find((size): size is number => typeof size === 'number') ?? 12;
     for (const direction of directions) {
       const manual = manualPositions[direction];
       if (manual) {
-        renderDirectionLabel(direction, L.latLng(manual.lat, manual.lng), map, boundaryInfo, manual.rotation ?? 0, manual.size ?? 12);
+        renderDirectionLabel(direction, L.latLng(manual.lat, manual.lng), map, boundaryInfo, manual.rotation ?? 0, sharedDirectionFontSize);
         continue;
       }
       for (const idx of mainBoundaryIndices) {
@@ -280,7 +283,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         const end = latlngs[(idx + 1) % latlngs.length];
         const mid = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
         if (getDirectionFromCenter(center.lat, center.lng, mid.lat, mid.lng) === direction) {
-          renderDirectionLabel(direction, computeAutoDirectionPosition(start, end, latlngs), map, boundaryInfo);
+          renderDirectionLabel(direction, computeAutoDirectionPosition(start, end, latlngs), map, boundaryInfo, 0, sharedDirectionFontSize);
           break;
         }
       }
@@ -1065,12 +1068,12 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
               <tr><td>Latitude: ${latVal} Longitude: ${lngVal}</td><td>${areaClean} m²</td></tr>
             </table>
             <div style="font-size:14px;font-weight:800;margin:0 4px 6px;white-space:nowrap;">Cabirka Iyo Soohdimaha Dhulka /Plot Measurements &amp; Neighboring Directions</div>
-            <table class="classic-survey-table" style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:7px;">
+            <table class="classic-survey-table" style="width:100%;border-collapse:collapse;font-size:15px;margin-bottom:7px;">
               <tr><th style="width:35%;">Jihada / Side</th><th style="width:25%;">Cabirka / Length (M)</th><th>Deriska / Neighbour</th></tr>
               ${sideRows}
             </table>
             <div style="font-size:15px;font-weight:800;margin:0 4px 8px;">Jaantuska Cabbirka iyo Bedka Dhulka</div>
-            <div style="height:410px;border:2px solid #1683df;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+            <div style="height:485px;border:2px solid #1683df;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;">
               ${sketchImage ? `<img src="${sketchImage}" style="width:100%;height:100%;object-fit:contain;display:block;" />` : ''}
             </div>
           </div>
