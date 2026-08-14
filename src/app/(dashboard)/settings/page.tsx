@@ -26,6 +26,10 @@ import {
 
 type Tab = 'account' | 'organization' | 'options' | 'drive' | 'archive' | 'desktop';
 
+const DESKTOP_INSTALLER_PARTS = 5;
+const DESKTOP_INSTALLER_BASE_URL =
+  `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/desktop-releases/Marwaazpn-App-Setup.exe`;
+
 async function authenticatedFetch(path: string, options: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -131,6 +135,8 @@ export default function SettingsPage() {
 
   // Logo upload state
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [downloadingDesktop, setDownloadingDesktop] = useState(false);
+  const [desktopDownloadProgress, setDesktopDownloadProgress] = useState(0);
 
   useEffect(() => {
     setFullname(profile?.fullname || '');
@@ -166,6 +172,39 @@ export default function SettingsPage() {
     setExpenseFormat(settings.expense_number_format || 'PREFIX-YYYY-SEQ');
     setExpenseDigits(settings.expense_number_digits || 3);
   }, [settings]);
+
+  const handleDesktopDownload = async () => {
+    setDownloadingDesktop(true);
+    setDesktopDownloadProgress(0);
+    try {
+      const parts = await Promise.all(
+        Array.from({ length: DESKTOP_INSTALLER_PARTS }, async (_, index) => {
+          const response = await fetch(`${DESKTOP_INSTALLER_BASE_URL}.part${index + 1}`);
+          if (!response.ok) throw new Error(`Qaybta ${index + 1} lama soo dejin karin.`);
+          const part = await response.arrayBuffer();
+          setDesktopDownloadProgress((completed) => completed + 1);
+          return part;
+        }),
+      );
+      const installer = new Blob(parts, { type: 'application/octet-stream' });
+      const downloadUrl = URL.createObjectURL(installer);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'Marwaazpn-App-Setup.exe';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+    } catch (error) {
+      showAlert(
+        'Download-ku wuu fashilmay',
+        error instanceof Error ? error.message : 'Fadlan mar kale isku day.',
+        'error',
+      );
+    } finally {
+      setDownloadingDesktop(false);
+    }
+  };
 
   const handleSaveName = async () => {
     if (!profile || !fullname.trim()) return;
@@ -566,13 +605,17 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <a
-            href="/downloads/Marwaazpn-App-Setup.exe"
-            download="Marwaazpn-App-Setup.exe"
-            className="inline-flex items-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 px-5 py-3 text-xs font-bold text-white shadow-md cursor-pointer transition-all"
+          <button
+            type="button"
+            onClick={handleDesktopDownload}
+            disabled={downloadingDesktop}
+            className="inline-flex items-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:bg-slate-300 px-5 py-3 text-xs font-bold text-white shadow-md cursor-pointer disabled:cursor-wait transition-all"
           >
-            <Download className="h-4 w-4" /> Soo Deji (Windows .exe)
-          </a>
+            {downloadingDesktop ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {downloadingDesktop
+              ? `Soo dejinaya (${desktopDownloadProgress}/${DESKTOP_INSTALLER_PARTS})`
+              : 'Soo Deji (Windows .exe)'}
+          </button>
 
           <p className="text-[11px] text-slate-400 font-medium">
             Installer-kan wuxuu u shaqeeyaa Windows 10/11. Kadib install-ka, app-ka wuxuu ku xirnaan doonaa internet-ka isla xogta browser-ka aad isticmaasho.

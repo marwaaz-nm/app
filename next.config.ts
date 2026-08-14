@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const desktopAppDownloadUrl =
-  "https://media.githubusercontent.com/media/marwaaz-nm/app/main/public/downloads/Marwaazpn-App-Setup.exe";
+  "https://github.com/marwaaz-nm/app/releases/download/desktop-v0.1.0/Marwaazpn-App-Setup.exe";
 
 const nextConfig: NextConfig = {
   devIndicators: false,
