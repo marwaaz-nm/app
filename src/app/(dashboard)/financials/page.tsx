@@ -783,17 +783,17 @@ export default function FinancialsPage() {
       const receiptCopy = (copyLabel: string) => `
         <section style="height:126mm;box-sizing:border-box;position:relative;font-family:Georgia,'Times New Roman',serif;color:#111827;">
           <div style="display:grid;grid-template-columns:27mm 1fr 27mm;align-items:center;gap:5mm;">
-            <img src="${logo}" alt="Logo" style="width:25mm;height:25mm;object-fit:contain;" />
+            <img src="${logo}" alt="Logo" style="width:25mm;height:25mm;object-fit:contain;${copyLabel === 'COPY' ? 'filter:grayscale(1) contrast(1.15);' : ''}" />
             <div style="text-align:center;">
               <div style="font-size:16px;font-weight:800;line-height:1.2;">${orgSo}</div>
               <div style="font-size:12px;margin-top:2px;">${orgEn}</div>
             </div>
-            <div style="text-align:right;"><span style="display:inline-block;border:1px solid #cbd5e1;border-radius:5px;padding:4px 9px;font:700 9px Arial,sans-serif;color:#64748b;">${copyLabel}</span></div>
+            <div></div>
           </div>
           <div style="border-top:1px solid #111827;margin:4mm 0 4mm;"></div>
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8mm;">
             <div style="font-size:22px;font-weight:800;color:${copyLabel === 'COPY' ? '#111827' : '#174a9c'};">Receipt</div>
-            <div style="font-size:13px;font-weight:800;">Receipt No: <span style="color:#dc2626;">${safe(receiptNo)}</span> &nbsp; Ref No: <span style="color:#dc2626;">${safe(refNo)}</span></div>
+            <div style="font-size:13px;font-weight:800;">Receipt No: <span style="color:${copyLabel === 'COPY' ? '#111827' : '#dc2626'};">${safe(receiptNo)}</span> &nbsp; Ref No: <span style="color:${copyLabel === 'COPY' ? '#111827' : '#dc2626'};">${safe(refNo)}</span></div>
           </div>
           <div style="font-size:12.5px;font-weight:700;line-height:2.05;margin-top:2mm;">
             <div style="display:flex;justify-content:space-between;gap:8mm;"><span>Taariikh: <u>${safe(paymentDate)}</u></span><span>Laga qabtay Md./Marwo: <u>${payer}</u></span></div>
