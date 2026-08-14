@@ -7,7 +7,9 @@ import { supabase } from '@/lib/supabase';
 type WorkerMessage = { type?: string; pending?: number };
 
 export default function OfflineManager() {
-  const [online, setOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine);
+  // Keep the server and first client render identical; real connectivity is applied
+  // after hydration so an offline launch cannot cause a React hydration mismatch.
+  const [online, setOnline] = useState(true);
   const [pending, setPending] = useState(0);
   const [syncing, setSyncing] = useState(false);
 
@@ -15,6 +17,9 @@ export default function OfflineManager() {
     if (!('serviceWorker' in navigator)) return;
 
     let active = true;
+    const initialStatusTimer = window.setTimeout(() => {
+      if (active) setOnline(navigator.onLine);
+    }, 0);
     const updateStatus = () => {
       const nextOnline = navigator.onLine;
       setOnline(nextOnline);
@@ -63,6 +68,7 @@ export default function OfflineManager() {
 
     return () => {
       active = false;
+      window.clearTimeout(initialStatusTimer);
       window.removeEventListener('online', updateStatus);
       window.removeEventListener('offline', updateStatus);
       navigator.serviceWorker.removeEventListener('message', handleMessage);
