@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 
 export const DATA_CHANGED_EVENT = 'marwaazpn-data-changed';
+export const PENDING_SURVEY_KEY = 'marwaazpn-pending-survey';
 
 export function notifyDataChanged() {
   if (typeof window === 'undefined') return;

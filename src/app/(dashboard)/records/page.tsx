@@ -11,7 +11,7 @@ import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
 import { useProfileNames, resolveCreatorName } from '@/lib/useProfileNames';
 import { displayStatus } from '@/lib/surveyCompleteness';
-import { useDataAutoRefresh } from '@/lib/useDataAutoRefresh';
+import { PENDING_SURVEY_KEY, useDataAutoRefresh } from '@/lib/useDataAutoRefresh';
 import {
   Plus,
   Search,
@@ -73,8 +73,23 @@ export default function RecordsPage() {
         .order('serial_no', { ascending: false });
 
       if (error) throw error;
-      setRecords(data || []);
-      setFilteredRecords(data || []);
+      const remoteRecords = (data || []) as Survey[];
+      let pendingSurvey: Survey | null = null;
+      try {
+        const pendingRaw = window.sessionStorage.getItem(PENDING_SURVEY_KEY);
+        pendingSurvey = pendingRaw ? JSON.parse(pendingRaw) as Survey : null;
+      } catch {
+        pendingSurvey = null;
+      }
+      const remoteHasPending = pendingSurvey
+        ? remoteRecords.some((record) => String(record.id) === String(pendingSurvey?.id))
+        : false;
+      const nextRecords = pendingSurvey && !remoteHasPending
+        ? [pendingSurvey, ...remoteRecords]
+        : remoteRecords;
+      setRecords(nextRecords);
+      setFilteredRecords(nextRecords);
+      if (remoteHasPending) window.sessionStorage.removeItem(PENDING_SURVEY_KEY);
     } catch (err) {
       console.error('Error fetching records:', err);
     } finally {

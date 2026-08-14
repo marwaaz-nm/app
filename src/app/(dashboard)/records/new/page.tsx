@@ -7,7 +7,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { ArrowLeft, Check, AlertCircle, Loader2, X } from 'lucide-react';
 import Link from 'next/link';
 import SurveyFormFields, { type SurveyDraft } from '@/components/SurveyFormFields';
-import { notifyDataChanged } from '@/lib/useDataAutoRefresh';
+import { notifyDataChanged, PENDING_SURVEY_KEY } from '@/lib/useDataAutoRefresh';
 
 export default function NewRecordPage() {
   const router = useRouter();
@@ -70,6 +70,10 @@ export default function NewRecordPage() {
 
       if (response.status === 202 && result.queued) {
         window.dispatchEvent(new CustomEvent('marwaazpn-offline-queued'));
+      } else if (result.survey) {
+        // Carry the server-confirmed row across the route transition. This prevents a
+        // newly saved survey from disappearing while the records page refetch starts.
+        window.sessionStorage.setItem(PENDING_SURVEY_KEY, JSON.stringify(result.survey));
       }
 
       notifyDataChanged();
