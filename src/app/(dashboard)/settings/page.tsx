@@ -26,11 +26,6 @@ import {
 
 type Tab = 'account' | 'organization' | 'options' | 'drive' | 'archive' | 'desktop';
 
-// Vercel serves the Git LFS pointer when LFS support is disabled for the project.
-// GitHub's media endpoint resolves that pointer to the actual installer binary.
-const DESKTOP_APP_DOWNLOAD_URL =
-  'https://media.githubusercontent.com/media/marwaaz-nm/app/main/public/downloads/GeoSurveyPro-Setup.exe';
-
 async function authenticatedFetch(path: string, options: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -572,7 +567,7 @@ export default function SettingsPage() {
           </div>
 
           <a
-            href={DESKTOP_APP_DOWNLOAD_URL}
+            href="/downloads/GeoSurveyPro-Setup.exe"
             download
             className="inline-flex items-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 px-5 py-3 text-xs font-bold text-white shadow-md cursor-pointer transition-all"
           >
