@@ -56,14 +56,13 @@
     "files": [
       "electron/**/*",
       "build/icon.png",
-      "build/icon.ico",
       "package.json"
     ],
     "directories": {
       "output": "dist-electron"
     },
     "win": {
-      "icon": "build/icon.ico",
+      "icon": "build/icon.png",
       "target": [
         "nsis",
         "portable"

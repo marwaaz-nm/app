@@ -1,5 +1,5 @@
 /* Marwaazpn offline worker: app shell cache, per-session data cache, and survey sync queue. */
-const VERSION = 'marwaazpn-offline-v3';
+const VERSION = 'marwaazpn-offline-v4';
 const SHELL_CACHE = `${VERSION}-shell`;
 const DATA_CACHE_PREFIX = `${VERSION}-data-`;
 const DB_NAME = 'marwaazpn-offline';
@@ -101,7 +101,7 @@ function dataCacheName(request) {
 }
 
 async function warmAppShell(cache) {
-  const assetUrls = new Set(['/favicon.ico', '/manifest.webmanifest']);
+  const assetUrls = new Set(['/icon.png', '/manifest.webmanifest']);
   await Promise.allSettled(APP_ROUTES.map(async (url) => {
     const request = new Request(url, { cache: 'reload' });
     const response = await fetch(request);
@@ -112,7 +112,7 @@ async function warmAppShell(cache) {
     const html = await response.text();
     for (const match of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)) {
       const assetUrl = match[1];
-      if (assetUrl.startsWith('/_next/static/') || assetUrl === '/favicon.ico') assetUrls.add(assetUrl);
+      if (assetUrl.startsWith('/_next/static/') || assetUrl === '/icon.png') assetUrls.add(assetUrl);
     }
   }));
   await Promise.allSettled(Array.from(assetUrls, async (url) => {
