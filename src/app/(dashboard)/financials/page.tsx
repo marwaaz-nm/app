@@ -819,72 +819,79 @@ export default function FinancialsPage() {
           image.src = logoData;
         });
 
+        const amountInWords = (value: number) => {
+          const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+          const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+          const whole = Math.floor(Math.max(0, value));
+          const underThousand = (number: number): string => {
+            if (number < 20) return ones[number];
+            if (number < 100) return `${tens[Math.floor(number / 10)]}${number % 10 ? `-${ones[number % 10]}` : ''}`;
+            return `${ones[Math.floor(number / 100)]} Hundred${number % 100 ? ` ${underThousand(number % 100)}` : ''}`;
+          };
+          let words = whole < 1000
+            ? underThousand(whole)
+            : `${underThousand(Math.floor(whole / 1000))} Thousand${whole % 1000 ? ` ${underThousand(whole % 1000)}` : ''}`;
+          if (!words) words = 'Zero';
+          const cents = Math.round((value - whole) * 100);
+          return `${words} Dollar${whole === 1 ? '' : 's'}${cents ? ` and ${cents}/100` : ''}`;
+        };
+
         const drawReceiptCopy = (startY: number, copy: boolean) => {
           const ink: [number, number, number] = copy ? [17, 24, 39] : [23, 74, 156];
           const red: [number, number, number] = copy ? [17, 24, 39] : [220, 38, 38];
           pdf.setTextColor(17, 24, 39);
-          pdf.addImage(copy ? logoGrayData : logoData, 'PNG', 16, startY + 2, 20, 20);
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(15);
-          pdf.text(raw(settings.org_name_so, 'Nootaayo Marwaaz'), 105, startY + 9, { align: 'center' });
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(9);
-          pdf.text(raw(settings.org_name_en, 'Marwaaz Public Notary'), 105, startY + 14.5, { align: 'center' });
+          pdf.addImage(copy ? logoGrayData : logoData, 'PNG', 17, startY + 1, 24, 24);
+          pdf.setFillColor(copy ? 248 : 255, copy ? 248 : 255, copy ? 248 : 255);
+          pdf.setDrawColor(232, 232, 232);
+          pdf.rect(51, startY + 4, 91, 18, 'FD');
+          pdf.setFont('times', 'bold');
+          pdf.setFontSize(13);
+          pdf.text(raw(settings.org_name_so, 'Nootaayo Marwaaz'), 96.5, startY + 11, { align: 'center' });
+          pdf.setFont('times', 'normal');
+          pdf.setFontSize(10);
+          pdf.text(raw(settings.org_name_en, 'Marwaaz Public Notary'), 96.5, startY + 17, { align: 'center' });
           if (copy) {
             pdf.setDrawColor(17, 24, 39);
-            pdf.setLineWidth(0.6);
-            pdf.roundedRect(168, startY + 4, 26, 10, 1.5, 1.5);
-            pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(9);
-            pdf.text('COPY', 181, startY + 10.5, { align: 'center' });
+            pdf.setLineWidth(0.45);
+            pdf.roundedRect(166, startY + 5, 29, 11, 1.5, 1.5);
+            pdf.setFont('times', 'bold');
+            pdf.setFontSize(10);
+            pdf.text('COPY', 180.5, startY + 12, { align: 'center' });
           }
 
           pdf.setDrawColor(17, 24, 39);
-          pdf.setLineWidth(0.45);
-          pdf.line(15, startY + 24, 195, startY + 24);
+          pdf.setLineWidth(0.35);
+          pdf.line(15, startY + 28, 195, startY + 28);
           pdf.setTextColor(...ink);
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(17);
-          pdf.text('RECEIPT', 15, startY + 35);
-          pdf.setFontSize(9);
-          pdf.setTextColor(17, 24, 39);
-          pdf.text('Receipt No:', 132, startY + 31);
-          pdf.setTextColor(...red);
-          pdf.text(receiptNo, 154, startY + 31);
-          pdf.setTextColor(17, 24, 39);
-          pdf.text(`Ref No: ${refNo}`, 132, startY + 37);
-
-          pdf.setFillColor(copy ? 245 : 244, copy ? 245 : 248, copy ? 245 : 255);
-          pdf.setDrawColor(copy ? 60 : 203, copy ? 60 : 213, copy ? 60 : 225);
-          pdf.roundedRect(15, startY + 43, 180, 31, 1.5, 1.5, 'FD');
-          pdf.setFontSize(8.7);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text(`LAGA QABTAY / RECEIVED FROM`, 20, startY + 50);
-          pdf.setFontSize(11);
-          pdf.text(pdf.splitTextToSize(rawPayer, 96)[0], 20, startY + 57);
-          pdf.setFontSize(8.5);
-          pdf.text(`Taariikh: ${paymentDate}`, 20, startY + 66);
-          pdf.text(`Reference: ${refNo}`, 72, startY + 66);
-          pdf.text(`Goobta: ${rawLocation}`, 132, startY + 66);
-
-          pdf.setFillColor(copy ? 232 : 232, copy ? 232 : 240, copy ? 232 : 251);
-          pdf.roundedRect(15, startY + 78, 180, 17, 1.5, 1.5, 'F');
-          pdf.setFontSize(8.5);
-          pdf.text('LACAGTA LA BIXIYEY / AMOUNT PAID', 20, startY + 85);
+          pdf.setFont('times', 'bold');
           pdf.setFontSize(16);
-          pdf.setTextColor(...ink);
-          pdf.text(`$${amountText}`, 190, startY + 89, { align: 'right' });
+          pdf.text('Receipt', 15, startY + 40);
+          pdf.setFontSize(10.5);
           pdf.setTextColor(17, 24, 39);
-          pdf.setFontSize(8.5);
-          pdf.text(pdf.splitTextToSize(`Ujeeddo: ${rawPurpose}`, 116), 20, startY + 103);
-          pdf.text(`Isticmaalka: ${rawLandType}   |   Bedka: ${rawArea}`, 20, startY + 113);
-          pdf.text(`Habka: ${paymentMode === 'Cash' ? '[X] Cash  [ ] Mobile' : `[ ] Cash  [X] Mobile - ${paymentMode}`}`, 20, startY + 122);
+          pdf.text('Receipt No:', 132, startY + 39);
+          pdf.setTextColor(...red);
+          pdf.text(receiptNo, 154, startY + 39);
+          pdf.setTextColor(17, 24, 39);
+          pdf.text(`ID No: ${refNo}`, 132, startY + 46);
+
+          pdf.setFontSize(10.5);
+          pdf.text(`Taariikh:  ${paymentDate}`, 15, startY + 52);
+          pdf.text(`Laga qabtay Md./Marwo:  ${rawPayer}`, 100, startY + 52);
+          pdf.text(`Ujeedka:  [X] ${pdf.splitTextToSize(rawPurpose, 77)[0]}    [ ] Wareejin    [ ] Adeeg kale`, 15, startY + 64);
+          pdf.text(`Plot No.  ${refNo}`, 15, startY + 76);
+          pdf.text(`Goobta:  ${rawLocation}`, 57, startY + 76);
+          pdf.text(`Soodhinta:  ${rawArea}`, 105, startY + 76);
+          pdf.text(`Isticmaalka:  ${rawLandType}`, 153, startY + 76);
+          pdf.text(`Lacagta uu bixiyey:  $ ${amountText}`, 15, startY + 89);
+          pdf.text(`Erey ahaan:  ${amountInWords(amount)}`, 103, startY + 89);
+          pdf.text(`Habka Lacag bixinta:  ${paymentMode === 'Cash' ? '[X] Cash   [ ] Bank   [ ] Mobile' : `[ ] Cash   [ ] Bank   [X] Mobile - ${paymentMode}`}`, 15, startY + 102);
+
           pdf.setDrawColor(17, 24, 39);
-          pdf.line(111, startY + 122, 151, startY + 122);
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(7.5);
-          pdf.text('Saxiixa Lacag Qabtaha', 111, startY + 127);
-          pdf.addImage(qrCode, 'PNG', 167, startY + 101, 24, 24);
+          pdf.line(15, startY + 116, 76, startY + 116);
+          pdf.setFont('times', 'normal');
+          pdf.setFontSize(9.5);
+          pdf.text('Saxiixa Lacag Qabtaha', 15, startY + 122);
+          pdf.addImage(qrCode, 'PNG', 166, startY + 105, 27, 27);
         };
 
         drawReceiptCopy(7, false);
