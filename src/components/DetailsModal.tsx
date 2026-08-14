@@ -1020,16 +1020,16 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       // centered masthead, blue data tables and sketch on page 1; GPS heading and a
       // full-height satellite image on page 2.
       const classicHeader = `
-        <div style="display:flex;align-items:center;justify-content:center;gap:22px;height:106px;">
-          <img src="/icon.png" style="width:84px;height:84px;object-fit:contain;" />
+        <div style="display:flex;align-items:center;justify-content:center;gap:26px;height:122px;">
+          <img src="/icon.png" style="width:94px;height:94px;object-fit:contain;" />
           <div style="text-align:left;font-weight:700;line-height:1.18;">
-            <div style="font-size:16px;color:#0865ed;">${settings.org_name_so || 'Nootaayo Marwaaz'}</div>
-            <div style="font-size:16px;color:#c40000;text-align:center;margin:4px 0;direction:rtl;">كاتب العدل مرواز</div>
-            <div style="font-size:16px;color:#000000;">${settings.org_name_en || 'Marwaaz Public Notary'}</div>
+            <div style="font-size:25px;color:#0865ed;">${settings.org_name_so || 'Nootaayo Marwaaz'}</div>
+            <div style="font-size:21px;color:#c40000;text-align:center;margin:5px 0;direction:rtl;">كاتب العدل مرواز</div>
+            <div style="font-size:22px;color:#000000;">${settings.org_name_en || 'Marwaaz Public Notary'}</div>
           </div>
         </div>
         <div style="height:3px;background:#153b75;margin-bottom:14px;"></div>`;
-      const contactLine = `<div style="border-top:2px solid #111827;margin:8px 20px 0;padding-top:6px;text-align:center;font-size:14px;line-height:1.25;overflow-wrap:anywhere;">Tel: ${settings.contact_phone || ''} Email: <span style="color:#0000ee;text-decoration:underline;">${settings.contact_email || ''}</span></div>`;
+      const contactLine = `<div style="border-top:2px solid #111827;margin:10px 38px 0;padding-top:7px;text-align:center;font-size:12px;line-height:1.2;white-space:nowrap;">Tel: ${settings.contact_phone || ''} Email: <span style="color:#0000ee;text-decoration:underline;">${settings.contact_email || ''}</span></div>`;
       const sideRows = [
         ['Waqooyi / North', cleanVal(record.boundary_w_val), record.boundary_w_neighbor || '-'],
         ['Bari / East', cleanVal(record.boundary_b_val), record.boundary_b_neighbor || '-'],
@@ -1041,21 +1041,21 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         <div class="survey-pdf-page" style="width:750px;height:1060px;padding:24px 34px 16px;box-sizing:border-box;display:flex;flex-direction:column;font:14px/1.2 Arial,sans-serif;background:#fff;color:#000;position:relative;overflow:hidden;">
           <div style="position:absolute;left:205px;top:350px;width:330px;height:330px;opacity:.06;"><img src="/icon.png" style="width:100%;height:100%;object-fit:contain;" /></div>
           <div style="position:relative;z-index:1;">${classicHeader}
-            <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;padding:0 12px 6px;"><span>Sumad No: ${record.survey_no || record.serial_no}</span><span>Taariikh: ${issueDate}</span></div>
-            <div style="font-size:16px;font-weight:800;text-align:center;margin:0 0 6px;">WARBIXINTA RASMIGA AH EE DHULKA</div>
-            <table class="classic-survey-table" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px;margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:700;padding:0 12px 6px;"><span>Sumad No: ${record.survey_no || record.serial_no}</span><span>Taariikh: ${issueDate}</span></div>
+            <div style="font-size:21px;font-weight:800;text-align:center;margin:0 0 6px;">WARBIXINTA RASMIGA AH EE DHULKA</div>
+            <table class="classic-survey-table" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:16px;margin-bottom:15px;">
               <tr><th>Milkiilaha / Owner</th><th>Goobta (Location):</th></tr>
               <tr><td>${record.owner_name}</td><td>${record.neighborhood}${record.branch ? ' - ' + record.branch : ''}</td></tr>
               <tr><th>GPS Coordinates</th><th>Cabirka Guud / Total Area</th></tr>
               <tr><td>Latitude: ${latVal} Longitude: ${lngVal}</td><td>${areaClean} m²</td></tr>
             </table>
-            <div style="font-size:16px;font-weight:800;line-height:1.15;margin:0 4px 6px;">Cabirka Iyo Soohdimaha Dhulka /Plot Measurements &amp; Neighboring Directions</div>
-            <table class="classic-survey-table" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px;margin-bottom:7px;">
+            <div style="font-size:16px;font-weight:800;line-height:1.15;margin:0 4px 8px;white-space:nowrap;">Cabirka Iyo Soohdimaha Dhulka /Plot Measurements &amp; Neighboring Directions</div>
+            <table class="classic-survey-table" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:15px;margin-bottom:10px;">
               <tr><th style="width:35%;">Jihada / Side</th><th style="width:25%;">Cabirka / Length (M)</th><th>Deriska / Neighbour</th></tr>
               ${sideRows}
             </table>
             <div style="font-size:16px;font-weight:800;margin:0 4px 8px;">Jaantuska Cabbirka iyo Bedka Dhulka</div>
-            <div style="height:400px;border:2px solid #1683df;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+            <div style="height:455px;border:2px solid #1683df;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;">
               ${sketchImage ? `<img src="${sketchImage}" style="width:100%;height:100%;object-fit:contain;display:block;" />` : ''}
             </div>
           </div>
@@ -1063,15 +1063,15 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         </div>
         <div class="html2pdf__page-break" style="page-break-after:always;height:0;"></div>
         <div class="survey-pdf-page" style="width:750px;height:1060px;padding:26px 46px 16px;box-sizing:border-box;display:flex;flex-direction:column;font:14px/1.2 Arial,sans-serif;background:#fff;color:#000;overflow:hidden;">
-          <div style="min-height:52px;border:1.5px solid #111;display:flex;align-items:center;justify-content:center;text-align:center;font-size:16px;font-weight:800;margin-bottom:9px;padding:0 10px;box-sizing:border-box;">GPS Ir Latitude&nbsp; <span style="color:#0000ee;">(${latVal}, ${lngVal})</span>&nbsp; Longitude</div>
-          <div style="height:780px;border:2px solid #1683df;background:#e2e8f0;overflow:hidden;">
+          <div style="height:52px;border:1.5px solid #111;display:flex;align-items:center;justify-content:center;text-align:center;font-size:21px;font-weight:800;margin-bottom:9px;padding:0 10px;box-sizing:border-box;">GPS Ir Latitude&nbsp; <span style="color:#0000ee;">(${latVal}, ${lngVal})</span>&nbsp; Longitude</div>
+          <div style="height:800px;border:2px solid #1683df;background:#e2e8f0;overflow:hidden;">
             ${satImage ? `<img src="${satImage}" style="width:100%;height:100%;display:block;" />` : ''}
           </div>
           <div style="margin-top:auto;">${contactLine}</div>
         </div>
         <style>
-          .classic-survey-table th{background:#0b79bd;color:#fff;text-align:left;font-size:14px;font-weight:800;padding:5px 7px;border:1px solid #111;line-height:1.15;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;box-sizing:border-box;}
-          .classic-survey-table td{font-size:14px;padding:5px 7px;border:1px solid #111;line-height:1.15;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;box-sizing:border-box;}
+          .classic-survey-table th{background:#0b79bd;color:#fff;text-align:left;font-size:16px;font-weight:800;padding:5px 7px;border:1px solid #111;line-height:1.15;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;box-sizing:border-box;}
+          .classic-survey-table td{font-size:15px;padding:5px 7px;border:1px solid #111;line-height:1.15;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;box-sizing:border-box;}
         </style>`;
 
       offscreenHost.appendChild(printContainer);
