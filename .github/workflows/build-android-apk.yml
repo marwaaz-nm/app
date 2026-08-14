@@ -1,0 +1,54 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'capacitor.config.ts'
+      - 'capacitor-web/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-android-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - run: npm ci
+      - run: npx cap sync android
+      - run: chmod +x android/gradlew
+      - run: ./gradlew assembleDebug
+        working-directory: android
+
+      - name: Prepare APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk Marwaazpn-App.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Marwaazpn-App-Android
+          path: Marwaazpn-App.apk
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mobile-v0.1.0
+          name: Marwaazpn App Android v0.1.0
+          body: Android APK for Marwaazpn App.
+          files: Marwaazpn-App.apk
+          make_latest: false

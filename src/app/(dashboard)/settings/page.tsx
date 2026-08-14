@@ -21,6 +21,7 @@ import {
   Plus,
   KeyRound,
   Monitor,
+  Smartphone,
   Download,
 } from 'lucide-react';
 
@@ -612,6 +613,7 @@ export default function SettingsPage() {
       {tab === 'archive' && isAdmin && <ArchiveDriveConfigPanel />}
 
       {tab === 'desktop' && (
+        <div className="space-y-5">
         <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-5 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="bg-teal-50 text-teal-600 p-2.5 rounded-xl border border-teal-100 shrink-0">
@@ -648,6 +650,32 @@ export default function SettingsPage() {
           <p className="text-[11px] text-slate-400 font-medium">
             Installer-kan wuxuu u shaqeeyaa Windows 10/11. Kadib install-ka, app-ka wuxuu ku xirnaan doonaa internet-ka isla xogta browser-ka aad isticmaasho.
           </p>
+        </div>
+
+        <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="bg-emerald-50 text-emerald-600 p-2.5 rounded-xl border border-emerald-100 shrink-0">
+              <Smartphone className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-800">Marwaazpn App — Android</h3>
+              <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                Soo deji APK-ga Android si aad app-ka ugu rakibto telefoonkaaga.
+              </p>
+            </div>
+          </div>
+
+          <a
+            href="https://github.com/marwaaz-nm/app/releases/download/mobile-v0.1.0/Marwaazpn-App.apk"
+            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-5 py-3 text-xs font-bold text-white shadow-md cursor-pointer transition-all"
+          >
+            <Download className="h-4 w-4" /> Soo Deji (Android APK)
+          </a>
+
+          <p className="text-[11px] text-slate-400 font-medium">
+            Android 7 ama ka cusub ayuu u shaqeeyaa. Haddii telefoonku ku weydiiyo, oggolow “Install unknown apps”.
+          </p>
+        </div>
         </div>
       )}
     </div>
