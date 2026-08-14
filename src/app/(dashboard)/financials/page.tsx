@@ -927,6 +927,121 @@ export default function FinancialsPage() {
         return;
       }
 
+      if (!paid) {
+        const { jsPDF } = await import('jspdf');
+        const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+        const raw = (value: unknown, fallback = '-') => String(value || fallback);
+        const invoicePayer = raw(selectedReceipt.owner_name, 'Macmiilka');
+        const invoicePurpose = raw(selectedReceipt.ref_subject || selectedReceipt.details, 'Adeegga Nootaayada');
+        const invoiceLocation = raw(selectedReceipt.neighborhood);
+        const invoiceArea = raw(selectedReceipt.sketch_area);
+        const invoiceLandType = raw(selectedReceipt.land_type);
+        const logoData = await fetch(logo)
+          .then((response) => response.blob())
+          .then((blob) => new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(blob);
+          }));
+        const logoGrayData = await new Promise<string>((resolve) => {
+          const image = new Image();
+          image.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = image.naturalWidth;
+            canvas.height = image.naturalHeight;
+            const context = canvas.getContext('2d');
+            if (!context) return resolve(logoData);
+            context.filter = 'grayscale(1) contrast(1.1)';
+            context.drawImage(image, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+          };
+          image.onerror = () => resolve(logoData);
+          image.src = logoData;
+        });
+
+        const drawInvoiceCopy = (startY: number, copy: boolean) => {
+          const primary: [number, number, number] = copy ? [17, 24, 39] : [23, 74, 156];
+          const accent: [number, number, number] = copy ? [17, 24, 39] : [220, 38, 38];
+          pdf.addImage(copy ? logoGrayData : logoData, 'PNG', 16, startY + 1, 21, 21);
+          pdf.setTextColor(17, 24, 39);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(14);
+          pdf.text(raw(settings.org_name_so, 'Nootaayo Marwaaz'), 105, startY + 9, { align: 'center' });
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8.5);
+          pdf.text(raw(settings.org_name_en, 'Marwaaz Public Notary'), 105, startY + 14.5, { align: 'center' });
+          if (copy) {
+            pdf.setDrawColor(17, 24, 39);
+            pdf.roundedRect(167, startY + 4, 27, 10, 1.5, 1.5);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(9);
+            pdf.text('COPY', 180.5, startY + 10.5, { align: 'center' });
+          }
+          pdf.setDrawColor(17, 24, 39);
+          pdf.line(15, startY + 25, 195, startY + 25);
+          pdf.setTextColor(...primary);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(19);
+          pdf.text('INVOICE', 15, startY + 38);
+          pdf.setTextColor(17, 24, 39);
+          pdf.setFontSize(8.5);
+          pdf.text('Invoice No:', 137, startY + 33);
+          pdf.setTextColor(...accent);
+          pdf.text(receiptNo, 158, startY + 33);
+          pdf.setTextColor(17, 24, 39);
+          pdf.text(`Issue: ${paymentDate}`, 137, startY + 39);
+          pdf.text(`Due: ${dueDate}`, 137, startY + 45);
+
+          pdf.setFillColor(copy ? 245 : 244, copy ? 245 : 248, copy ? 245 : 255);
+          pdf.setDrawColor(copy ? 70 : 203, copy ? 70 : 213, copy ? 70 : 225);
+          pdf.roundedRect(15, startY + 48, 112, 24, 1.5, 1.5, 'FD');
+          pdf.roundedRect(132, startY + 48, 63, 24, 1.5, 1.5, 'FD');
+          pdf.setFontSize(7.5);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text('LAGU LEEYAHAY / BILL TO', 20, startY + 55);
+          pdf.setFontSize(10.5);
+          pdf.text(pdf.splitTextToSize(invoicePayer, 102)[0], 20, startY + 62);
+          pdf.setFontSize(8);
+          pdf.text(`Goobta: ${invoiceLocation}`, 20, startY + 68);
+          pdf.text(`Reference: ${refNo}`, 137, startY + 56);
+          pdf.text(`Bedka: ${invoiceArea}`, 137, startY + 62);
+          pdf.text(`Isticmaalka: ${invoiceLandType}`, 137, startY + 68);
+
+          pdf.setFillColor(...primary);
+          pdf.rect(15, startY + 78, 180, 9, 'F');
+          pdf.setTextColor(255, 255, 255);
+          pdf.setFontSize(8.5);
+          pdf.text('ADEEGGA / DESCRIPTION', 19, startY + 84);
+          pdf.text('AMOUNT', 190, startY + 84, { align: 'right' });
+          pdf.setTextColor(17, 24, 39);
+          pdf.setDrawColor(203, 213, 225);
+          pdf.rect(15, startY + 87, 180, 15);
+          pdf.setFontSize(9);
+          pdf.text(pdf.splitTextToSize(invoicePurpose, 128)[0], 19, startY + 96);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(`$${amountText}`, 190, startY + 96, { align: 'right' });
+          pdf.setFillColor(copy ? 232 : 232, copy ? 232 : 240, copy ? 232 : 251);
+          pdf.rect(132, startY + 106, 63, 12, 'F');
+          pdf.setFontSize(10.5);
+          pdf.text('AMOUNT DUE', 136, startY + 114);
+          pdf.text(`$${amountText}`, 190, startY + 114, { align: 'right' });
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(7.5);
+          pdf.text(`Bixi ugu dambayn ${dueDate}. Invoice-kan ma aha caddeyn lacag-bixin.`, 15, startY + 113);
+          pdf.addImage(qrCode, 'PNG', 168, startY + 120, 20, 20);
+        };
+
+        drawInvoiceCopy(5, false);
+        pdf.setLineDashPattern([2, 2], 0);
+        pdf.setDrawColor(17, 24, 39);
+        pdf.line(12, 149, 198, 149);
+        pdf.setLineDashPattern([], 0);
+        drawInvoiceCopy(154, true);
+        pdf.save(`Invoice_${receiptNo.replace(/[^a-zA-Z0-9_-]+/g, '_')}.pdf`);
+        return;
+      }
+
       const receiptCopy = (copyLabel: string) => `
         <section style="height:126mm;box-sizing:border-box;position:relative;font-family:Georgia,'Times New Roman',serif;color:#111827;">
           ${copyLabel === 'COPY' ? '<div style="position:absolute;top:0;right:0;z-index:5;border:2px solid #111827;border-radius:4px;padding:4px 12px;background:#ffffff;color:#111827;font:900 12px Arial,sans-serif;letter-spacing:1.5px;">COPY</div>' : ''}

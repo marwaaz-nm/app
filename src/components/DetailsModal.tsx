@@ -133,8 +133,11 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
   };
 
   // Helper to add dimension markers to the sketch map
-  const addSketchDimension = (start: L.LatLng, end: L.LatLng, map: L.Map, allCoords: L.LatLng[]) => {
-    const dist = map.distance(start, end).toFixed(1);
+  const addSketchDimension = (start: L.LatLng, end: L.LatLng, map: L.Map, allCoords: L.LatLng[], savedValue?: string | null) => {
+    const computedDistance = map.distance(start, end).toFixed(3);
+    const displayDistance = savedValue?.trim()
+      ? savedValue.trim().replace(/\s*m(?:Â²|²)?$/i, '')
+      : computedDistance;
 
     let angle = Math.atan2(end.lat - start.lat, end.lng - start.lng) * 180 / Math.PI;
     if (angle > 90 || angle < -90) { angle += 180; }
@@ -194,7 +197,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         html: `
           <div contenteditable="true" spellcheck="false" class="editable-field"
                style="transform: translate(-50%, -50%) rotate(${-angle}deg); min-width: 45px; text-align: center;">
-               <span class="dist-text">${parseFloat(dist).toFixed(3)}</span>
+               <span class="dist-text">${displayDistance}</span>
           </div>`,
         iconSize: [0, 0],
         iconAnchor: [0, 0]
@@ -439,7 +442,10 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         for (let i = 0; i < latlngs.length; i++) {
           const start = latlngs[i];
           const end = latlngs[(i + 1) % latlngs.length];
-          addSketchDimension(start, end, skMap, latlngs);
+          const midpoint = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
+          const direction = getDirectionFromCenter(vertexCenter.lat, vertexCenter.lng, midpoint.lat, midpoint.lng);
+          const savedBoundaryValue = mainBoundaryIndices.has(i) ? boundaryInfo[direction]?.val : undefined;
+          addSketchDimension(start, end, skMap, latlngs, savedBoundaryValue);
         }
         addBoundaryDirectionLabels(skMap, latlngs, mainBoundaryIndices, vertexCenter, boundaryInfo, manualPositions);
 
