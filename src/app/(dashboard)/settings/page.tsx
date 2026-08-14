@@ -29,8 +29,9 @@ type Tab = 'account' | 'organization' | 'options' | 'drive' | 'archive' | 'deskt
 
 const DESKTOP_INSTALLER_PARTS = 5;
 const DESKTOP_INSTALLER_SIZE = 188518686;
-const DESKTOP_INSTALLER_BASE_URL =
-  `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/desktop-releases/Marwaazpn-App-Setup-v2.exe`;
+const DESKTOP_INSTALLER_PART_URL = '/downloads/desktop-parts';
+const DESKTOP_DOWNLOAD_CONCURRENCY = 2;
+const DESKTOP_DOWNLOAD_ATTEMPTS = 3;
 
 async function authenticatedFetch(path: string, options: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -183,28 +184,60 @@ export default function SettingsPage() {
     try {
       const startedAt = performance.now();
       let downloadedBytes = 0;
-      const parts = await Promise.all(
-        Array.from({ length: DESKTOP_INSTALLER_PARTS }, async (_, index) => {
-          const response = await fetch(`${DESKTOP_INSTALLER_BASE_URL}.part${index + 1}`);
-          if (!response.ok) throw new Error(`Qaybta ${index + 1} lama soo dejin karin.`);
-          if (!response.body) throw new Error(`Qaybta ${index + 1} lama akhrin karin.`);
-          const reader = response.body.getReader();
-          const chunks: ArrayBuffer[] = [];
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            chunks.push(value.slice().buffer as ArrayBuffer);
-            downloadedBytes += value.byteLength;
-            const elapsedSeconds = (performance.now() - startedAt) / 1000;
-            const bytesPerSecond = downloadedBytes / elapsedSeconds;
-            const secondsRemaining = Math.ceil(
-              Math.max(0, DESKTOP_INSTALLER_SIZE - downloadedBytes) / bytesPerSecond,
-            );
-            setDesktopDownloadEta(secondsRemaining);
+      const parts: Blob[] = new Array(DESKTOP_INSTALLER_PARTS);
+      let nextPartIndex = 0;
+
+      const downloadPart = async (index: number) => {
+        let lastError: unknown;
+        for (let attempt = 1; attempt <= DESKTOP_DOWNLOAD_ATTEMPTS; attempt += 1) {
+          let attemptBytes = 0;
+          try {
+            const response = await fetch(`${DESKTOP_INSTALLER_PART_URL}/${index + 1}`, {
+              cache: 'no-store',
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.body) throw new Error('Jawaabta download-ka lama akhrin karo.');
+
+            const reader = response.body.getReader();
+            const chunks: ArrayBuffer[] = [];
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value.slice().buffer as ArrayBuffer);
+              attemptBytes += value.byteLength;
+              downloadedBytes += value.byteLength;
+              const elapsedSeconds = Math.max((performance.now() - startedAt) / 1000, 0.1);
+              const bytesPerSecond = downloadedBytes / elapsedSeconds;
+              setDesktopDownloadEta(Math.ceil(
+                Math.max(0, DESKTOP_INSTALLER_SIZE - downloadedBytes) / bytesPerSecond,
+              ));
+            }
+
+            parts[index] = new Blob(chunks, { type: 'application/octet-stream' });
+            setDesktopDownloadProgress((completed) => completed + 1);
+            return;
+          } catch (error) {
+            downloadedBytes = Math.max(0, downloadedBytes - attemptBytes);
+            lastError = error;
+            if (attempt < DESKTOP_DOWNLOAD_ATTEMPTS) {
+              await new Promise((resolve) => window.setTimeout(resolve, 1000 * (2 ** (attempt - 1))));
+            }
           }
-          setDesktopDownloadProgress((completed) => completed + 1);
-          return new Blob(chunks, { type: 'application/octet-stream' });
-        }),
+        }
+        throw new Error(
+          `Qaybta ${index + 1} way fashilantay 3 jeer. Hubi internet-ka kadibna mar kale isku day. ${lastError instanceof Error ? lastError.message : ''}`,
+        );
+      };
+
+      const worker = async () => {
+        while (nextPartIndex < DESKTOP_INSTALLER_PARTS) {
+          const index = nextPartIndex;
+          nextPartIndex += 1;
+          await downloadPart(index);
+        }
+      };
+      await Promise.all(
+        Array.from({ length: DESKTOP_DOWNLOAD_CONCURRENCY }, () => worker()),
       );
       const installer = new Blob(parts, { type: 'application/octet-stream' });
       const downloadUrl = URL.createObjectURL(installer);
