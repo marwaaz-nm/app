@@ -1031,23 +1031,23 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
       printContainer.innerHTML = `
         <div style="width:750px;height:1060px;padding:24px 34px 16px;box-sizing:border-box;display:flex;flex-direction:column;font-family:Arial,sans-serif;background:#fff;color:#000;position:relative;overflow:hidden;">
-          <div style="position:absolute;left:205px;top:365px;width:330px;height:330px;opacity:.12;"><img src="/icon.png" style="width:100%;height:100%;object-fit:contain;" /></div>
+          <div style="position:absolute;left:205px;top:350px;width:330px;height:330px;opacity:.06;"><img src="/icon.png" style="width:100%;height:100%;object-fit:contain;" /></div>
           <div style="position:relative;z-index:1;">${classicHeader}
             <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:700;padding:0 12px 6px;"><span>Sumad No: ${record.survey_no || record.serial_no}</span><span>Taariikh: ${issueDate}</span></div>
             <div style="font-size:21px;font-weight:800;text-align:center;margin:0 0 6px;">WARBIXINTA RASMIGA AH EE DHULKA</div>
-            <table class="classic-survey-table" style="width:100%;border-collapse:collapse;font-size:16px;margin-bottom:15px;">
+            <table class="classic-survey-table" style="width:100%;border-collapse:collapse;font-size:15px;margin-bottom:10px;">
               <tr><th>Milkiilaha / Owner</th><th>Goobta (Location):</th></tr>
               <tr><td>${record.owner_name}</td><td>${record.neighborhood}${record.branch ? ' - ' + record.branch : ''}</td></tr>
               <tr><th>GPS Coordinates</th><th>Cabirka Guud / Total Area</th></tr>
               <tr><td>Latitude: ${latVal} Longitude: ${lngVal}</td><td>${areaClean} m²</td></tr>
             </table>
-            <div style="font-size:16px;font-weight:800;margin:0 4px 8px;">Cabirka Iyo Soohdimaha Dhulka /Plot Measurements &amp; Neighboring Directions</div>
-            <table class="classic-survey-table" style="width:100%;border-collapse:collapse;font-size:15px;margin-bottom:10px;">
+            <div style="font-size:14px;font-weight:800;margin:0 4px 6px;white-space:nowrap;">Cabirka Iyo Soohdimaha Dhulka /Plot Measurements &amp; Neighboring Directions</div>
+            <table class="classic-survey-table" style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:7px;">
               <tr><th style="width:35%;">Jihada / Side</th><th style="width:25%;">Cabirka / Length (M)</th><th>Deriska / Neighbour</th></tr>
               ${sideRows}
             </table>
-            <div style="font-size:16px;font-weight:800;margin:0 4px 18px;">Jaantuska Cabbirka iyo Bedka Dhulka</div>
-            <div style="height:355px;border:2px solid #1683df;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+            <div style="font-size:15px;font-weight:800;margin:0 4px 8px;">Jaantuska Cabbirka iyo Bedka Dhulka</div>
+            <div style="height:410px;border:2px solid #1683df;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;">
               ${sketchImage ? `<img src="${sketchImage}" style="width:100%;height:100%;object-fit:contain;display:block;" />` : ''}
             </div>
           </div>
@@ -1062,8 +1062,8 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           <div style="margin-top:auto;">${contactLine}</div>
         </div>
         <style>
-          .classic-survey-table th{background:#0b79bd;color:#fff;text-align:left;font-weight:800;padding:5px 7px;border:1px solid #111;}
-          .classic-survey-table td{padding:5px 7px;border:1px solid #111;line-height:1.12;}
+          .classic-survey-table th{background:#0b79bd;color:#fff;text-align:left;font-weight:800;padding:4px 7px;border:1px solid #111;white-space:nowrap;}
+          .classic-survey-table td{padding:3px 7px;border:1px solid #111;line-height:1.08;}
         </style>`;
 
       offscreenHost.appendChild(printContainer);
