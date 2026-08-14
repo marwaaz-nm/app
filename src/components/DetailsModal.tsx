@@ -946,19 +946,30 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           ${watermarkHTML}
           <div style="position:relative;z-index:1;">
             ${headerHTML}
-            <div style="display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #dbe6ed;padding-bottom:7px;margin:12px 0 8px;">
-              <div><h2 style="font-size:15px;font-weight:900;color:#17324d;margin:0;">SAWIRKA FARSAMADA</h2><div style="font-size:8px;font-weight:800;color:#2f86c7;letter-spacing:1px;margin-top:2px;">TECHNICAL PARCEL SKETCH</div></div>
-              <div style="font-size:9px;text-align:right;color:#64748b;">Survey: <strong style="color:#17324d;">${record.survey_no || record.serial_no}</strong> &nbsp; Area: <strong style="color:#168b35;">${areaClean} m²</strong></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;background:#f5f8fa;border:1px solid #dbe6ed;border-radius:6px;padding:8px 11px;margin:12px 0 12px;font-size:9px;color:#64748b;">
+              <span>Survey: <strong style="color:#17324d;">${record.survey_no || record.serial_no}</strong></span>
+              <span>Area: <strong style="color:#168b35;">${areaClean} m²</strong></span>
+              <span>GPS: <strong style="color:#17324d;">${latVal}, ${lngVal}</strong></span>
             </div>
-            <div style="border:1px solid #b9cbd7;border-top:4px solid #2f86c7;border-radius:5px;padding:7px;background:#ffffff;box-sizing:border-box;display:flex;align-items:center;justify-content:center;height:330px;">
-              ${sketchImage ? `<img src="${sketchImage}" style="max-width:100%;max-height:300px;object-fit:contain;background:#ffffff;" />` : `<div style="color:#64748b;font-size:11px;">Sketch image not available</div>`}
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #dbe6ed;padding-bottom:7px;margin:11px 0 8px;">
-              <div><h2 style="font-size:15px;font-weight:900;color:#17324d;margin:0;">GOOBTA DAYAX-GACMEEDKA</h2><div style="font-size:8px;font-weight:800;color:#2f86c7;letter-spacing:1px;margin-top:2px;">SATELLITE LOCATION MAP</div></div>
-              <div style="font-size:8px;text-align:right;color:#64748b;">LAT <strong style="color:#17324d;">${latVal}</strong> &nbsp; LNG <strong style="color:#17324d;">${lngVal}</strong></div>
-            </div>
-            <div style="border:1px solid #b9cbd7;border-top:4px solid #168b35;border-radius:5px;padding:6px;background:#ffffff;box-sizing:border-box;display:flex;align-items:center;justify-content:center;height:330px;">
-              ${satImage ? `<img src="${satImage}" style="width:100%;height:300px;object-fit:cover;display:block;background:#e2e8f0;" />` : `<div style="color:#64748b;font-size:11px;">Satellite map image not available</div>`}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:stretch;">
+              <div style="border:1px solid #b9cbd7;border-top:5px solid #2f86c7;border-radius:7px;padding:10px;background:#ffffff;box-sizing:border-box;height:650px;display:flex;flex-direction:column;">
+                <div style="border-bottom:1px solid #dbe6ed;padding-bottom:8px;margin-bottom:10px;min-height:40px;">
+                  <h2 style="font-size:14px;font-weight:900;color:#17324d;margin:0;">SAWIRKA FARSAMADA</h2>
+                  <div style="font-size:8px;font-weight:800;color:#2f86c7;letter-spacing:0.8px;margin-top:2px;">TECHNICAL PARCEL SKETCH</div>
+                </div>
+                <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#ffffff;">
+                  ${sketchImage ? `<img src="${sketchImage}" style="width:100%;height:560px;object-fit:contain;display:block;background:#ffffff;" />` : `<div style="color:#64748b;font-size:11px;">Sketch image not available</div>`}
+                </div>
+              </div>
+              <div style="border:1px solid #b9cbd7;border-top:5px solid #168b35;border-radius:7px;padding:10px;background:#ffffff;box-sizing:border-box;height:650px;display:flex;flex-direction:column;">
+                <div style="border-bottom:1px solid #dbe6ed;padding-bottom:8px;margin-bottom:10px;min-height:40px;">
+                  <h2 style="font-size:14px;font-weight:900;color:#17324d;margin:0;">GOOBTA DAYAX-GACMEEDKA</h2>
+                  <div style="font-size:8px;font-weight:800;color:#168b35;letter-spacing:0.8px;margin-top:2px;">SATELLITE LOCATION MAP</div>
+                </div>
+                <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#e2e8f0;">
+                  ${satImage ? `<img src="${satImage}" style="width:100%;height:560px;object-fit:cover;display:block;background:#e2e8f0;" />` : `<div style="color:#64748b;font-size:11px;">Satellite map image not available</div>`}
+                </div>
+              </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;font-size:9px;color:#475569;margin-top:10px;">
               <div>Surveyor: ______________________________</div><div style="text-align:right;">Signature: ______________________________</div>
