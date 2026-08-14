@@ -848,23 +848,41 @@ export default function FinancialsPage() {
       const documentCopy = (copyLabel: string) => paid ? receiptCopy(copyLabel) : invoiceCopy(copyLabel);
 
       const printContainer = document.createElement('div');
-      printContainer.style.cssText = 'width:210mm;min-height:297mm;background:#fff;padding:14mm 16mm 10mm;box-sizing:border-box;position:fixed;left:-10000px;top:0;';
+      // Keep the export node inside the rendered viewport. html2canvas can return a
+      // blank canvas when the source is positioned thousands of pixels off-screen.
+      printContainer.style.cssText = 'width:210mm;min-height:297mm;background:#fff;padding:14mm 16mm 10mm;box-sizing:border-box;position:fixed;left:0;top:0;z-index:-2147483647;pointer-events:none;overflow:hidden;';
       printContainer.innerHTML = `
         ${documentCopy('ORIGINAL')}
         <div style="height:9mm;border-top:2px dashed #111827;box-sizing:border-box;"></div>
         ${documentCopy('COPY')}
       `;
       document.body.appendChild(printContainer);
+
+      await Promise.all(Array.from(printContainer.querySelectorAll('img')).map(async (image) => {
+        if (image.complete) return;
+        try {
+          await image.decode();
+        } catch {
+          await new Promise<void>((resolve) => {
+            image.addEventListener('load', () => resolve(), { once: true });
+            image.addEventListener('error', () => resolve(), { once: true });
+          });
+        }
+      }));
+      await document.fonts?.ready;
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-      await html2pdf().set({
-        margin: 0,
-        filename: `${documentTitle}_${receiptNo.replace(/[^a-zA-Z0-9_-]+/g, '_')}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      }).from(printContainer).save();
-      printContainer.remove();
+      try {
+        await html2pdf().set({
+          margin: 0,
+          filename: `${documentTitle}_${receiptNo.replace(/[^a-zA-Z0-9_-]+/g, '_')}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false, scrollX: 0, scrollY: 0 },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        }).from(printContainer).save();
+      } finally {
+        printContainer.remove();
+      }
     } catch (error) {
       console.error('Receipt PDF download failed:', error);
       showAlert('Cillad', 'Receipt PDF-ga lama soo dejin karin. Fadlan mar kale isku day.', 'error');
