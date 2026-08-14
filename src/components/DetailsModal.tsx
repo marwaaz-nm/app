@@ -800,75 +800,35 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         return val.replace('m', '').replace('M', '').trim();
       };
 
-      // Official Baidoa Emblem Seal SVG for Header & Background Watermark
-      const emblemSealSVG = `
-        <svg width="72" height="72" viewBox="0 0 100 100" style="display:block;margin:0 auto 4px;">
-          <circle cx="50" cy="50" r="46" fill="#ffffff" stroke="#166534" stroke-width="4"/>
-          <circle cx="50" cy="50" r="39" fill="none" stroke="#22c55e" stroke-width="1" stroke-dasharray="2,2"/>
-          <path id="curve-top" d="M 12,50 A 38,38 0 0,1 88,50" fill="none"/>
-          <text font-size="4.2" font-weight="900" fill="#15803d" letter-spacing="0.2">
-            <textPath href="#curve-top" startOffset="50%" text-anchor="middle">DOWLADDA HOOSE DEGMADA BAYDHABO</textPath>
-          </text>
-          <path id="curve-bottom" d="M 88,50 A 38,38 0 0,1 12,50" fill="none"/>
-          <text font-size="4" font-weight="900" fill="#15803d" letter-spacing="0.2">
-            <textPath href="#curve-bottom" startOffset="50%" text-anchor="middle">LOCAL GOVERNMENT BAIDOA DISTRICT</textPath>
-          </text>
-          <path d="M 36,36 A 14,14 0 0,0 64,36 C 64,54 50,68 50,68 C 50,68 36,54 36,36 Z" fill="#2563eb" stroke="#1d4ed8" stroke-width="1.5"/>
-          <polygon points="50,38 52.5,44.5 59.5,45.5 54.2,50 55.5,57 50,53.5 44.5,57 45.8,50 40.5,45.5 47.5,44.5" fill="#ffffff"/>
-          <path d="M 28,74 Q 50,82 72,74 L 68,78 Q 50,85 32,78 Z" fill="#b91c1c"/>
-          <text x="50" y="79" font-size="3.5" font-weight="bold" fill="#ffffff" text-anchor="middle">BAYDHABO / BAIDOA</text>
-        </svg>
-      `;
-
       const watermarkHTML = `
-        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:360px;height:360px;opacity:0.025;pointer-events:none;z-index:0;">
-          <svg width="100%" height="100%" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="46" fill="none" stroke="#166534" stroke-width="3"/>
-            <circle cx="50" cy="50" r="39" fill="none" stroke="#22c55e" stroke-width="1" stroke-dasharray="2,2"/>
-            <path d="M 36,36 A 14,14 0 0,0 64,36 C 64,54 50,68 50,68 C 50,68 36,54 36,36 Z" fill="#2563eb" stroke="#1d4ed8" stroke-width="1.5"/>
-            <polygon points="50,38 52.5,44.5 59.5,45.5 54.2,50 55.5,57 50,53.5 44.5,57 45.8,50 40.5,45.5 47.5,44.5" fill="#ffffff"/>
-          </svg>
+        <div style="position:absolute;top:51%;left:50%;transform:translate(-50%,-50%);width:330px;height:330px;opacity:0.035;pointer-events:none;z-index:0;">
+          <img src="/icon.png" alt="" style="width:100%;height:100%;object-fit:contain;" />
         </div>
       `;
 
       const headerHTML = `
-        <div style="display:grid;grid-template-columns:1.2fr 1fr 1.2fr;gap:12px;align-items:center;padding:10px 0 8px;font-family:Arial,sans-serif;position:relative;z-index:1;">
-          <!-- Left Column: Somali -->
-          <div style="font-size:10px;font-weight:700;line-height:1.45;color:#000000;text-align:left;">
-            Dowladda Koonfur Galbeed Soomaaliya<br/>
-            Dowladda Hoose ee Baydhabo<br/>
-            Waaxda Howlaha Guud, Guryeynta<br/>
-            Iyo Maamulka Dhulka
+        <div style="display:grid;grid-template-columns:1fr 96px 1fr;gap:16px;align-items:center;padding:4px 0 14px;font-family:Arial,sans-serif;position:relative;z-index:1;border-bottom:4px solid #168b35;">
+          <div style="font-size:10px;font-weight:700;line-height:1.55;color:#17324d;text-align:left;">
+            <div style="font-size:12px;font-weight:900;color:#168b35;margin-bottom:3px;">${settings.org_name_so}</div>
+            Nootaayada & Maamulka Dhulka<br/>
+            Diiwaangelinta Sahanka Rasmiga ah
           </div>
-          
-          <!-- Center Column: Seal Emblem & English -->
-          <div style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-            ${emblemSealSVG}
-            <div style="font-size:8.5px;font-weight:bold;line-height:1.3;color:#000000;text-transform:none;white-space:nowrap;">
-              <strong>Southwest State of Somalia</strong><br/>
-              Municipality of Baidoa<br/>
-              Public works, Housing and land<br/>
-              Administration Department
-            </div>
+          <div style="text-align:center;display:flex;align-items:center;justify-content:center;">
+            <img src="/icon.png" alt="Marwaaz logo" style="width:88px;height:88px;object-fit:contain;display:block;" />
           </div>
-
-          <!-- Right Column: Arabic -->
-          <div style="font-size: 11px; font-weight: bold; line-height: 1.45; color: #000000; text-align: right; direction: rtl;">
-            ولاية جنوب غرب الصومال<br/>
-            حكومة بلدية بيدوا<br/>
-            إدارة الأشغال العامة والإسكان<br/>
-            وإدارة الأراضي
+          <div style="font-size:10px;font-weight:700;line-height:1.55;color:#17324d;text-align:right;">
+            <div style="font-size:12px;font-weight:900;color:#2f86c7;margin-bottom:3px;">${settings.org_name_en}</div>
+            Notary & Land Administration<br/>
+            Official Survey Registration
           </div>
         </div>
-        <div style="border-bottom:2px solid #000080;margin:10px 0 16px;"></div>
       `;
 
-      const footerHTML = `
-        <div style="border-top:1.5px solid #000000;padding-top:10px;margin-top:auto;text-align:center;font-size:11px;color:#000000;line-height:1.6;font-family:Arial,sans-serif;position:relative;z-index:1;">
-          <div>Email :<a href="mailto:${settings.contact_email}" style="color:#0000ee;text-decoration:underline;">${settings.contact_email}</a></div>
-          <div>Mobile: ${settings.contact_phone}</div>
-          <div>${settings.contact_address}</div>
-          <div style="margin-top:4px;font-size:9px;color:#475569;">System-ka waxaa maamula ${settings.org_name_so} (${settings.org_name_en})</div>
+      const footerHTML = (page: number, title: string) => `
+        <div style="border-top:1px solid #cbd5e1;padding-top:9px;margin-top:auto;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;font-size:9px;color:#475569;line-height:1.45;font-family:Arial,sans-serif;position:relative;z-index:1;">
+          <div style="text-align:left;">${settings.contact_phone || ''}<br/>${settings.contact_email || ''}</div>
+          <div style="text-align:center;font-weight:800;color:#17324d;">${title}<br/><span style="color:#168b35;">Bogga ${page} / 3</span></div>
+          <div style="text-align:right;">${settings.contact_address || ''}<br/>Generated by Marwaazpn App</div>
         </div>
       `;
 
@@ -895,28 +855,31 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           <div style="position:relative;z-index:1;">
             ${headerHTML}
             
-            <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:bold;margin-bottom:20px;color:#000000;">
-              <span>Ref No: ${record.survey_no || record.serial_no}</span>
-              <span>Date: ${issueDate}</span>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:800;margin:14px 0 12px;color:#17324d;">
+              <span style="background:#eaf7ee;border:1px solid #b8e1c2;border-radius:999px;padding:6px 12px;">Survey No: ${record.survey_no || record.serial_no}</span>
+              <span style="background:#edf6fc;border:1px solid #beddf1;border-radius:999px;padding:6px 12px;">Taariikh: ${issueDate}</span>
             </div>
 
-            <h2 style="text-align:center;font-size:16px;font-weight:bold;margin:18px 0 22px;letter-spacing:0.5px;color:#000000;">OFFICIAL LAND SURVEY FORM</h2>
+            <div style="text-align:center;margin:10px 0 16px;">
+              <h2 style="font-size:18px;font-weight:900;margin:0;color:#17324d;letter-spacing:0.3px;">FOOMKA SAHANKA DHULKA</h2>
+              <div style="font-size:10px;font-weight:800;color:#2f86c7;margin-top:4px;letter-spacing:1.4px;">OFFICIAL LAND SURVEY REPORT</div>
+            </div>
 
-            <div style="font-size:12px;line-height:2.0;color:#000000;margin-bottom:24px;">
-              <div><strong>Plot Location:</strong> ${record.neighborhood}${record.branch ? ' Laanta ' + record.branch : ''}</div>
-              <div><strong>Parcel Number:</strong> ${record.survey_no || (record.serial_no ? 'SRV-' + record.serial_no : 'N/A')}</div>
-              <div><strong>Owner's Full Name:</strong> ${record.owner_name}</div>
-              <div><strong>Contact Number:</strong> ${(record as unknown as { phone_number?: string }).phone_number || '+252611122205'}</div>
-              <div><strong>GPS Coordinates:</strong> Latitude: ${latVal} &nbsp;&nbsp;&nbsp;&nbsp; Longitude: ${lngVal}</div>
-              <div><strong>Total Area (Sq.m):</strong> ${areaClean}</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;color:#17324d;margin-bottom:18px;">
+              <div style="grid-column:1 / -1;border-left:4px solid #168b35;background:#f5faf6;padding:9px 12px;border-radius:4px;"><span style="font-size:8px;text-transform:uppercase;color:#64748b;font-weight:800;">Milkiilaha / Owner</span><br/><strong style="font-size:13px;">${record.owner_name}</strong></div>
+              <div style="border:1px solid #dce7ef;padding:8px 10px;border-radius:6px;background:#ffffff;"><span style="font-size:8px;color:#64748b;font-weight:800;">GOOBTA</span><br/><strong>${record.neighborhood}${record.branch ? ' - ' + record.branch : ''}</strong></div>
+              <div style="border:1px solid #dce7ef;padding:8px 10px;border-radius:6px;background:#ffffff;"><span style="font-size:8px;color:#64748b;font-weight:800;">NOOCA DHULKA</span><br/><strong>${record.land_type || '-'}</strong></div>
+              <div style="border:1px solid #dce7ef;padding:8px 10px;border-radius:6px;background:#ffffff;"><span style="font-size:8px;color:#64748b;font-weight:800;">GPS LATITUDE</span><br/><strong>${latVal}</strong></div>
+              <div style="border:1px solid #dce7ef;padding:8px 10px;border-radius:6px;background:#ffffff;"><span style="font-size:8px;color:#64748b;font-weight:800;">GPS LONGITUDE</span><br/><strong>${lngVal}</strong></div>
+              <div style="grid-column:1 / -1;border:1px solid #b8d8ee;padding:8px 10px;border-radius:6px;background:#edf7fd;text-align:center;"><span style="font-size:8px;color:#64748b;font-weight:800;">BEDKA GUUD / TOTAL AREA</span><br/><strong style="font-size:14px;color:#168b35;">${areaClean} m²</strong></div>
             </div>
 
             <!-- Table 1: PLOT MEASUREMENTS -->
             <div style="margin-bottom:24px;">
-              <h3 style="text-align:center;font-size:13px;font-weight:bold;margin:0 0 10px;color:#000000;">1. PLOT MEASUREMENTS</h3>
-              <table style="width:100%;border-collapse:collapse;border:1.5px solid #000000;font-size:12px;">
+              <h3 style="text-align:left;font-size:11px;font-weight:900;margin:0 0 8px;color:#17324d;">1. CABIRRADA DHULKA / PLOT MEASUREMENTS</h3>
+              <table style="width:100%;border-collapse:collapse;border:1px solid #bfd2df;font-size:11px;">
                 <thead>
-                  <tr style="background:#ffffff;border-bottom:1.5px solid #000000;">
+                  <tr style="background:#17324d;color:#ffffff;">
                     <th style="padding:8px 12px;border:1.5px solid #000000;text-align:center;width:40%;font-weight:bold;">Side</th>
                     <th style="padding:8px 12px;border:1.5px solid #000000;text-align:center;width:60%;font-weight:bold;">Length (m)</th>
                   </tr>
@@ -944,10 +907,10 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
             <!-- Table 2: NEIGHBOURING DIRECTIONS -->
             <div style="margin-bottom:20px;">
-              <h3 style="text-align:center;font-size:13px;font-weight:bold;margin:0 0 10px;color:#000000;">2. NEIGHBOURING DIRECTIONS</h3>
-              <table style="width:100%;border-collapse:collapse;border:1.5px solid #000000;font-size:12px;">
+              <h3 style="text-align:left;font-size:11px;font-weight:900;margin:0 0 8px;color:#17324d;">2. XUDUUDA DERISKA / NEIGHBOURING DIRECTIONS</h3>
+              <table style="width:100%;border-collapse:collapse;border:1px solid #bfd2df;font-size:11px;">
                 <thead>
-                  <tr style="background:#ffffff;border-bottom:1.5px solid #000000;">
+                  <tr style="background:#168b35;color:#ffffff;">
                     <th style="padding:8px 12px;border:1.5px solid #000000;text-align:center;width:40%;font-weight:bold;">Direction</th>
                     <th style="padding:8px 12px;border:1.5px solid #000000;text-align:center;width:60%;font-weight:bold;">What is next to the land?</th>
                   </tr>
@@ -974,7 +937,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             </div>
           </div>
 
-          ${footerHTML}
+          ${footerHTML(1, 'Survey Summary')}
         </div>
         <div class="html2pdf__page-break" style="page-break-after: always; height: 0;"></div>
 
@@ -984,24 +947,23 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           <div style="position:relative;z-index:1;">
             ${headerHTML}
             
-            <div style="font-size:12px;line-height:1.7;color:#000000;margin:16px 0 14px;">
-              <p style="margin-bottom:16px;">This document forms part of the official land registration process and shall be permanently filed with the corresponding parcel records for future reference and legal use.</p>
-              
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;font-size:12px;font-weight:bold;">
-                <span>Surveyor Name: Eng. Salah Ali Mohamed</span>
-                <span>Signature: ________________</span>
+            <div style="margin:14px 0 12px;">
+              <div style="display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #dbe6ed;padding-bottom:9px;margin-bottom:10px;">
+                <div><h2 style="font-size:17px;font-weight:900;color:#17324d;margin:0;">SAWIRKA FARSAMADA</h2><div style="font-size:9px;font-weight:800;color:#2f86c7;letter-spacing:1.2px;margin-top:3px;">TECHNICAL PARCEL SKETCH</div></div>
+                <div style="font-size:10px;text-align:right;color:#64748b;">Survey: <strong style="color:#17324d;">${record.survey_no || record.serial_no}</strong><br/>Area: <strong style="color:#168b35;">${areaClean} m²</strong></div>
               </div>
-
-              <p style="margin-bottom:6px;">A detailed site sketch illustrating the approximate shape of the land parcel including all measured sides and their respective lengths, as well as any adjacent features noted during the survey.</p>
-              <p style="font-style:italic;margin-bottom:14px;">This sketch forms part of the official record.</p>
+              <p style="font-size:10px;line-height:1.55;color:#475569;margin:0;">Jaantuskani wuxuu muujinayaa qaabka dhulka, cabbirrada dhinacyada iyo jihada xuduudaha. This sketch forms part of the official survey record.</p>
             </div>
 
-            <div style="border:1.5px solid #000000;padding:12px;background:#ffffff;box-sizing:border-box;margin-bottom:16px;display:flex;align-items:center;justify-content:center;height:520px;">
+            <div style="border:1px solid #b9cbd7;border-top:5px solid #2f86c7;border-radius:6px;padding:12px;background:#ffffff;box-sizing:border-box;margin-bottom:16px;display:flex;align-items:center;justify-content:center;height:535px;box-shadow:0 2px 7px rgba(23,50,77,0.08);">
               ${sketchImage ? `<img src="${sketchImage}" style="max-width:100%;max-height:490px;object-fit:contain;background:#ffffff;" />` : `<div style="color:#64748b;font-size:12px;">Sketch image not available</div>`}
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;font-size:10px;color:#475569;margin-top:10px;">
+              <div>Surveyor: ______________________________</div><div style="text-align:right;">Signature: ______________________________</div>
             </div>
           </div>
 
-          ${footerHTML}
+          ${footerHTML(2, 'Technical Sketch')}
         </div>
         <div class="html2pdf__page-break" style="page-break-after: always; height: 0;"></div>
 
@@ -1010,16 +972,17 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           <div style="position:relative;z-index:1;">
             ${headerHTML}
             
-            <div style="border:1.5px solid #000000;padding:10px 14px;text-align:center;font-size:14px;font-weight:bold;margin:20px 0 16px;color:#000000;">
-              GPS Ir Latitude ( <span style="color:#0000ff;">${latVal}</span> &nbsp;&nbsp; <span style="color:#0000ff;">${lngVal}</span> ) Longitude
+            <div style="display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #dbe6ed;padding-bottom:9px;margin:14px 0 12px;">
+              <div><h2 style="font-size:17px;font-weight:900;color:#17324d;margin:0;">GOOBTA DAYAX-GACMEEDKA</h2><div style="font-size:9px;font-weight:800;color:#2f86c7;letter-spacing:1.2px;margin-top:3px;">SATELLITE LOCATION MAP</div></div>
+              <div style="font-size:9px;text-align:right;color:#64748b;">LAT <strong style="color:#17324d;">${latVal}</strong><br/>LNG <strong style="color:#17324d;">${lngVal}</strong></div>
             </div>
 
-            <div style="border:1.5px solid #000000;padding:8px;background:#ffffff;box-sizing:border-box;margin-bottom:16px;display:flex;align-items:center;justify-content:center;height:570px;">
+            <div style="border:1px solid #b9cbd7;border-top:5px solid #168b35;border-radius:6px;padding:8px;background:#ffffff;box-sizing:border-box;margin-bottom:16px;display:flex;align-items:center;justify-content:center;height:590px;box-shadow:0 2px 7px rgba(23,50,77,0.08);">
               ${satImage ? `<img src="${satImage}" style="width:100%;height:550px;display:block;background:#e2e8f0;" />` : `<div style="color:#64748b;font-size:12px;">Satellite map image not available</div>`}
             </div>
           </div>
 
-          ${footerHTML}
+          ${footerHTML(3, 'Satellite Location')}
         </div>
       `;
 
