@@ -749,9 +749,11 @@ export default function FinancialsPage() {
       const amountText = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const receiptNo = String(selectedReceipt.receipt_no || '-');
       const refNo = String(selectedReceipt.ref_number || '-');
-      const paymentDate = selectedReceipt.payment_date
-        ? new Date(selectedReceipt.payment_date).toLocaleDateString('en-GB')
-        : '-';
+      const issueDateValue = selectedReceipt.payment_date ? new Date(selectedReceipt.payment_date) : new Date();
+      const paymentDate = issueDateValue.toLocaleDateString('en-GB');
+      const dueDateValue = new Date(issueDateValue);
+      dueDateValue.setDate(dueDateValue.getDate() + 30);
+      const dueDate = dueDateValue.toLocaleDateString('en-GB');
       const paymentMode = String(selectedReceipt.payment_mode || 'Cash');
       const paid = selectedReceipt.status !== 'Credit';
       const documentTitle = paid ? 'Receipt' : 'Invoice';
@@ -811,12 +813,45 @@ export default function FinancialsPage() {
           </div>
         </section>`;
 
+      const invoiceCopy = (copyLabel: string) => `
+        <section style="height:126mm;box-sizing:border-box;position:relative;font-family:Arial,sans-serif;color:#111827;">
+          ${copyLabel === 'COPY' ? '<div style="position:absolute;top:0;right:0;z-index:5;border:2px solid #111827;border-radius:4px;padding:4px 12px;background:#ffffff;color:#111827;font:900 12px Arial,sans-serif;letter-spacing:1.5px;">COPY</div>' : ''}
+          <div style="display:grid;grid-template-columns:27mm 1fr 27mm;align-items:center;gap:5mm;">
+            <img src="${logo}" alt="Logo" style="width:25mm;height:25mm;object-fit:contain;${copyLabel === 'COPY' ? 'filter:grayscale(1) contrast(1.15);' : ''}" />
+            <div style="text-align:center;"><div style="font-size:16px;font-weight:900;">${orgSo}</div><div style="font-size:11px;margin-top:3px;">${orgEn}</div></div>
+            <div></div>
+          </div>
+          <div style="border-top:2px solid #111827;margin:3mm 0 3mm;"></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8mm;">
+            <div style="font-size:24px;font-weight:900;color:${copyLabel === 'COPY' ? '#111827' : '#174a9c'};letter-spacing:0.5px;">INVOICE</div>
+            <div style="text-align:right;font-size:10.5px;line-height:1.6;"><div><strong>Invoice No:</strong> <span style="color:${copyLabel === 'COPY' ? '#111827' : '#dc2626'};font-weight:900;">${safe(receiptNo)}</span></div><div><strong>Issue Date:</strong> ${safe(paymentDate)}</div><div><strong>Due Date:</strong> ${safe(dueDate)}</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:8mm;margin-top:3mm;font-size:10px;">
+            <div style="border-left:4px solid ${copyLabel === 'COPY' ? '#111827' : '#174a9c'};background:#f8fafc;padding:3mm 4mm;">
+              <div style="font-size:8px;font-weight:900;letter-spacing:1px;color:#64748b;margin-bottom:2mm;">BILL TO / MACMIILKA</div>
+              <div style="font-size:12px;font-weight:900;">${payer}</div><div style="margin-top:1mm;">Goobta: ${location}</div>
+            </div>
+            <div style="background:#f8fafc;padding:3mm 4mm;line-height:1.7;"><div><strong>Reference:</strong> ${safe(refNo)}</div><div><strong>Bedka:</strong> ${area}</div><div><strong>Isticmaalka:</strong> ${landType}</div></div>
+          </div>
+          <table style="width:100%;border-collapse:collapse;margin-top:4mm;font-size:10px;">
+            <thead><tr style="background:${copyLabel === 'COPY' ? '#111827' : '#174a9c'};color:#ffffff;"><th style="padding:2.5mm;text-align:left;">ADEEGGA / DESCRIPTION</th><th style="padding:2.5mm;width:13mm;">QTY</th><th style="padding:2.5mm;width:24mm;text-align:right;">RATE</th><th style="padding:2.5mm;width:26mm;text-align:right;">AMOUNT</th></tr></thead>
+            <tbody><tr><td style="padding:3mm 2.5mm;border:1px solid #cbd5e1;font-weight:700;">${purpose}</td><td style="padding:3mm 2.5mm;border:1px solid #cbd5e1;text-align:center;">1</td><td style="padding:3mm 2.5mm;border:1px solid #cbd5e1;text-align:right;">$${amountText}</td><td style="padding:3mm 2.5mm;border:1px solid #cbd5e1;text-align:right;font-weight:900;">$${amountText}</td></tr></tbody>
+          </table>
+          <div style="display:grid;grid-template-columns:1fr 57mm;gap:10mm;margin-top:3mm;align-items:start;">
+            <div style="font-size:9px;line-height:1.6;"><strong>Terms / Shuruudaha:</strong><br/>Lacagtan waa deyn wali taagan. Fadlan bixi ugu dambayn ${safe(dueDate)}.<br/><span style="color:#64748b;">Invoice-kan ma aha caddeyn lacag-bixin.</span></div>
+            <div style="font-size:10px;"><div style="display:flex;justify-content:space-between;padding:2mm 0;border-bottom:1px solid #cbd5e1;"><span>Subtotal</span><strong>$${amountText}</strong></div><div style="display:flex;justify-content:space-between;padding:2.5mm;background:${copyLabel === 'COPY' ? '#e5e7eb' : '#e8f0fb'};font-size:12px;"><strong>AMOUNT DUE</strong><strong>$${amountText}</strong></div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 30mm;gap:12mm;align-items:end;margin-top:3mm;"><div style="font-size:9px;color:#64748b;">Mahadsanid / Thank you<br/><span style="color:#111827;font-weight:700;">Authorized by ${orgSo}</span></div><img src="${qrCode}" alt="Invoice QR" style="width:25mm;height:25mm;display:block;" /></div>
+        </section>`;
+
+      const documentCopy = (copyLabel: string) => paid ? receiptCopy(copyLabel) : invoiceCopy(copyLabel);
+
       const printContainer = document.createElement('div');
       printContainer.style.cssText = 'width:210mm;min-height:297mm;background:#fff;padding:14mm 16mm 10mm;box-sizing:border-box;position:fixed;left:-10000px;top:0;';
       printContainer.innerHTML = `
-        ${receiptCopy('ORIGINAL')}
+        ${documentCopy('ORIGINAL')}
         <div style="height:9mm;border-top:2px dashed #111827;box-sizing:border-box;"></div>
-        ${receiptCopy('COPY')}
+        ${documentCopy('COPY')}
       `;
       document.body.appendChild(printContainer);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
