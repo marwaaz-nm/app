@@ -597,7 +597,7 @@ export default function MiniMap({
     direction: CompassDirection,
     latlng: L.LatLng,
     rotation = 0,
-    size = 100,
+    size = 12,
   ) => {
     // Keep the technical drawing uncluttered: neighbour names remain in the form and
     // report table, while the sketch marker shows only its cardinal letter.
@@ -605,10 +605,12 @@ export default function MiniMap({
     const icon = L.divIcon({
       className: 'boundary-direction-marker',
       html: `
-        <div class="boundary-direction-wrap" style="transform: translate(-50%, -50%) rotate(${rotation}deg) scale(${size / 100});">
+        <div class="boundary-direction-wrap" style="transform: translate(-50%, -50%) rotate(${rotation}deg);">
           <div class="boundary-direction-rotate-handle" title="Wareeji (rotate)">&#8635;</div>
-          <div class="boundary-direction-resize-handle" title="Weynee ama yaree">&#8599;</div>
-          <div class="boundary-direction-box">${label}</div>
+          <select class="boundary-direction-font-size" title="Dooro font size">
+            ${[10, 12, 14, 16, 18, 20, 24, 28].map((fontSize) => `<option value="${fontSize}"${fontSize === Math.round(size) ? ' selected' : ''}>${fontSize}px</option>`).join('')}
+          </select>
+          <div class="boundary-direction-box" style="font-size:${size}px">${label}</div>
         </div>`,
       iconSize: [0, 0],
       iconAnchor: [0, 0],
@@ -625,7 +627,7 @@ export default function MiniMap({
       marker.on('dragend', () => {
         const pos = marker.getLatLng();
         const previous = labelPositionsRef.current[direction];
-        labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: pos.lat, lng: pos.lng, rotation: previous?.rotation ?? 0, size: previous?.size ?? 100 } };
+        labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: pos.lat, lng: pos.lng, rotation: previous?.rotation ?? 0, size: previous?.size ?? 12 } };
         onLabelPositionsChange?.(serializeDirectionPositions(labelPositionsRef.current));
       });
       marker.on('dblclick', () => {
@@ -647,10 +649,11 @@ export default function MiniMap({
     const el = marker.getElement();
     const wrap = el?.querySelector('.boundary-direction-wrap') as HTMLElement | null;
     const handle = el?.querySelector('.boundary-direction-rotate-handle') as HTMLElement | null;
-    const resizeHandle = el?.querySelector('.boundary-direction-resize-handle') as HTMLElement | null;
-    if (!wrap || !handle || !resizeHandle) return;
+    const fontSizeSelect = el?.querySelector('.boundary-direction-font-size') as HTMLSelectElement | null;
+    const labelBox = el?.querySelector('.boundary-direction-box') as HTMLElement | null;
+    if (!wrap || !handle || !fontSizeSelect || !labelBox) return;
     L.DomEvent.disableClickPropagation(handle);
-    L.DomEvent.disableClickPropagation(resizeHandle);
+    L.DomEvent.disableClickPropagation(fontSizeSelect);
 
     const startRotate = (clientX: number, clientY: number) => {
       const markerPoint = targetMap.latLngToContainerPoint(marker.getLatLng());
@@ -667,7 +670,7 @@ export default function MiniMap({
         const angle = angleFor(x, y);
         const pos = marker.getLatLng();
         const previous = labelPositionsRef.current[direction];
-        labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: pos.lat, lng: pos.lng, rotation: angle, size: previous?.size ?? 100 } };
+        labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: pos.lat, lng: pos.lng, rotation: angle, size: previous?.size ?? 12 } };
         onLabelPositionsChange?.(serializeDirectionPositions(labelPositionsRef.current));
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
@@ -705,39 +708,14 @@ export default function MiniMap({
       if (touch) startRotate(touch.clientX, touch.clientY);
     });
 
-    const startResize = (clientX: number, clientY: number) => {
-      const markerPoint = targetMap.latLngToContainerPoint(marker.getLatLng());
-      const rect = targetMap.getContainer().getBoundingClientRect();
-      const centerX = rect.left + markerPoint.x;
-      const centerY = rect.top + markerPoint.y;
-      const initialDistance = Math.max(1, Math.hypot(clientX - centerX, clientY - centerY));
-      const initialSize = labelPositionsRef.current[direction]?.size ?? 100;
-      const resizeTo = (x: number, y: number) => {
-        const nextSize = Math.max(60, Math.min(250, initialSize * Math.hypot(x - centerX, y - centerY) / initialDistance));
-        wrap.style.transform = `translate(-50%, -50%) rotate(${labelPositionsRef.current[direction]?.rotation ?? rotation}deg) scale(${nextSize / 100})`;
-        return nextSize;
-      };
-      const finish = (x: number, y: number) => {
-        const nextSize = resizeTo(x, y);
-        const previous = labelPositionsRef.current[direction];
-        labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: marker.getLatLng().lat, lng: marker.getLatLng().lng, rotation: previous?.rotation ?? rotation, size: nextSize } };
-        onLabelPositionsChange?.(serializeDirectionPositions(labelPositionsRef.current));
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.removeEventListener('touchmove', onTouchMove);
-        document.removeEventListener('touchend', onTouchEnd);
-      };
-      const onMouseMove = (event: MouseEvent) => resizeTo(event.clientX, event.clientY);
-      const onMouseUp = (event: MouseEvent) => finish(event.clientX, event.clientY);
-      const onTouchMove = (event: TouchEvent) => { const touch = event.touches[0]; if (touch) resizeTo(touch.clientX, touch.clientY); };
-      const onTouchEnd = (event: TouchEvent) => { const touch = event.changedTouches[0]; if (touch) finish(touch.clientX, touch.clientY); };
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
-      document.addEventListener('touchmove', onTouchMove, { passive: false });
-      document.addEventListener('touchend', onTouchEnd);
-    };
-    L.DomEvent.on(resizeHandle, 'mousedown', (event) => { L.DomEvent.stop(event); startResize((event as MouseEvent).clientX, (event as MouseEvent).clientY); });
-    L.DomEvent.on(resizeHandle, 'touchstart', (event) => { L.DomEvent.stop(event); const touch = (event as TouchEvent).touches[0]; if (touch) startResize(touch.clientX, touch.clientY); });
+    L.DomEvent.on(fontSizeSelect, 'change', (event) => {
+      L.DomEvent.stop(event);
+      const nextSize = Number(fontSizeSelect.value) || 12;
+      labelBox.style.fontSize = `${nextSize}px`;
+      const previous = labelPositionsRef.current[direction];
+      labelPositionsRef.current = { ...labelPositionsRef.current, [direction]: { lat: marker.getLatLng().lat, lng: marker.getLatLng().lng, rotation: previous?.rotation ?? rotation, size: nextSize } };
+      onLabelPositionsChange?.(serializeDirectionPositions(labelPositionsRef.current));
+    });
   };
 
   const generateSketch = (latlngs: L.LatLng[], bounds: L.LatLngBounds) => {
@@ -826,7 +804,7 @@ export default function MiniMap({
       directionMarkersRef.current = {};
       (Object.keys(labelPositionsRef.current) as CompassDirection[]).forEach((direction) => {
         const pos = labelPositionsRef.current[direction];
-        if (pos) placeDirectionMarker(skMap, directionLayer, direction, L.latLng(pos.lat, pos.lng), pos.rotation ?? 0, pos.size ?? 100);
+        if (pos) placeDirectionMarker(skMap, directionLayer, direction, L.latLng(pos.lat, pos.lng), pos.rotation ?? 0, pos.size ?? 12);
       });
       skMap.on('click', (event: L.LeafletMouseEvent) => {
         if (!placingDirectionRef.current) return;

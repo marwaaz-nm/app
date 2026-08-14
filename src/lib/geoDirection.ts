@@ -77,7 +77,7 @@ export type DirectionPositions = Partial<Record<CompassDirection, LatLngPoint>>;
 export function serializeDirectionPositions(positions: DirectionPositions): string {
   return (Object.keys(positions) as CompassDirection[])
     .filter((dir) => positions[dir])
-    .map((dir) => `${dir}:${positions[dir]!.lat.toFixed(6)},${positions[dir]!.lng.toFixed(6)},${Math.round(positions[dir]!.rotation ?? 0)},${Math.round(positions[dir]!.size ?? 100)}`)
+    .map((dir) => `${dir}:${positions[dir]!.lat.toFixed(6)},${positions[dir]!.lng.toFixed(6)},${Math.round(positions[dir]!.rotation ?? 0)},${Math.round(positions[dir]!.size ?? 12)}`)
     .join(';');
 }
 
@@ -92,8 +92,11 @@ export function parseDirectionPositions(raw: string | null | undefined): Directi
     const lat = parseFloat(latStr);
     const lng = parseFloat(lngStr);
     const rotation = rotStr !== undefined ? parseFloat(rotStr) : 0;
-    const size = sizeStr !== undefined ? parseFloat(sizeStr) : 100;
-    if (!Number.isNaN(lat) && !Number.isNaN(lng)) result[dir] = { lat, lng, rotation: Number.isNaN(rotation) ? 0 : rotation, size: Number.isNaN(size) ? 100 : size };
+    const parsedSize = sizeStr !== undefined ? parseFloat(sizeStr) : 12;
+    // Earlier builds briefly stored scale percentages (60-250). Convert those records
+    // to the equivalent font pixels while keeping the format backward compatible.
+    const size = parsedSize > 40 ? Math.round(12 * parsedSize / 100) : parsedSize;
+    if (!Number.isNaN(lat) && !Number.isNaN(lng)) result[dir] = { lat, lng, rotation: Number.isNaN(rotation) ? 0 : rotation, size: Number.isNaN(size) ? 12 : size };
   }
   return result;
 }
