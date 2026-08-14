@@ -39,6 +39,13 @@ export default function OfflineManager() {
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
     navigator.serviceWorker.addEventListener('message', handleMessage);
+    const wasUncontrolled = !navigator.serviceWorker.controller;
+    const handleControllerChange = () => {
+      if (!wasUncontrolled || sessionStorage.getItem('marwaazpn-sw-reloaded')) return;
+      sessionStorage.setItem('marwaazpn-sw-reloaded', '1');
+      window.location.reload();
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
     void navigator.serviceWorker.register('/sw.js', {
       scope: '/',
       updateViaCache: 'none',
@@ -59,6 +66,7 @@ export default function OfflineManager() {
       window.removeEventListener('online', updateStatus);
       window.removeEventListener('offline', updateStatus);
       navigator.serviceWorker.removeEventListener('message', handleMessage);
+      navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
     };
   }, []);
 

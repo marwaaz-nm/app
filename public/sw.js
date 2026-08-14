@@ -1,5 +1,5 @@
 /* Marwaazpn offline worker: app shell cache, per-session data cache, and survey sync queue. */
-const VERSION = 'marwaazpn-offline-v1';
+const VERSION = 'marwaazpn-offline-v2';
 const SHELL_CACHE = `${VERSION}-shell`;
 const DATA_CACHE_PREFIX = `${VERSION}-data-`;
 const DB_NAME = 'marwaazpn-offline';
@@ -15,7 +15,7 @@ let latestAccessToken = null;
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(SHELL_CACHE);
-    await Promise.allSettled(APP_ROUTES.map((url) => cache.add(new Request(url, { cache: 'reload' }))));
+    await warmAppShell(cache);
     await self.skipWaiting();
   })());
 });
@@ -98,6 +98,28 @@ function dataCacheName(request) {
   let hash = 5381;
   for (let index = 0; index < authorization.length; index += 1) hash = ((hash << 5) + hash) ^ authorization.charCodeAt(index);
   return `${DATA_CACHE_PREFIX}${(hash >>> 0).toString(36)}`;
+}
+
+async function warmAppShell(cache) {
+  const assetUrls = new Set(['/favicon.ico', '/manifest.webmanifest']);
+  await Promise.allSettled(APP_ROUTES.map(async (url) => {
+    const request = new Request(url, { cache: 'reload' });
+    const response = await fetch(request);
+    if (!response.ok) return;
+    await cache.put(request, response.clone());
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('text/html')) return;
+    const html = await response.text();
+    for (const match of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)) {
+      const assetUrl = match[1];
+      if (assetUrl.startsWith('/_next/static/') || assetUrl === '/favicon.ico') assetUrls.add(assetUrl);
+    }
+  }));
+  await Promise.allSettled(Array.from(assetUrls, async (url) => {
+    const request = new Request(url, { cache: 'reload' });
+    const response = await fetch(request);
+    if (response.ok) await cache.put(request, response);
+  }));
 }
 
 async function networkOrQueueSurvey(request) {
