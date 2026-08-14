@@ -559,7 +559,7 @@ export default function SettingsPage() {
               <Monitor className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-slate-800">Nootaayo Marwaaz — Desktop App</h3>
+              <h3 className="text-sm font-black text-slate-800">Marwaazpn App — Desktop</h3>
               <p className="text-xs text-slate-500 font-semibold mt-0.5">
                 Soo deji app-ka desktop-ka ee Windows si aad system-ka uga shaqeyso window gaar ah, adigoon u baahnayn browser.
               </p>
@@ -567,8 +567,8 @@ export default function SettingsPage() {
           </div>
 
           <a
-            href="/downloads/GeoSurveyPro-Setup.exe"
-            download
+            href="/downloads/Marwaazpn-App-Setup.exe"
+            download="Marwaazpn-App-Setup.exe"
             className="inline-flex items-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 px-5 py-3 text-xs font-bold text-white shadow-md cursor-pointer transition-all"
           >
             <Download className="h-4 w-4" /> Soo Deji (Windows .exe)

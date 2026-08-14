@@ -29,7 +29,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "GeoSurvey Pro",
+  title: "Marwaazpn App",
   description: "Diiwaangelinta iyo Sahanka Dhulka - Professional land survey management system",
 };
 

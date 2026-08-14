@@ -71,7 +71,7 @@ export default function ReportsPage() {
       }
       const blob = await response.blob();
       const disposition = response.headers.get('content-disposition') || '';
-      const name = disposition.match(/filename="([^"]+)"/)?.[1] || `geosurvey-${format}`;
+      const name = disposition.match(/filename="([^"]+)"/)?.[1] || `marwaazpn-app-${format}`;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url; anchor.download = name; anchor.click();

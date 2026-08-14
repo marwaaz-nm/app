@@ -130,7 +130,7 @@ export default function Sidebar() {
   const moreMobileNav = permittedNavigation.filter((item) => !PRIMARY_MOBILE_HREFS.includes(item.href));
   const moreActive = moreMobileNav.some((item) => isActive(item.href));
 
-  const initials = (profile?.fullname || 'GeoSurvey User')
+  const initials = (profile?.fullname || 'Marwaazpn App User')
     .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0])

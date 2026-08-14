@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     if (format === 'csv') {
       const headers = ['Serial', 'Survey No', 'Owner', 'Neighborhood', 'Branch', 'Land Type', 'GPS', 'Status', 'Area m2', 'Created'];
       const rows = surveys.map((survey) => [survey.serial_no, survey.survey_no, survey.owner_name, survey.neighborhood, survey.branch, survey.land_type, survey.gps_location, survey.status, survey.sketch_area, survey.created_at]);
-      return download([headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n'), `geosurvey-surveys-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv; charset=utf-8');
+      return download([headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n'), `marwaazpn-app-surveys-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv; charset=utf-8');
     }
 
     if (format === 'geojson') {
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
           properties: { id: survey.id, serial_no: survey.serial_no, survey_no: survey.survey_no, owner_name: survey.owner_name, neighborhood: survey.neighborhood, branch: survey.branch, land_type: survey.land_type, status: survey.status, area_m2: survey.sketch_area },
         })).filter((feature) => feature.geometry.coordinates[0].length >= 4),
       };
-      return download(JSON.stringify(collection, null, 2), `geosurvey-parcels-${new Date().toISOString().slice(0, 10)}.geojson`, 'application/geo+json; charset=utf-8');
+      return download(JSON.stringify(collection, null, 2), `marwaazpn-app-parcels-${new Date().toISOString().slice(0, 10)}.geojson`, 'application/geo+json; charset=utf-8');
     }
 
     if (format === 'backup') {
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
         exported_at: new Date().toISOString(),
         version: 1,
         data: { profiles: profileResult.data, surveys, survey_revisions: revisionResult.data, survey_documents: documentResult.data, references, transfers, receipts, expenses },
-      }, null, 2), `geosurvey-backup-${new Date().toISOString().slice(0, 10)}.json`, 'application/json; charset=utf-8');
+      }, null, 2), `marwaazpn-app-backup-${new Date().toISOString().slice(0, 10)}.json`, 'application/json; charset=utf-8');
     }
 
     const sum = (rows: Array<Record<string, unknown>>, field: string) => rows.reduce((total, row) => total + (Number(row[field]) || 0), 0);
