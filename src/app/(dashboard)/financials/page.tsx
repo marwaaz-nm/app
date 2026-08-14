@@ -782,13 +782,14 @@ export default function FinancialsPage() {
 
       const receiptCopy = (copyLabel: string) => `
         <section style="height:126mm;box-sizing:border-box;position:relative;font-family:Georgia,'Times New Roman',serif;color:#111827;">
+          ${copyLabel === 'COPY' ? '<div style="position:absolute;top:0;right:0;z-index:5;border:2px solid #111827;border-radius:4px;padding:4px 12px;background:#ffffff;color:#111827;font:900 12px Arial,sans-serif;letter-spacing:1.5px;">COPY</div>' : ''}
           <div style="display:grid;grid-template-columns:27mm 1fr 27mm;align-items:center;gap:5mm;">
             <img src="${logo}" alt="Logo" style="width:25mm;height:25mm;object-fit:contain;${copyLabel === 'COPY' ? 'filter:grayscale(1) contrast(1.15);' : ''}" />
             <div style="text-align:center;">
               <div style="font-size:16px;font-weight:800;line-height:1.2;">${orgSo}</div>
               <div style="font-size:12px;margin-top:2px;">${orgEn}</div>
             </div>
-            <div style="text-align:right;">${copyLabel === 'COPY' ? '<span style="font:800 10px Arial,sans-serif;color:#111827;letter-spacing:1px;">COPY</span>' : ''}</div>
+            <div></div>
           </div>
           <div style="border-top:1px solid #111827;margin:4mm 0 4mm;"></div>
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8mm;">
