@@ -405,6 +405,26 @@ body {
   cursor: grabbing;
 }
 
+.boundary-direction-resize-handle {
+  position: absolute;
+  left: 10px;
+  top: 7px;
+  display: flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #0f766e;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: nwse-resize;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.25);
+  touch-action: none;
+  user-select: none;
+}
+
 .boundary-direction-box {
   display: inline-block;
   transform: translate(-50%, -50%);

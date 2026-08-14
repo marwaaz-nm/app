@@ -242,14 +242,14 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
   // Renders a single direction label marker at an exact position — either a manually
   // placed spot (from `boundary_label_positions`) or the automatic fallback computed
   // above.
-  const renderDirectionLabel = (direction: CompassDirection, position: L.LatLng, map: L.Map, _boundaryInfo: BoundaryInfo, rotation = 0) => {
+  const renderDirectionLabel = (direction: CompassDirection, position: L.LatLng, map: L.Map, _boundaryInfo: BoundaryInfo, rotation = 0, size = 100) => {
     // The sketch already prints a length number on every edge, so the direction label
     // itself only needs the direction (and neighbor) — not a duplicate "Xm".
     const label = direction;
     L.marker(position, {
       icon: L.divIcon({
         className: 'boundary-direction-label',
-        html: `<div class="boundary-direction-wrap" style="transform: translate(-50%, -50%) rotate(${rotation}deg);"><div class="boundary-direction-box">${label}</div></div>`,
+        html: `<div class="boundary-direction-wrap" style="transform: translate(-50%, -50%) rotate(${rotation}deg) scale(${size / 100});"><div class="boundary-direction-box">${label}</div></div>`,
         iconSize: [0, 0],
         iconAnchor: [0, 0],
       }),
@@ -272,7 +272,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
     for (const direction of directions) {
       const manual = manualPositions[direction];
       if (manual) {
-        renderDirectionLabel(direction, L.latLng(manual.lat, manual.lng), map, boundaryInfo, manual.rotation ?? 0);
+        renderDirectionLabel(direction, L.latLng(manual.lat, manual.lng), map, boundaryInfo, manual.rotation ?? 0, manual.size ?? 100);
         continue;
       }
       for (const idx of mainBoundaryIndices) {
