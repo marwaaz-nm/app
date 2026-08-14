@@ -20,9 +20,11 @@ import {
   X,
   Plus,
   KeyRound,
+  Monitor,
+  Download,
 } from 'lucide-react';
 
-type Tab = 'account' | 'organization' | 'options' | 'drive' | 'archive';
+type Tab = 'account' | 'organization' | 'options' | 'drive' | 'archive' | 'desktop';
 
 async function authenticatedFetch(path: string, options: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -300,6 +302,7 @@ export default function SettingsPage() {
     { id: 'options', label: 'Liisaska (Options)', icon: ListChecks, adminOnly: true },
     { id: 'drive', label: 'Drive Connections', icon: Cloud, adminOnly: true, hidden: !canManageDriveConnections },
     { id: 'archive', label: 'Document Archive', icon: Archive, adminOnly: true },
+    { id: 'desktop', label: 'Desktop App', icon: Monitor },
   ];
 
   return (
@@ -548,6 +551,34 @@ export default function SettingsPage() {
       {tab === 'drive' && canManageDriveConnections && <DriveConnectionsPanel />}
 
       {tab === 'archive' && isAdmin && <ArchiveDriveConfigPanel />}
+
+      {tab === 'desktop' && (
+        <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="bg-teal-50 text-teal-600 p-2.5 rounded-xl border border-teal-100 shrink-0">
+              <Monitor className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-800">Nootaayo Marwaaz — Desktop App</h3>
+              <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                Soo deji app-ka desktop-ka ee Windows si aad system-ka uga shaqeyso window gaar ah, adigoon u baahnayn browser.
+              </p>
+            </div>
+          </div>
+
+          <a
+            href="/downloads/GeoSurveyPro-Setup.exe"
+            download
+            className="inline-flex items-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 px-5 py-3 text-xs font-bold text-white shadow-md cursor-pointer transition-all"
+          >
+            <Download className="h-4 w-4" /> Soo Deji (Windows .exe)
+          </a>
+
+          <p className="text-[11px] text-slate-400 font-medium">
+            Installer-kan wuxuu u shaqeeyaa Windows 10/11. Kadib install-ka, app-ka wuxuu ku xirnaan doonaa internet-ka isla xogta browser-ka aad isticmaasho.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
