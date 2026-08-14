@@ -731,6 +731,12 @@ export default function MiniMap({
         fillOpacity: 0.42,
       }).addTo(skMap);
 
+      // Leaflet must have a center and zoom before pixel/layer-point conversion can
+      // be used by the dimension renderer. Extra padding also reserves room for the
+      // measurement boxes that sit outside the parcel boundary.
+      skMap.invalidateSize();
+      skMap.fitBounds(bounds, { animate: false, padding: [60, 60] });
+
       const center = bounds.getCenter();
       const area = calculateArea(latlngs).toFixed(2);
 
@@ -783,8 +789,6 @@ export default function MiniMap({
         setPlacingDirection(null);
       });
 
-      skMap.invalidateSize();
-      skMap.fitBounds(bounds.pad(0.08), { animate: false });
       sketchMapRef.current = skMap;
 
       // Initial save of details to parent form
