@@ -742,6 +742,12 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           areaBox.innerHTML = `<div style="line-height: 1.3;">Area =<br/>${areaNum}</div>`;
         }
 
+        // The downloaded report intentionally omits the center Area badge. Keep it in
+        // the live editor/details view and hide it only for this canvas capture.
+        const areaMarker = sketchContainer.querySelector('.sketch-area-label') as HTMLElement | null;
+        const originalAreaDisplay = areaMarker?.style.display || '';
+        if (areaMarker) areaMarker.style.display = 'none';
+
         const originalStyles = new Map<any, any>();
         sketchMapRef.current?.eachLayer((layer: any) => {
           if (layer.setStyle) {
@@ -779,7 +785,23 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             logging: false,
             backgroundColor: '#ffffff'
           });
-          sketchImage = sketchCanvas.toDataURL('image/jpeg', 0.95);
+          const cropX = Math.round(sketchCanvas.width * 0.08);
+          const cropY = Math.round(sketchCanvas.height * 0.04);
+          const croppedSketch = document.createElement('canvas');
+          croppedSketch.width = sketchCanvas.width - cropX * 2;
+          croppedSketch.height = sketchCanvas.height - cropY * 2;
+          croppedSketch.getContext('2d')?.drawImage(
+            sketchCanvas,
+            cropX,
+            cropY,
+            croppedSketch.width,
+            croppedSketch.height,
+            0,
+            0,
+            croppedSketch.width,
+            croppedSketch.height,
+          );
+          sketchImage = croppedSketch.toDataURL('image/jpeg', 0.95);
         } catch (e) {
           console.error('Failed to capture sketch map', e);
         } finally {
@@ -789,6 +811,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           if (areaBox) {
             areaBox.innerHTML = originalAreaHTML;
           }
+          if (areaMarker) areaMarker.style.display = originalAreaDisplay;
           restoreSketch();
           sketchContainer.style.width = originalSketchWidth;
           sketchContainer.style.height = originalSketchHeight;
