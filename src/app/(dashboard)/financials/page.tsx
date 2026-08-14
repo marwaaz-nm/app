@@ -755,7 +755,8 @@ export default function FinancialsPage() {
       dueDateValue.setDate(dueDateValue.getDate() + 30);
       const dueDate = dueDateValue.toLocaleDateString('en-GB');
       const paymentMode = String(selectedReceipt.payment_mode || 'Cash');
-      const paid = selectedReceipt.status !== 'Credit';
+      const normalizedStatus = String(selectedReceipt.status || '').trim().toLowerCase();
+      const paid = !['credit', 'deyn', 'unpaid', 'invoice'].includes(normalizedStatus);
       const documentTitle = paid ? 'Receipt' : 'Invoice';
       const safe = (value: unknown) => String(value ?? '-')
         .replace(/&/g, '&amp;')
@@ -800,7 +801,7 @@ export default function FinancialsPage() {
             <div style="font-size:13px;font-weight:800;">${documentTitle} No: <span style="color:${copyLabel === 'COPY' ? '#111827' : '#dc2626'};">${safe(receiptNo)}</span> &nbsp; Ref No: <span style="color:${copyLabel === 'COPY' ? '#111827' : '#dc2626'};">${safe(refNo)}</span></div>
           </div>
           <div style="font-size:12.5px;font-weight:700;line-height:2.05;margin-top:2mm;">
-            <div style="display:flex;justify-content:space-between;gap:8mm;"><span>Taariikh: <u>${safe(paymentDate)}</u></span><span>Laga qabtay Md./Marwo: <u>${payer}</u></span></div>
+            <div style="display:flex;justify-content:space-between;gap:8mm;"><span>Taariikh: <u>${safe(paymentDate)}</u></span><span>${paid ? 'Laga qabtay' : 'Lagu leeyahay'} Md./Marwo: <u>${payer}</u></span></div>
             <div>Ujeedka: ${paid ? checked : unchecked} Bixin &nbsp;&nbsp; ${!paid ? checked : unchecked} Deyn &nbsp;&nbsp; Faahfaahin: <u>${purpose}</u></div>
             <div style="display:flex;flex-wrap:wrap;gap:2mm 9mm;"><span>Reference: <u>${safe(refNo)}</u></span><span>Goobta: <u>${location}</u></span><span>Bedka: <u>${area}</u></span><span>Isticmaalka: <u>${landType}</u></span></div>
             <div style="display:flex;justify-content:space-between;gap:8mm;"><span>${paid ? 'Lacagta la bixiyey' : 'Lacagta deynta'}: <u>$ ${amountText}</u></span><span>Xaaladda: <u>${paid ? 'Paid / La bixiyey' : 'Credit / Deyn'}</u></span></div>
@@ -828,7 +829,7 @@ export default function FinancialsPage() {
           </div>
           <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:8mm;margin-top:3mm;font-size:10px;">
             <div style="border-left:4px solid ${copyLabel === 'COPY' ? '#111827' : '#174a9c'};background:#f8fafc;padding:3mm 4mm;">
-              <div style="font-size:8px;font-weight:900;letter-spacing:1px;color:#64748b;margin-bottom:2mm;">BILL TO / MACMIILKA</div>
+              <div style="font-size:8px;font-weight:900;letter-spacing:1px;color:#64748b;margin-bottom:2mm;">LAGU LEEYAHAY / BILL TO</div>
               <div style="font-size:12px;font-weight:900;">${payer}</div><div style="margin-top:1mm;">Goobta: ${location}</div>
             </div>
             <div style="background:#f8fafc;padding:3mm 4mm;line-height:1.7;"><div><strong>Reference:</strong> ${safe(refNo)}</div><div><strong>Bedka:</strong> ${area}</div><div><strong>Isticmaalka:</strong> ${landType}</div></div>
