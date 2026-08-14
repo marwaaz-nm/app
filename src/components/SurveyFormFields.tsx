@@ -294,6 +294,7 @@ export default function SurveyFormFields({ draft, onChange, landTypes }: SurveyF
             onGpsChange={(value) => set({ gps_location: value })}
             polygonValue={str(draft.polygon_boundary)}
             onPolygonChange={(value) => set({ polygon_boundary: value })}
+            sketchDetailsValue={str(draft.sketch_dimensions)}
             labelPositionsValue={str(draft.boundary_label_positions)}
             onLabelPositionsChange={(value) => set({ boundary_label_positions: value })}
             boundaryInfo={{

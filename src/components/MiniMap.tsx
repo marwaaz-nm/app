@@ -71,6 +71,7 @@ interface MiniMapProps {
   polygonValue: string;
   onPolygonChange: (value: string) => void;
   onSketchDetailsChange: (value: string) => void;
+  sketchDetailsValue?: string;
   // Waqooyi/Bari/Koonfur/Galbeed measurement + neighbor, typed elsewhere in the same
   // form — used to label a manually-placed direction marker with e.g.
   // "Waqooyi — 25m — Axmed". Optional so MiniMap still works before that data exists.
@@ -112,6 +113,7 @@ export default function MiniMap({
   polygonValue,
   onPolygonChange,
   onSketchDetailsChange,
+  sketchDetailsValue,
   labelPositionsValue,
   onLabelPositionsChange,
 }: MiniMapProps) {
@@ -522,7 +524,7 @@ export default function MiniMap({
   };
 
   // Helper to add dimension annotation lines in Sketch Map
-  const addSketchDimension = (start: L.LatLng, end: L.LatLng, map: L.Map, allCoords: L.LatLng[]) => {
+  const addSketchDimension = (start: L.LatLng, end: L.LatLng, map: L.Map, allCoords: L.LatLng[], savedValue?: string) => {
     const dist = map.distance(start, end).toFixed(1);
     const mid = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
 
@@ -560,7 +562,7 @@ export default function MiniMap({
         html: `
           <div contenteditable="true" spellcheck="false" class="editable-field sketch-dimension-input" 
                style="transform: translate(-50%, -50%) rotate(${-angle}deg); min-width: 40px;">
-               ${dist}m
+               ${savedValue || `${dist}m`}
           </div>`,
         iconSize: [0, 0],
         iconAnchor: [0, 0] 
@@ -738,7 +740,12 @@ export default function MiniMap({
       skMap.fitBounds(bounds, { animate: false, padding: [60, 60] });
 
       const center = bounds.getCenter();
-      const area = calculateArea(latlngs).toFixed(2);
+      const savedParts = (sketchDetailsValue || '').split('|').map((part) => part.trim());
+      const savedArea = savedParts[0]?.replace(/^Area:\s*/i, '').replace(/\s*m(?:Â²|²)?$/i, '').trim();
+      const savedDimensions = savedParts.slice(1).map((part, index) =>
+        (index === 0 ? part.replace(/^Dim:\s*/i, '') : part).trim(),
+      ).filter(Boolean);
+      const area = savedArea || calculateArea(latlngs).toFixed(2);
 
       // Add Area Label
       const areaMarker = L.marker(center, {
@@ -768,7 +775,7 @@ export default function MiniMap({
       for (let i = 0; i < latlngs.length; i++) {
         const start = latlngs[i];
         const end = latlngs[(i + 1) % latlngs.length];
-        addSketchDimension(start, end, skMap, latlngs);
+        addSketchDimension(start, end, skMap, latlngs, savedDimensions[i]);
       }
 
       // Manual direction labels (Waqooyi/Bari/Koonfur/Galbeed) live on the sketch, not

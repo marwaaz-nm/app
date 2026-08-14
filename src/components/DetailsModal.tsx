@@ -348,6 +348,10 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         W: { val: record.boundary_g_val, neighbor: record.boundary_g_neighbor },
       };
       const manualPositions = parseDirectionPositions(record.boundary_label_positions);
+      const savedSketchParts = (record.sketch_dimensions || '').split('|').map((part) => part.trim());
+      const savedSketchDimensions = savedSketchParts.slice(1).map((part, index) =>
+        (index === 0 ? part.replace(/^Dim:\s*/i, '') : part).trim(),
+      ).filter(Boolean);
 
       // The 4 longest sides are treated as the plot's "main" boundaries — the ones that
       // get a Waqooyi/Bari/Koonfur/Galbeed label — same selection both maps use.
@@ -445,7 +449,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           const midpoint = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
           const direction = getDirectionFromCenter(vertexCenter.lat, vertexCenter.lng, midpoint.lat, midpoint.lng);
           const savedBoundaryValue = mainBoundaryIndices.has(i) ? boundaryInfo[direction]?.val : undefined;
-          addSketchDimension(start, end, skMap, latlngs, savedBoundaryValue);
+          addSketchDimension(start, end, skMap, latlngs, savedSketchDimensions[i] || savedBoundaryValue);
         }
         addBoundaryDirectionLabels(skMap, latlngs, mainBoundaryIndices, vertexCenter, boundaryInfo, manualPositions);
 

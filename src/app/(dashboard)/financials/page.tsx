@@ -928,21 +928,11 @@ export default function FinancialsPage() {
           };
 
           underlinedValue('Receipt No:', receiptNo, 132, startY + 39, 63, red);
-          underlinedValue('ID No:', refNo, 132, startY + 46, 63);
-          underlinedValue('Taariikh:', paymentDate, 15, startY + 52, 62);
-          underlinedValue('Laga qabtay Md./Marwo:', rawPayer, 100, startY + 52, 95);
-          underlinedValue('Ujeedka: [X]', rawPurpose, 15, startY + 64, 92);
-          pdf.text('[ ] Wareejin    [ ] Adeeg kale', 113, startY + 64);
-          underlinedValue('Plot No.', rawPlotNo, 15, startY + 76, 40);
-          underlinedValue('Goobta:', rawLocation, 57, startY + 76, 44);
-          underlinedValue('Soodhinta:', rawArea, 105, startY + 76, 44);
-          underlinedValue('Isticmaalka:', rawLandType, 153, startY + 76, 42);
-          underlinedValue('Lacagta uu bixiyey: $', amountText, 15, startY + 89, 77);
-          underlinedValue('Erey ahaan:', amountInWords(amount), 103, startY + 89, 92);
-          const paymentValue = paymentMode === 'Cash'
-            ? '[X] Cash   [ ] Bank   [ ] Mobile'
-            : `[ ] Cash   [ ] Bank   [X] Mobile - ${paymentMode}`;
-          underlinedValue('Habka Lacag bixinta:', paymentValue, 15, startY + 102, 145);
+          underlinedValue('Magaca Bixiyaha (Payer Name):', rawPayer, 15, startY + 52, 180);
+          underlinedValue('Sumad (Ref):', refNo, 15, startY + 65, 82);
+          underlinedValue('Payment Date:', paymentDate, 108, startY + 65, 87);
+          underlinedValue('Paid Via:', paymentMode, 15, startY + 78, 82);
+          underlinedValue('Faahfaahinta (Details):', rawPurpose, 15, startY + 91, 180);
 
           pdf.setDrawColor(17, 24, 39);
           pdf.line(15, startY + 116, 76, startY + 116);
@@ -1022,50 +1012,29 @@ export default function FinancialsPage() {
           pdf.text('INVOICE', 15, startY + 38);
           pdf.setTextColor(17, 24, 39);
           pdf.setFontSize(8.5);
-          pdf.text('Invoice No:', 137, startY + 33);
+          pdf.text('Invoice No:', 137, startY + 36);
           pdf.setTextColor(...accent);
-          pdf.text(receiptNo, 158, startY + 33);
+          pdf.text(receiptNo, 158, startY + 36);
           pdf.setTextColor(17, 24, 39);
-          pdf.text(`Issue: ${paymentDate}`, 137, startY + 39);
-          pdf.text(`Due: ${dueDate}`, 137, startY + 45);
-
-          pdf.setFillColor(copy ? 245 : 244, copy ? 245 : 248, copy ? 245 : 255);
-          pdf.setDrawColor(copy ? 70 : 203, copy ? 70 : 213, copy ? 70 : 225);
-          pdf.roundedRect(15, startY + 48, 112, 24, 1.5, 1.5, 'FD');
-          pdf.roundedRect(132, startY + 48, 63, 24, 1.5, 1.5, 'FD');
-          pdf.setFontSize(7.5);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text('LAGU LEEYAHAY / BILL TO', 20, startY + 55);
-          pdf.setFontSize(10.5);
-          pdf.text(pdf.splitTextToSize(invoicePayer, 102)[0], 20, startY + 62);
-          pdf.setFontSize(8);
-          pdf.text(`Goobta: ${invoiceLocation}`, 20, startY + 68);
-          pdf.text(`Reference: ${refNo}`, 137, startY + 56);
-          pdf.text(`Bedka: ${invoiceArea}`, 137, startY + 62);
-          pdf.text(`Plot: ${invoicePlotNo} | ${invoiceLandType}`, 137, startY + 68);
-
-          pdf.setFillColor(...primary);
-          pdf.rect(15, startY + 78, 180, 9, 'F');
-          pdf.setTextColor(255, 255, 255);
-          pdf.setFontSize(8.5);
-          pdf.text('ADEEGGA / DESCRIPTION', 19, startY + 84);
-          pdf.text('AMOUNT', 190, startY + 84, { align: 'right' });
-          pdf.setTextColor(17, 24, 39);
-          pdf.setDrawColor(203, 213, 225);
-          pdf.rect(15, startY + 87, 180, 15);
-          pdf.setFontSize(9);
-          pdf.text(pdf.splitTextToSize(invoicePurpose, 128)[0], 19, startY + 96);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text(`$${amountText}`, 190, startY + 96, { align: 'right' });
-          pdf.setFillColor(copy ? 232 : 232, copy ? 232 : 240, copy ? 232 : 251);
-          pdf.rect(132, startY + 106, 63, 12, 'F');
-          pdf.setFontSize(10.5);
-          pdf.text('AMOUNT DUE', 136, startY + 114);
-          pdf.text(`$${amountText}`, 190, startY + 114, { align: 'right' });
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(7.5);
-          pdf.text(`Bixi ugu dambayn ${dueDate}. Invoice-kan ma aha caddeyn lacag-bixin.`, 15, startY + 113);
-          pdf.addImage(qrCode, 'PNG', 168, startY + 120, 20, 20);
+          const drawField = (label: string, value: string, x: number, y: number, width: number) => {
+            pdf.setFillColor(copy ? 247 : 248, copy ? 247 : 250, copy ? 247 : 252);
+            pdf.setDrawColor(copy ? 80 : 203, copy ? 80 : 213, copy ? 80 : 225);
+            pdf.roundedRect(x, y, width, 18, 1.5, 1.5, 'FD');
+            pdf.setTextColor(100, 116, 139);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(7);
+            pdf.text(label.toUpperCase(), x + 4, y + 6);
+            pdf.setTextColor(17, 24, 39);
+            pdf.setFontSize(9.5);
+            pdf.text(pdf.splitTextToSize(value || '-', width - 8)[0], x + 4, y + 13);
+          };
+          drawField('Magaca Bixiyaha (Payer Name)', invoicePayer, 15, startY + 48, 180);
+          drawField('Receipt No', receiptNo, 15, startY + 70, 56);
+          drawField('Sumad (Ref)', refNo, 76, startY + 70, 56);
+          drawField('Payment Date', paymentDate, 137, startY + 70, 58);
+          drawField('Paid Via', paymentMode, 15, startY + 92, 56);
+          drawField('Faahfaahinta (Details)', storedReceiptDetails.details || invoicePurpose, 76, startY + 92, 119);
+          pdf.addImage(qrCode, 'PNG', 170, startY + 115, 20, 20);
         };
 
         drawInvoiceCopy(5, false);
