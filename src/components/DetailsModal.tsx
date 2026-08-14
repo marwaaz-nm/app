@@ -27,7 +27,7 @@ import L from 'leaflet';
 import { useModal } from '@/context/ModalContext';
 import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/lib/supabase';
-import { buildDirectionLabel, getDirectionFromCenter, parseDirectionPositions, type BoundaryInfo, type CompassDirection } from '@/lib/geoDirection';
+import { getDirectionFromCenter, parseDirectionPositions, type BoundaryInfo, type CompassDirection } from '@/lib/geoDirection';
 
 interface DetailsModalProps {
   record: Survey | null;
@@ -242,14 +242,14 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
   // Renders a single direction label marker at an exact position — either a manually
   // placed spot (from `boundary_label_positions`) or the automatic fallback computed
   // above.
-  const renderDirectionLabel = (direction: CompassDirection, position: L.LatLng, map: L.Map, boundaryInfo: BoundaryInfo, rotation = 0) => {
+  const renderDirectionLabel = (direction: CompassDirection, position: L.LatLng, map: L.Map, _boundaryInfo: BoundaryInfo, rotation = 0) => {
     // The sketch already prints a length number on every edge, so the direction label
     // itself only needs the direction (and neighbor) — not a duplicate "Xm".
-    const label = buildDirectionLabel(direction, boundaryInfo[direction], { includeMeasurement: false });
+    const label = direction;
     L.marker(position, {
       icon: L.divIcon({
         className: 'boundary-direction-label',
-        html: `<div class="boundary-direction-box" style="transform: translate(-50%, -50%) rotate(${rotation}deg);">${label}</div>`,
+        html: `<div class="boundary-direction-wrap" style="transform: translate(-50%, -50%) rotate(${rotation}deg);"><div class="boundary-direction-rotate-handle">&#8635;</div><div class="boundary-direction-box">${label}</div></div>`,
         iconSize: [0, 0],
         iconAnchor: [0, 0],
       }),
@@ -433,10 +433,10 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         skMap.getContainer().style.touchAction = 'pan-y pinch-zoom';
 
         L.polygon(coords, {
-          color: '#090d16',
-          weight: 3,
-          fillColor: '#ffffff',
-          fillOpacity: 1,
+          color: '#0f172a',
+          weight: 2.5,
+          fillColor: '#dbeafe',
+          fillOpacity: 0.42,
         }).addTo(skMap);
 
         const center = bounds.getCenter();
@@ -460,17 +460,14 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         L.marker(center, {
           icon: L.divIcon({
             className: 'sketch-area-label',
-            html: `
-              <div class="modal-area-box font-sans">
-                <small style="display: block; font-size: 8px; color: #64748b; font-weight: 800; text-transform: uppercase; margin-bottom: -2px;">Area</small>
-                <strong>${areaValue}</strong>
-              </div>`,
-            iconSize: [110, 50],
-            iconAnchor: [55, 25]
+            html: `<div class="editable-field sketch-area-input">Area: ${areaValue}</div>`,
+            iconSize: [140, 40],
+            iconAnchor: [70, 20]
           })
         }).addTo(skMap);
 
-        skMap.fitBounds(bounds, { padding: [20, 20] });
+        skMap.invalidateSize();
+        skMap.fitBounds(bounds, { animate: false, padding: [60, 60] });
         L.control.zoom({ position: 'bottomright' }).addTo(skMap);
         sketchMapRef.current = skMap;
         sketchMapContainerRef.current.addEventListener('wheel', handleSkWheel, { passive: false });
