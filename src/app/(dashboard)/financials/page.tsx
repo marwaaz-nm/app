@@ -792,7 +792,7 @@ export default function FinancialsPage() {
           </div>
           <div style="border-top:1px solid #111827;margin:4mm 0 4mm;"></div>
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8mm;">
-            <div style="font-size:22px;font-weight:800;color:#174a9c;">Receipt</div>
+            <div style="font-size:22px;font-weight:800;color:${copyLabel === 'COPY' ? '#111827' : '#174a9c'};">Receipt</div>
             <div style="font-size:13px;font-weight:800;">Receipt No: <span style="color:#dc2626;">${safe(receiptNo)}</span> &nbsp; Ref No: <span style="color:#dc2626;">${safe(refNo)}</span></div>
           </div>
           <div style="font-size:12.5px;font-weight:700;line-height:2.05;margin-top:2mm;">
@@ -804,7 +804,7 @@ export default function FinancialsPage() {
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 30mm;gap:12mm;align-items:end;margin-top:5mm;">
             <div><div style="border-top:1px solid #111827;padding-top:2px;font-size:11px;">Saxiixa Lacag Qabtaha</div></div>
-            <div><div style="padding-top:2px;font-size:11px;">Shaabadda</div></div>
+            <div></div>
             <img src="${qrCode}" alt="Receipt QR" style="width:28mm;height:28mm;display:block;" />
           </div>
         </section>`;
