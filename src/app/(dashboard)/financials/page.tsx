@@ -848,9 +848,10 @@ export default function FinancialsPage() {
       const documentCopy = (copyLabel: string) => paid ? receiptCopy(copyLabel) : invoiceCopy(copyLabel);
 
       const printContainer = document.createElement('div');
-      // Keep the export node inside the rendered viewport. html2canvas can return a
-      // blank canvas when the source is positioned thousands of pixels off-screen.
-      printContainer.style.cssText = 'width:210mm;min-height:297mm;background:#fff;padding:14mm 16mm 10mm;box-sizing:border-box;position:fixed;left:0;top:0;z-index:-2147483647;pointer-events:none;overflow:hidden;';
+      // The node must be painted by Chrome while html2canvas captures it. Moving it
+      // off-screen, hiding it, or putting it behind the page can produce a white PDF.
+      printContainer.style.cssText = 'width:210mm;min-height:297mm;background:#fff;padding:14mm 16mm 10mm;box-sizing:border-box;position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none;overflow:hidden;color-scheme:light;';
+      printContainer.setAttribute('aria-hidden', 'true');
       printContainer.innerHTML = `
         ${documentCopy('ORIGINAL')}
         <div style="height:9mm;border-top:2px dashed #111827;box-sizing:border-box;"></div>
