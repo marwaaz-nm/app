@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import QRCode from 'qrcode';
 import { supabase } from '@/lib/supabase';
 import { Reference, Receipt, Expense } from '@/types';
 import { useAuth } from '@/context/AuthContext';
@@ -24,13 +25,14 @@ import {
   AlertCircle,
   Calendar,
   Pencil,
-  Trash2
+  Trash2,
+  Download
 } from 'lucide-react';
 
 export default function FinancialsPage() {
   const { profile } = useAuth();
   const { showAlert, showConfirm } = useModal();
-  const { refetch: refetchSettings } = useSettings();
+  const { settings, refetch: refetchSettings } = useSettings();
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
 
   useEffect(() => {
@@ -88,6 +90,7 @@ export default function FinancialsPage() {
   const [editReceiptDetails, setEditReceiptDetails] = useState('');
   const [savingReceiptEdit, setSavingReceiptEdit] = useState(false);
   const [deletingReceipt, setDeletingReceipt] = useState(false);
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
 
   // Pay Debt Modal State (Partial or Full Payment)
   const [showPayDebtModal, setShowPayDebtModal] = useState(false);
@@ -126,6 +129,12 @@ export default function FinancialsPage() {
           ref_number,
           subject,
           issue_date,
+          surveys (
+            owner_name,
+            neighborhood,
+            land_type,
+            sketch_area
+          ),
           receipts (
             id,
             reference_id,
@@ -646,12 +655,20 @@ export default function FinancialsPage() {
 
   // Render receipt details popup
   const openReceiptDetails = (receipt: any, ref: any) => {
-    const refNum = typeof ref === 'string' ? ref : ref?.ref_number;
-    const refId = typeof ref === 'object' ? ref?.id : receipt?.reference_id;
+    const parentRef = typeof ref === 'object'
+      ? ref
+      : referencesWithReceipts.find((item) => item.ref_number === ref);
+    const refNum = parentRef?.ref_number || (typeof ref === 'string' ? ref : undefined);
+    const refId = parentRef?.id || receipt?.reference_id;
     setSelectedReceipt({
       ...receipt,
       reference_id: refId || receipt?.reference_id,
-      ref_number: refNum
+      ref_number: refNum,
+      ref_subject: parentRef?.subject,
+      owner_name: parentRef?.surveys?.owner_name,
+      neighborhood: parentRef?.surveys?.neighborhood,
+      land_type: parentRef?.surveys?.land_type,
+      sketch_area: parentRef?.surveys?.sketch_area,
     });
     setReceiptEditMode(false);
   };
@@ -718,6 +735,103 @@ export default function FinancialsPage() {
       showAlert('Cillad', err instanceof Error ? err.message : 'Tirtiridda wuu fashilmay.', 'error');
     } finally {
       setDeletingReceipt(false);
+    }
+  };
+
+  const handleDownloadReceiptPdf = async () => {
+    if (!selectedReceipt || downloadingReceipt) return;
+    setDownloadingReceipt(true);
+
+    try {
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = html2pdfModule.default || html2pdfModule;
+      const amount = Number(selectedReceipt.amount || 0);
+      const amountText = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const receiptNo = String(selectedReceipt.receipt_no || '-');
+      const refNo = String(selectedReceipt.ref_number || '-');
+      const paymentDate = selectedReceipt.payment_date
+        ? new Date(selectedReceipt.payment_date).toLocaleDateString('en-GB')
+        : '-';
+      const paymentMode = String(selectedReceipt.payment_mode || 'Cash');
+      const paid = selectedReceipt.status !== 'Credit';
+      const safe = (value: unknown) => String(value ?? '-')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+      const qrCode = await QRCode.toDataURL([
+        `Marwaazpn Receipt: ${receiptNo}`,
+        `Reference: ${refNo}`,
+        `Amount: $${amountText}`,
+        `Status: ${paid ? 'Paid' : 'Credit'}`,
+        `Date: ${paymentDate}`,
+      ].join('\n'), { width: 220, margin: 1, errorCorrectionLevel: 'M' });
+
+      const purpose = safe(selectedReceipt.details || selectedReceipt.ref_subject || 'Bixinta adeegga');
+      const payer = safe(selectedReceipt.owner_name || selectedReceipt.ref_subject || 'Macmiilka');
+      const location = safe(selectedReceipt.neighborhood || '-');
+      const landType = safe(selectedReceipt.land_type || '-');
+      const area = safe(selectedReceipt.sketch_area || '-');
+      // Same-origin transparent PNG avoids cross-origin canvas failures during export.
+      const logo = '/icon.png';
+      const orgSo = safe(settings.org_name_so || 'Nootaayo Marwaaz');
+      const orgEn = safe(settings.org_name_en || 'Marwaaz Public Notary');
+      const checked = '<span style="font-family:Arial,sans-serif;font-weight:900;">&#9745;</span>';
+      const unchecked = '<span style="font-family:Arial,sans-serif;">&#9744;</span>';
+
+      const receiptCopy = (copyLabel: string) => `
+        <section style="height:126mm;box-sizing:border-box;position:relative;font-family:Georgia,'Times New Roman',serif;color:#111827;">
+          <div style="display:grid;grid-template-columns:27mm 1fr 27mm;align-items:center;gap:5mm;">
+            <img src="${logo}" alt="Logo" style="width:25mm;height:25mm;object-fit:contain;" />
+            <div style="text-align:center;">
+              <div style="font-size:16px;font-weight:800;line-height:1.2;">${orgSo}</div>
+              <div style="font-size:12px;margin-top:2px;">${orgEn}</div>
+            </div>
+            <div style="text-align:right;"><span style="display:inline-block;border:1px solid #cbd5e1;border-radius:5px;padding:4px 9px;font:700 9px Arial,sans-serif;color:#64748b;">${copyLabel}</span></div>
+          </div>
+          <div style="border-top:1px solid #111827;margin:4mm 0 4mm;"></div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8mm;">
+            <div style="font-size:22px;font-weight:800;color:#174a9c;">Receipt</div>
+            <div style="font-size:13px;font-weight:800;">Receipt No: <span style="color:#dc2626;">${safe(receiptNo)}</span> &nbsp; Ref No: <span style="color:#dc2626;">${safe(refNo)}</span></div>
+          </div>
+          <div style="font-size:12.5px;font-weight:700;line-height:2.05;margin-top:2mm;">
+            <div style="display:flex;justify-content:space-between;gap:8mm;"><span>Taariikh: <u>${safe(paymentDate)}</u></span><span>Laga qabtay Md./Marwo: <u>${payer}</u></span></div>
+            <div>Ujeedka: ${paid ? checked : unchecked} Bixin &nbsp;&nbsp; ${!paid ? checked : unchecked} Deyn &nbsp;&nbsp; Faahfaahin: <u>${purpose}</u></div>
+            <div style="display:flex;flex-wrap:wrap;gap:2mm 9mm;"><span>Reference: <u>${safe(refNo)}</u></span><span>Goobta: <u>${location}</u></span><span>Bedka: <u>${area}</u></span><span>Isticmaalka: <u>${landType}</u></span></div>
+            <div style="display:flex;justify-content:space-between;gap:8mm;"><span>Lacagta la bixiyey: <u>$ ${amountText}</u></span><span>Xaaladda: <u>${paid ? 'Paid / La bixiyey' : 'Credit / Deyn'}</u></span></div>
+            <div>Habka lacag bixinta: ${paymentMode === 'Cash' ? checked : unchecked} Cash &nbsp;&nbsp; ${paymentMode !== 'Cash' ? checked : unchecked} Mobile &nbsp;&nbsp; Habka: <u>${safe(paymentMode)}</u></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 30mm;gap:12mm;align-items:end;margin-top:5mm;">
+            <div><div style="border-top:1px solid #111827;padding-top:2px;font-size:11px;">Saxiixa Lacag Qabtaha</div></div>
+            <div><div style="border-top:1px solid #111827;padding-top:2px;font-size:11px;">Shaabadda</div></div>
+            <img src="${qrCode}" alt="Receipt QR" style="width:28mm;height:28mm;display:block;" />
+          </div>
+        </section>`;
+
+      const printContainer = document.createElement('div');
+      printContainer.style.cssText = 'width:210mm;min-height:297mm;background:#fff;padding:14mm 16mm 10mm;box-sizing:border-box;position:fixed;left:-10000px;top:0;';
+      printContainer.innerHTML = `
+        ${receiptCopy('ORIGINAL')}
+        <div style="height:9mm;border-top:2px dashed #111827;box-sizing:border-box;"></div>
+        ${receiptCopy('COPY')}
+      `;
+      document.body.appendChild(printContainer);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      await html2pdf().set({
+        margin: 0,
+        filename: `Receipt_${receiptNo.replace(/[^a-zA-Z0-9_-]+/g, '_')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      }).from(printContainer).save();
+      printContainer.remove();
+    } catch (error) {
+      console.error('Receipt PDF download failed:', error);
+      showAlert('Cillad', 'Receipt PDF-ga lama soo dejin karin. Fadlan mar kale isku day.', 'error');
+    } finally {
+      setDownloadingReceipt(false);
     }
   };
 
@@ -1730,6 +1844,14 @@ export default function FinancialsPage() {
                 {/* Footer Actions */}
                 <div className="p-4 sm:px-6 sm:py-4.5 border-t border-slate-150 bg-slate-50/80 flex flex-col gap-2.5">
                   <div className="flex flex-col sm:flex-row gap-2.5">
+                    <button
+                      onClick={handleDownloadReceiptPdf}
+                      disabled={downloadingReceipt}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-sm transition-all active:scale-95"
+                    >
+                      {downloadingReceipt ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                      <span>{downloadingReceipt ? 'SAMEYNAYA PDF...' : 'DOWNLOAD PDF'}</span>
+                    </button>
                     <button
                       onClick={() => window.print()}
                       className="flex items-center justify-center gap-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-2xs border border-slate-200 transition-all active:scale-95"
