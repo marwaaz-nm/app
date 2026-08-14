@@ -567,8 +567,6 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       document.head.appendChild(styleEl);
       showAlert('Sug fadlan...', 'PDF-ka ayaa la diyaarinayaa, fadlan sug...', 'info');
 
-      const html2pdfModule = await import('html2pdf.js');
-      const html2pdf = html2pdfModule.default || html2pdfModule;
       const html2canvas = (await import('html2canvas')).default;
 
       // Helper to temporarily prepare Leaflet map elements for html2canvas
@@ -825,22 +823,6 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         }
       }
 
-      const options = {
-        margin: [0, 0, 0, 0] as [number, number, number, number],
-        filename: `Survey_Report_SN_${record.serial_no}_${record.owner_name.replace(/\s+/g, '_')}.pdf`,
-        image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          letterRendering: true,
-          backgroundColor: '#ffffff',
-          logging: false
-        },
-        pagebreak: { mode: ['css', 'legacy'], after: '.html2pdf__page-break' },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
-      };
-
       const gpsParts = record.gps_location ? record.gps_location.split(',') : [];
       const latVal = gpsParts[0] ? gpsParts[0].trim() : 'N/A';
       const lngVal = gpsParts[1] ? gpsParts[1].trim() : 'N/A';
@@ -1056,7 +1038,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       ].map(([side, length, neighbour]) => `<tr><td style="font-weight:700;">${side}</td><td>${length}m</td><td>${neighbour}</td></tr>`).join('');
 
       printContainer.innerHTML = `
-        <div style="width:750px;height:1060px;padding:24px 34px 16px;box-sizing:border-box;display:flex;flex-direction:column;font:14px/1.2 Arial,sans-serif;background:#fff;color:#000;position:relative;overflow:hidden;">
+        <div class="survey-pdf-page" style="width:750px;height:1060px;padding:24px 34px 16px;box-sizing:border-box;display:flex;flex-direction:column;font:14px/1.2 Arial,sans-serif;background:#fff;color:#000;position:relative;overflow:hidden;">
           <div style="position:absolute;left:205px;top:350px;width:330px;height:330px;opacity:.06;"><img src="/icon.png" style="width:100%;height:100%;object-fit:contain;" /></div>
           <div style="position:relative;z-index:1;">${classicHeader}
             <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;padding:0 12px 6px;"><span>Sumad No: ${record.survey_no || record.serial_no}</span><span>Taariikh: ${issueDate}</span></div>
@@ -1080,7 +1062,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           <div style="margin-top:auto;position:relative;z-index:1;">${contactLine}</div>
         </div>
         <div class="html2pdf__page-break" style="page-break-after:always;height:0;"></div>
-        <div style="width:750px;height:1060px;padding:26px 46px 16px;box-sizing:border-box;display:flex;flex-direction:column;font:14px/1.2 Arial,sans-serif;background:#fff;color:#000;overflow:hidden;">
+        <div class="survey-pdf-page" style="width:750px;height:1060px;padding:26px 46px 16px;box-sizing:border-box;display:flex;flex-direction:column;font:14px/1.2 Arial,sans-serif;background:#fff;color:#000;overflow:hidden;">
           <div style="min-height:52px;border:1.5px solid #111;display:flex;align-items:center;justify-content:center;text-align:center;font-size:16px;font-weight:800;margin-bottom:9px;padding:0 10px;box-sizing:border-box;">GPS Ir Latitude&nbsp; <span style="color:#0000ee;">(${latVal}, ${lngVal})</span>&nbsp; Longitude</div>
           <div style="height:780px;border:2px solid #1683df;background:#e2e8f0;overflow:hidden;">
             ${satImage ? `<img src="${satImage}" style="width:100%;height:100%;display:block;" />` : ''}
@@ -1108,7 +1090,23 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
       await new Promise((resolve) => setTimeout(resolve, 300));
 
-      await html2pdf().set(options).from(printContainer).save();
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      const pages = Array.from(printContainer.querySelectorAll('.survey-pdf-page')) as HTMLElement[];
+      for (let index = 0; index < pages.length; index += 1) {
+        const pageCanvas = await html2canvas(pages[index], {
+          width: 750,
+          height: 1060,
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+        });
+        if (index > 0) pdf.addPage('a4', 'portrait');
+        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.98), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+      }
+      pdf.save(`Survey_Report_SN_${record.serial_no}_${record.owner_name.replace(/\s+/g, '_')}.pdf`);
       showAlert('Guul', 'PDF-ka waa la soo dejiyay.', 'success');
 
     } catch (err) {
