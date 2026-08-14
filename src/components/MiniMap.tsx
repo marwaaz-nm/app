@@ -5,7 +5,6 @@ import { Compass, Fullscreen, Navigation, Loader2, MapPin, MousePointer2, Pencil
 import L from 'leaflet';
 import { useModal } from '@/context/ModalContext';
 import {
-  buildDirectionLabel,
   parseDirectionPositions,
   serializeDirectionPositions,
   DIRECTION_LABELS,
@@ -113,7 +112,6 @@ export default function MiniMap({
   polygonValue,
   onPolygonChange,
   onSketchDetailsChange,
-  boundaryInfo,
   labelPositionsValue,
   onLabelPositionsChange,
 }: MiniMapProps) {
@@ -132,14 +130,6 @@ export default function MiniMap({
   // layer is currently live — direction labels live on the sketch now, not the satellite
   // map, so a manual placement always has a clean technical-drawing background to sit on.
   const sketchDirectionLayerRef = useRef<L.LayerGroup | null>(null);
-  // The map-init effect below only runs once (guarded by mapRef.current), so its event
-  // handlers close over whatever `boundaryInfo` was at that first render. Reading through
-  // a ref instead means a later edit to the Waqooyi/Bari/Koonfur/Galbeed text fields is
-  // picked up next time a direction label is placed/moved, without needing to re-init
-  // the whole map.
-  const boundaryInfoRef = useRef<BoundaryInfo | undefined>(boundaryInfo);
-  useEffect(() => { boundaryInfoRef.current = boundaryInfo; }, [boundaryInfo]);
-
   // Manually-placed direction labels: which direction (if any) is "armed" for the next
   // map click to place, the markers currently on the map per direction, and the
   // positions themselves (kept in a ref too so the stable map-click handler always sees
@@ -539,52 +529,37 @@ export default function MiniMap({
     let angle = Math.atan2(end.lat - start.lat, end.lng - start.lng) * 180 / Math.PI;
     if (angle > 90 || angle < -90) { angle += 180; }
 
-    const dLat = end.lat - start.lat;
-    const dLng = end.lng - start.lng;
+    // Work in screen pixels so every measurement stays visibly outside the parcel,
+    // regardless of the current zoom level or the real-world length of the edge.
+    const startPoint = map.latLngToLayerPoint(start);
+    const endPoint = map.latLngToLayerPoint(end);
+    const dx = endPoint.x - startPoint.x;
+    const dy = endPoint.y - startPoint.y;
+    const segmentLength = Math.hypot(dx, dy) || 1;
+    const offsetPx = 30;
+    let normalX = (-dy / segmentLength) * offsetPx;
+    let normalY = (dx / segmentLength) * offsetPx;
 
-    // Calculate winding order (Shoelace formula)
-    let sum = 0;
-    for (let i = 0; i < allCoords.length; i++) {
-      const p1 = allCoords[i];
-      const p2 = allCoords[(i + 1) % allCoords.length];
-      sum += (p2.lng - p1.lng) * (p2.lat + p1.lat);
-    }
-    const isCCW = sum < 0;
-
-    // Perpendicular vector pointing outward
-    let pLat = isCCW ? -dLng : dLng;
-    let pLng = isCCW ? dLat : -dLat;
-
-    // Normalize perpendicular vector
-    const pLen = Math.sqrt(pLat * pLat + pLng * pLng);
-    if (pLen > 0) {
-      pLat /= pLen;
-      pLng /= pLen;
+    const testPoint = L.point((startPoint.x + endPoint.x) / 2 + normalX, (startPoint.y + endPoint.y) / 2 + normalY);
+    if (isPointInPolygon(map.layerPointToLatLng(testPoint), allCoords)) {
+      normalX *= -1;
+      normalY *= -1;
     }
 
-    const offset = 0.000025;
-    let ox = pLng * offset;
-    let oy = pLat * offset;
-
-    // Check if the offset midpoint is inside the polygon; if so, flip it to the outside
-    const testMid = L.latLng(mid.lat + oy, mid.lng + ox);
-    if (isPointInPolygon(testMid, allCoords)) {
-      ox = -ox;
-      oy = -oy;
-    }
-
-    const p1 = L.latLng(start.lat + oy, start.lng + ox);
-    const p2 = L.latLng(end.lat + oy, end.lng + ox);
+    const p1 = map.layerPointToLatLng(L.point(startPoint.x + normalX, startPoint.y + normalY));
+    const p2 = map.layerPointToLatLng(L.point(endPoint.x + normalX, endPoint.y + normalY));
     const labelPos = L.latLng((p1.lat + p2.lat) / 2, (p1.lng + p2.lng) / 2);
 
     L.polyline([p1, p2], { color: '#2563eb', weight: 1.5, opacity: 0.72 }).addTo(map);
+    L.polyline([start, p1], { color: '#60a5fa', weight: 1, opacity: 0.55 }).addTo(map);
+    L.polyline([end, p2], { color: '#60a5fa', weight: 1, opacity: 0.55 }).addTo(map);
 
     const marker = L.marker(labelPos, {
       icon: L.divIcon({
         className: 'sketch-dist-label',
         html: `
           <div contenteditable="true" spellcheck="false" class="editable-field sketch-dimension-input" 
-               style="transform: rotate(${-angle}deg); min-width: 40px;">
+               style="transform: translate(-50%, -50%) rotate(${-angle}deg); min-width: 40px;">
                ${dist}m
           </div>`,
         iconSize: [0, 0],
@@ -621,9 +596,9 @@ export default function MiniMap({
     latlng: L.LatLng,
     rotation = 0,
   ) => {
-    // The sketch already has its own per-edge length numbers, so the direction label
-    // itself only needs the direction (and neighbor, if typed in) — not a duplicate "Xm".
-    const label = buildDirectionLabel(direction, boundaryInfoRef.current?.[direction], { includeMeasurement: false });
+    // Keep the technical drawing uncluttered: neighbour names remain in the form and
+    // report table, while the sketch marker shows only its cardinal letter.
+    const label = direction;
     const icon = L.divIcon({
       className: 'boundary-direction-marker',
       html: `
@@ -1035,7 +1010,7 @@ export default function MiniMap({
               <div className="absolute bottom-4 left-4 z-10 flex flex-col gap-2">
                 {placingDirection && (
                   <span className="w-fit rounded-xl border border-blue-200 bg-blue-600/95 px-3 py-1.5 text-[10px] font-extrabold text-white shadow-md backdrop-blur-md">
-                    Riix meesha sketch-ka si aad ugu dhigto &quot;{DIRECTION_LABELS[placingDirection]}&quot;
+                    Riix meesha sketch-ka si aad ugu dhigto &quot;{placingDirection}&quot;
                   </span>
                 )}
                 <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-md backdrop-blur-md">
@@ -1050,7 +1025,7 @@ export default function MiniMap({
                           : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      {DIRECTION_LABELS[dir]}
+                      {dir}
                     </button>
                   ))}
                 </div>
