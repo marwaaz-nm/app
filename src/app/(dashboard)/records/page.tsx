@@ -83,7 +83,7 @@ export default function RecordsPage() {
   };
 
   useEffect(() => {
-    fetchRecords();
+    void fetchRecords();
   }, []);
   useDataAutoRefresh(fetchRecords);
 
