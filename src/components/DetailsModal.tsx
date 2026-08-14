@@ -249,7 +249,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
     L.marker(position, {
       icon: L.divIcon({
         className: 'boundary-direction-label',
-        html: `<div class="boundary-direction-wrap" style="transform: translate(-50%, -50%) rotate(${rotation}deg);"><div class="boundary-direction-rotate-handle">&#8635;</div><div class="boundary-direction-box">${label}</div></div>`,
+        html: `<div class="boundary-direction-wrap" style="transform: translate(-50%, -50%) rotate(${rotation}deg);"><div class="boundary-direction-box">${label}</div></div>`,
         iconSize: [0, 0],
         iconAnchor: [0, 0],
       }),
