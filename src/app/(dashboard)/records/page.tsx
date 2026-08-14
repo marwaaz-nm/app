@@ -11,6 +11,7 @@ import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
 import { useProfileNames, resolveCreatorName } from '@/lib/useProfileNames';
 import { displayStatus } from '@/lib/surveyCompleteness';
+import { useDataAutoRefresh } from '@/lib/useDataAutoRefresh';
 import {
   Plus,
   Search,
@@ -84,6 +85,7 @@ export default function RecordsPage() {
   useEffect(() => {
     fetchRecords();
   }, []);
+  useDataAutoRefresh(fetchRecords);
 
   // Which surveys already have at least one reference issued against them — drives the
   // "Used / Not Used" badge so staff can spot land that's never had a reference at a glance.

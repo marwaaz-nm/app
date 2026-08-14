@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useDataAutoRefresh } from '@/lib/useDataAutoRefresh';
 import { Profile } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
@@ -130,6 +131,7 @@ export default function UsersPage() {
   useEffect(() => {
     fetchUsers();
   }, []);
+  useDataAutoRefresh(fetchUsers);
 
   const handleOpenAddModal = () => {
     setEditingUser(null);

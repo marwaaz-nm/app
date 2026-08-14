@@ -10,6 +10,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
+import { useDataAutoRefresh } from '@/lib/useDataAutoRefresh';
 import {
   TrendingUp,
   TrendingDown,
@@ -186,6 +187,7 @@ export default function FinancialsPage() {
   useEffect(() => {
     fetchData();
   }, []);
+  useDataAutoRefresh(fetchData);
 
   const filteredReferencesWithReceipts = useMemo(() => {
     let result = [...referencesWithReceipts];

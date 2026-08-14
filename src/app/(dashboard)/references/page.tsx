@@ -13,6 +13,7 @@ import { formatReferenceNumber } from '@/lib/numbering';
 import { generateVerificationToken } from '@/lib/verificationToken';
 import DetailsModal from '@/components/DetailsModal';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
+import { useDataAutoRefresh } from '@/lib/useDataAutoRefresh';
 import { useProfileNames, resolveCreatorName } from '@/lib/useProfileNames';
 import {
   Plus,
@@ -195,6 +196,7 @@ export default function ReferencesPage() {
     fetchReferences();
     fetchSurveys();
   }, []);
+  useDataAutoRefresh(fetchReferences);
 
   // Filter application
   useEffect(() => {

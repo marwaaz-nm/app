@@ -8,6 +8,7 @@ import { useModal } from '@/context/ModalContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
+import { useDataAutoRefresh } from '@/lib/useDataAutoRefresh';
 import { useProfileNames, resolveCreatorName } from '@/lib/useProfileNames';
 import {
   Plus,
@@ -102,6 +103,7 @@ export default function TransfersPage() {
     fetchTransfers();
     fetchSurveys();
   }, []);
+  useDataAutoRefresh(fetchTransfers);
 
   // Filter application
   useEffect(() => {

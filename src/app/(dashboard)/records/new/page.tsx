@@ -7,6 +7,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { ArrowLeft, Check, AlertCircle, Loader2, X } from 'lucide-react';
 import Link from 'next/link';
 import SurveyFormFields, { type SurveyDraft } from '@/components/SurveyFormFields';
+import { notifyDataChanged } from '@/lib/useDataAutoRefresh';
 
 export default function NewRecordPage() {
   const router = useRouter();
@@ -71,8 +72,8 @@ export default function NewRecordPage() {
         window.dispatchEvent(new CustomEvent('marwaazpn-offline-queued'));
       }
 
-      router.push('/records');
-      router.refresh();
+      notifyDataChanged();
+      router.replace(`/records?updated=${Date.now()}`);
     } catch (err: unknown) {
       console.error('Error saving survey record:', err);
       setError(err instanceof Error ? err.message : 'Cillad ayaa dhacday xilliga kaydinta sahnaka.');
