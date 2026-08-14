@@ -788,7 +788,7 @@ export default function FinancialsPage() {
               <div style="font-size:16px;font-weight:800;line-height:1.2;">${orgSo}</div>
               <div style="font-size:12px;margin-top:2px;">${orgEn}</div>
             </div>
-            <div></div>
+            <div style="text-align:right;">${copyLabel === 'COPY' ? '<span style="font:800 10px Arial,sans-serif;color:#111827;letter-spacing:1px;">COPY</span>' : ''}</div>
           </div>
           <div style="border-top:1px solid #111827;margin:4mm 0 4mm;"></div>
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8mm;">
