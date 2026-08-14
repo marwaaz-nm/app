@@ -30,6 +30,22 @@ import {
   Download
 } from 'lucide-react';
 
+const RECEIPT_DETAILS_PREFIX = '__MARWAAZPN_RECEIPT__';
+
+const parseReceiptDetails = (value: unknown) => {
+  const raw = String(value || '');
+  if (!raw.startsWith(RECEIPT_DETAILS_PREFIX)) return { payerName: '', details: raw };
+  try {
+    const parsed = JSON.parse(raw.slice(RECEIPT_DETAILS_PREFIX.length));
+    return { payerName: String(parsed.payerName || ''), details: String(parsed.details || '') };
+  } catch {
+    return { payerName: '', details: raw };
+  }
+};
+
+const serializeReceiptDetails = (payerName: string, details: string) =>
+  `${RECEIPT_DETAILS_PREFIX}${JSON.stringify({ payerName: payerName.trim(), details: details.trim() })}`;
+
 export default function FinancialsPage() {
   const { profile } = useAuth();
   const { showAlert, showConfirm } = useModal();
@@ -72,6 +88,7 @@ export default function FinancialsPage() {
   const [showPayModal, setShowPayModal] = useState(false);
   const [payRefNumber, setPayRefNumber] = useState('');
   const [payReceiptNo, setPayReceiptNo] = useState('');
+  const [payPayerName, setPayPayerName] = useState('');
   const [payDetails, setPayDetails] = useState('');
   const [payDate, setPayDate] = useState('');
   const [payStatus, setPayStatus] = useState<'Paid' | 'Credit'>('Paid');
@@ -277,8 +294,11 @@ export default function FinancialsPage() {
 
   // Pay Dialog triggers
   const openPayDialog = (refId: number, refNum: string, subject: string) => {
+    const selectedReference = referencesWithReceipts.find((item) => item.id === refId);
+    const survey = Array.isArray(selectedReference?.surveys) ? selectedReference.surveys[0] : selectedReference?.surveys;
     setSelectedRefIds([refId]);
     setPayRefNumber(refNum);
+    setPayPayerName(survey?.owner_name || '');
     setPayDetails(subject);
 
     // Receipt No is only assigned once the receipt is actually saved (see
@@ -312,6 +332,10 @@ export default function FinancialsPage() {
     const subjectsString = `Wadajir u bixiyey: ${selectedRefs.map(r => r.ref_number).join(', ')}`;
     
     setPayRefNumber(refNumsString);
+    const payerNames = selectedRefs
+      .map((item) => Array.isArray(item.surveys) ? item.surveys[0]?.owner_name : item.surveys?.owner_name)
+      .filter(Boolean);
+    setPayPayerName(new Set(payerNames).size === 1 ? payerNames[0] : '');
     setPayDetails(subjectsString);
 
     setPayReceiptNo('');
@@ -334,6 +358,7 @@ export default function FinancialsPage() {
     setShowPayModal(false);
     setPayRefNumber('');
     setPayReceiptNo('');
+    setPayPayerName('');
     setPayDetails('');
     setBulkAmounts({});
     setSelectedRefIds([]);
@@ -360,7 +385,7 @@ export default function FinancialsPage() {
         return {
           receipt_no: recNo,
           reference_id: refId,
-          details: payDetails,
+          details: serializeReceiptDetails(payPayerName, payDetails),
           amount: amountVal,
           status: payStatus,
           payment_mode: payMode,
@@ -682,12 +707,13 @@ export default function FinancialsPage() {
 
   const openReceiptEditMode = () => {
     if (!selectedReceipt) return;
+    const storedDetails = parseReceiptDetails(selectedReceipt.details);
     setEditReceiptNo(selectedReceipt.receipt_no || '');
     setEditReceiptAmount(String(selectedReceipt.amount ?? ''));
     setEditReceiptStatus(selectedReceipt.status === 'Credit' ? 'Credit' : 'Paid');
     setEditReceiptMode(selectedReceipt.payment_mode || 'Cash');
     setEditReceiptDate(selectedReceipt.payment_date ? String(selectedReceipt.payment_date).slice(0, 10) : '');
-    setEditReceiptDetails(selectedReceipt.details || '');
+    setEditReceiptDetails(storedDetails.details);
     setReceiptEditMode(true);
   };
 
@@ -696,13 +722,14 @@ export default function FinancialsPage() {
     if (!selectedReceipt) return;
     setSavingReceiptEdit(true);
     try {
+      const storedDetails = parseReceiptDetails(selectedReceipt.details);
       const payload = {
         receipt_no: editReceiptNo,
         amount: parseFloat(editReceiptAmount) || 0,
         status: editReceiptStatus,
         payment_mode: editReceiptMode,
         payment_date: editReceiptDate,
-        details: editReceiptDetails || null,
+        details: serializeReceiptDetails(storedDetails.payerName || selectedReceipt.owner_name || '', editReceiptDetails),
       };
       const { error } = await supabase.from('receipts').update(payload).eq('id', selectedReceipt.id);
       if (error) throw error;
@@ -779,8 +806,9 @@ export default function FinancialsPage() {
         `Date: ${paymentDate}`,
       ].join('\n'), { width: 220, margin: 1, errorCorrectionLevel: 'M' });
 
-      const purpose = safe(selectedReceipt.details || selectedReceipt.ref_subject || 'Bixinta adeegga');
-      const payer = safe(selectedReceipt.owner_name || selectedReceipt.ref_subject || 'Macmiilka');
+      const storedReceiptDetails = parseReceiptDetails(selectedReceipt.details);
+      const purpose = safe(storedReceiptDetails.details || selectedReceipt.ref_subject || 'Bixinta adeegga');
+      const payer = safe(storedReceiptDetails.payerName || selectedReceipt.owner_name || 'Macmiilka');
       const location = safe(selectedReceipt.neighborhood || '-');
       const landType = safe(selectedReceipt.land_type || '-');
       const area = safe(selectedReceipt.sketch_area || '-');
@@ -795,9 +823,9 @@ export default function FinancialsPage() {
         const { jsPDF } = await import('jspdf');
         const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
         const raw = (value: unknown, fallback = '-') => String(value || fallback);
-        const rawPayer = raw(selectedReceipt.owner_name, 'Macmiilka');
+        const rawPayer = raw(storedReceiptDetails.payerName || selectedReceipt.owner_name, 'Macmiilka');
         const rawPlotNo = raw(selectedReceipt.survey_no || selectedReceipt.survey_serial_no);
-        const receiptDetails = raw(selectedReceipt.details, '');
+        const receiptDetails = raw(storedReceiptDetails.details, '');
         const autoGeneratedDetails = /^Bixinta\s+(deynta|lacagta)\s*:/i.test(receiptDetails);
         const rawPurpose = raw(autoGeneratedDetails ? selectedReceipt.ref_subject : (receiptDetails || selectedReceipt.ref_subject), 'Adeegga Nootaayada');
         const rawLocation = raw(selectedReceipt.neighborhood);
@@ -938,9 +966,9 @@ export default function FinancialsPage() {
         const { jsPDF } = await import('jspdf');
         const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
         const raw = (value: unknown, fallback = '-') => String(value || fallback);
-        const invoicePayer = raw(selectedReceipt.owner_name, 'Macmiilka');
+        const invoicePayer = raw(storedReceiptDetails.payerName || selectedReceipt.owner_name, 'Macmiilka');
         const invoicePlotNo = raw(selectedReceipt.survey_no || selectedReceipt.survey_serial_no);
-        const invoicePurpose = raw(selectedReceipt.ref_subject || selectedReceipt.details, 'Adeegga Nootaayada');
+        const invoicePurpose = raw(selectedReceipt.ref_subject || storedReceiptDetails.details, 'Adeegga Nootaayada');
         const invoiceLocation = raw(selectedReceipt.neighborhood);
         const invoiceArea = raw(selectedReceipt.sketch_area);
         const invoiceLandType = raw(selectedReceipt.land_type);
@@ -1845,6 +1873,18 @@ export default function FinancialsPage() {
               </div>
 
               <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Magaca Bixiyaha (Payer Name)</label>
+                <input
+                  type="text"
+                  required
+                  value={payPayerName}
+                  onChange={(e) => setPayPayerName(e.target.value)}
+                  placeholder="Geli magaca qofka lacagta bixiyey"
+                  className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3.5 text-sm text-slate-900 font-bold focus:outline-none"
+                />
+              </div>
+
+              <div>
                 <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Faahfaahin (Details)</label>
                 <input
                   type="text"
@@ -2167,7 +2207,7 @@ export default function FinancialsPage() {
                           Faahfaahinta (Details)
                         </span>
                         <div className="font-bold text-slate-700 bg-white border border-slate-200 p-3.5 rounded-2xl text-xs leading-relaxed text-left shadow-2xs">
-                          {selectedReceipt.details || 'Bixinta lacagta'}
+                          {parseReceiptDetails(selectedReceipt.details).details || 'Bixinta lacagta'}
                         </div>
                       </div>
                     </div>
