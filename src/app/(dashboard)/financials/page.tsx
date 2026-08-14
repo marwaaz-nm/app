@@ -754,6 +754,7 @@ export default function FinancialsPage() {
         : '-';
       const paymentMode = String(selectedReceipt.payment_mode || 'Cash');
       const paid = selectedReceipt.status !== 'Credit';
+      const documentTitle = paid ? 'Receipt' : 'Invoice';
       const safe = (value: unknown) => String(value ?? '-')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -761,7 +762,7 @@ export default function FinancialsPage() {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
       const qrCode = await QRCode.toDataURL([
-        `Marwaazpn Receipt: ${receiptNo}`,
+        `Marwaazpn ${documentTitle}: ${receiptNo}`,
         `Reference: ${refNo}`,
         `Amount: $${amountText}`,
         `Status: ${paid ? 'Paid' : 'Credit'}`,
@@ -793,14 +794,14 @@ export default function FinancialsPage() {
           </div>
           <div style="border-top:1px solid #111827;margin:4mm 0 4mm;"></div>
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8mm;">
-            <div style="font-size:22px;font-weight:800;color:${copyLabel === 'COPY' ? '#111827' : '#174a9c'};">Receipt</div>
-            <div style="font-size:13px;font-weight:800;">Receipt No: <span style="color:${copyLabel === 'COPY' ? '#111827' : '#dc2626'};">${safe(receiptNo)}</span> &nbsp; Ref No: <span style="color:${copyLabel === 'COPY' ? '#111827' : '#dc2626'};">${safe(refNo)}</span></div>
+            <div style="font-size:22px;font-weight:800;color:${copyLabel === 'COPY' ? '#111827' : '#174a9c'};">${documentTitle}</div>
+            <div style="font-size:13px;font-weight:800;">${documentTitle} No: <span style="color:${copyLabel === 'COPY' ? '#111827' : '#dc2626'};">${safe(receiptNo)}</span> &nbsp; Ref No: <span style="color:${copyLabel === 'COPY' ? '#111827' : '#dc2626'};">${safe(refNo)}</span></div>
           </div>
           <div style="font-size:12.5px;font-weight:700;line-height:2.05;margin-top:2mm;">
             <div style="display:flex;justify-content:space-between;gap:8mm;"><span>Taariikh: <u>${safe(paymentDate)}</u></span><span>Laga qabtay Md./Marwo: <u>${payer}</u></span></div>
             <div>Ujeedka: ${paid ? checked : unchecked} Bixin &nbsp;&nbsp; ${!paid ? checked : unchecked} Deyn &nbsp;&nbsp; Faahfaahin: <u>${purpose}</u></div>
             <div style="display:flex;flex-wrap:wrap;gap:2mm 9mm;"><span>Reference: <u>${safe(refNo)}</u></span><span>Goobta: <u>${location}</u></span><span>Bedka: <u>${area}</u></span><span>Isticmaalka: <u>${landType}</u></span></div>
-            <div style="display:flex;justify-content:space-between;gap:8mm;"><span>Lacagta la bixiyey: <u>$ ${amountText}</u></span><span>Xaaladda: <u>${paid ? 'Paid / La bixiyey' : 'Credit / Deyn'}</u></span></div>
+            <div style="display:flex;justify-content:space-between;gap:8mm;"><span>${paid ? 'Lacagta la bixiyey' : 'Lacagta deynta'}: <u>$ ${amountText}</u></span><span>Xaaladda: <u>${paid ? 'Paid / La bixiyey' : 'Credit / Deyn'}</u></span></div>
             <div>Habka lacag bixinta: ${paymentMode === 'Cash' ? checked : unchecked} Cash &nbsp;&nbsp; ${paymentMode !== 'Cash' ? checked : unchecked} Mobile &nbsp;&nbsp; Habka: <u>${safe(paymentMode)}</u></div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 30mm;gap:12mm;align-items:end;margin-top:5mm;">
@@ -822,7 +823,7 @@ export default function FinancialsPage() {
 
       await html2pdf().set({
         margin: 0,
-        filename: `Receipt_${receiptNo.replace(/[^a-zA-Z0-9_-]+/g, '_')}.pdf`,
+        filename: `${documentTitle}_${receiptNo.replace(/[^a-zA-Z0-9_-]+/g, '_')}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
