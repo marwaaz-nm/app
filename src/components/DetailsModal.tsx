@@ -951,23 +951,25 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
               <span>Area: <strong style="color:#168b35;">${areaClean} m²</strong></span>
               <span>GPS: <strong style="color:#17324d;">${latVal}, ${lngVal}</strong></span>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:stretch;">
-              <div style="border:1px solid #b9cbd7;border-top:5px solid #2f86c7;border-radius:7px;padding:10px;background:#ffffff;box-sizing:border-box;height:650px;display:flex;flex-direction:column;">
-                <div style="border-bottom:1px solid #dbe6ed;padding-bottom:8px;margin-bottom:10px;min-height:40px;">
+            <div style="display:grid;grid-template-columns:1fr;gap:12px;align-items:stretch;">
+              <div style="border:1px solid #b9cbd7;border-left:5px solid #2f86c7;border-radius:7px;padding:10px;background:#ffffff;box-sizing:border-box;height:292px;display:grid;grid-template-columns:160px 1fr;gap:12px;align-items:stretch;">
+                <div style="border-right:1px solid #dbe6ed;padding:12px 12px 12px 2px;display:flex;flex-direction:column;justify-content:center;">
                   <h2 style="font-size:14px;font-weight:900;color:#17324d;margin:0;">SAWIRKA FARSAMADA</h2>
-                  <div style="font-size:8px;font-weight:800;color:#2f86c7;letter-spacing:0.8px;margin-top:2px;">TECHNICAL PARCEL SKETCH</div>
+                  <div style="font-size:8px;font-weight:800;color:#2f86c7;letter-spacing:0.8px;line-height:1.5;margin-top:5px;">TECHNICAL PARCEL SKETCH</div>
+                  <div style="font-size:8px;color:#64748b;line-height:1.5;margin-top:14px;">Cabbirrada iyo xuduudaha rasmiga ah ee dhulka.</div>
                 </div>
-                <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#ffffff;">
-                  ${sketchImage ? `<img src="${sketchImage}" style="width:100%;height:560px;object-fit:contain;display:block;background:#ffffff;" />` : `<div style="color:#64748b;font-size:11px;">Sketch image not available</div>`}
+                <div style="min-width:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#ffffff;">
+                  ${sketchImage ? `<img src="${sketchImage}" style="width:100%;height:268px;object-fit:contain;display:block;background:#ffffff;" />` : `<div style="color:#64748b;font-size:11px;">Sketch image not available</div>`}
                 </div>
               </div>
-              <div style="border:1px solid #b9cbd7;border-top:5px solid #168b35;border-radius:7px;padding:10px;background:#ffffff;box-sizing:border-box;height:650px;display:flex;flex-direction:column;">
-                <div style="border-bottom:1px solid #dbe6ed;padding-bottom:8px;margin-bottom:10px;min-height:40px;">
+              <div style="border:1px solid #b9cbd7;border-left:5px solid #168b35;border-radius:7px;padding:10px;background:#ffffff;box-sizing:border-box;height:292px;display:grid;grid-template-columns:160px 1fr;gap:12px;align-items:stretch;">
+                <div style="border-right:1px solid #dbe6ed;padding:12px 12px 12px 2px;display:flex;flex-direction:column;justify-content:center;">
                   <h2 style="font-size:14px;font-weight:900;color:#17324d;margin:0;">GOOBTA DAYAX-GACMEEDKA</h2>
-                  <div style="font-size:8px;font-weight:800;color:#168b35;letter-spacing:0.8px;margin-top:2px;">SATELLITE LOCATION MAP</div>
+                  <div style="font-size:8px;font-weight:800;color:#168b35;letter-spacing:0.8px;line-height:1.5;margin-top:5px;">SATELLITE LOCATION MAP</div>
+                  <div style="font-size:8px;color:#64748b;line-height:1.5;margin-top:14px;">Muuqaalka goobta iyo calaamadda xadka dhulka.</div>
                 </div>
-                <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#e2e8f0;">
-                  ${satImage ? `<img src="${satImage}" style="width:100%;height:560px;object-fit:cover;display:block;background:#e2e8f0;" />` : `<div style="color:#64748b;font-size:11px;">Satellite map image not available</div>`}
+                <div style="min-width:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#e2e8f0;">
+                  ${satImage ? `<img src="${satImage}" style="width:100%;height:268px;object-fit:cover;display:block;background:#e2e8f0;" />` : `<div style="color:#64748b;font-size:11px;">Satellite map image not available</div>`}
                 </div>
               </div>
             </div>
