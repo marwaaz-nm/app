@@ -34,17 +34,17 @@ const RECEIPT_DETAILS_PREFIX = '__MARWAAZPN_RECEIPT__';
 
 const parseReceiptDetails = (value: unknown) => {
   const raw = String(value || '');
-  if (!raw.startsWith(RECEIPT_DETAILS_PREFIX)) return { payerName: '', details: raw };
+  if (!raw.startsWith(RECEIPT_DETAILS_PREFIX)) return { payerName: '', details: raw, refNumbers: '' };
   try {
     const parsed = JSON.parse(raw.slice(RECEIPT_DETAILS_PREFIX.length));
-    return { payerName: String(parsed.payerName || ''), details: String(parsed.details || '') };
+    return { payerName: String(parsed.payerName || ''), details: String(parsed.details || ''), refNumbers: String(parsed.refNumbers || '') };
   } catch {
-    return { payerName: '', details: raw };
+    return { payerName: '', details: raw, refNumbers: '' };
   }
 };
 
-const serializeReceiptDetails = (payerName: string, details: string) =>
-  `${RECEIPT_DETAILS_PREFIX}${JSON.stringify({ payerName: payerName.trim(), details: details.trim() })}`;
+const serializeReceiptDetails = (payerName: string, details: string, refNumbers = '') =>
+  `${RECEIPT_DETAILS_PREFIX}${JSON.stringify({ payerName: payerName.trim(), details: details.trim(), refNumbers: refNumbers.trim() })}`;
 
 export default function FinancialsPage() {
   const { profile } = useAuth();
@@ -378,24 +378,23 @@ export default function FinancialsPage() {
       if (rpcError) throw rpcError;
       const baseRecNo = freshReceiptNo as string;
 
-      const payloads = selectedRefIds.map((refId, idx) => {
-        const recNo = selectedRefIds.length > 1 ? `${baseRecNo}-${idx + 1}` : baseRecNo;
-        const amountVal = parseFloat(bulkAmounts[refId]) || 0;
-        
-        return {
-          receipt_no: recNo,
-          reference_id: refId,
-          details: serializeReceiptDetails(payPayerName, payDetails),
-          amount: amountVal,
-          status: payStatus,
-          payment_mode: payMode,
-          payment_date: payDate,
-        };
-      });
+      const totalAmount = selectedRefIds.reduce(
+        (sum, refId) => sum + (parseFloat(bulkAmounts[refId]) || 0),
+        0,
+      );
+      const payload = {
+        receipt_no: baseRecNo,
+        reference_id: selectedRefIds[0],
+        details: serializeReceiptDetails(payPayerName, payDetails, payRefNumber),
+        amount: totalAmount,
+        status: payStatus,
+        payment_mode: payMode,
+        payment_date: payDate,
+      };
 
       const { error } = await supabase
         .from('receipts')
-        .insert(payloads);
+        .insert(payload);
 
       if (error) throw error;
 
@@ -729,7 +728,7 @@ export default function FinancialsPage() {
         status: editReceiptStatus,
         payment_mode: editReceiptMode,
         payment_date: editReceiptDate,
-        details: serializeReceiptDetails(storedDetails.payerName || selectedReceipt.owner_name || '', editReceiptDetails),
+        details: serializeReceiptDetails(storedDetails.payerName || selectedReceipt.owner_name || '', editReceiptDetails, storedDetails.refNumbers),
       };
       const { error } = await supabase.from('receipts').update(payload).eq('id', selectedReceipt.id);
       if (error) throw error;
@@ -783,6 +782,8 @@ export default function FinancialsPage() {
       const amountText = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const receiptNo = String(selectedReceipt.receipt_no || '-');
       const refNo = String(selectedReceipt.ref_number || '-');
+      const storedReceiptDetails = parseReceiptDetails(selectedReceipt.details);
+      const displayRefNumbers = storedReceiptDetails.refNumbers || refNo;
       const issueDateValue = selectedReceipt.payment_date ? new Date(selectedReceipt.payment_date) : new Date();
       const paymentDate = issueDateValue.toLocaleDateString('en-GB');
       const dueDateValue = new Date(issueDateValue);
@@ -800,13 +801,12 @@ export default function FinancialsPage() {
         .replace(/'/g, '&#039;');
       const qrCode = await QRCode.toDataURL([
         `Marwaazpn ${documentTitle}: ${receiptNo}`,
-        `Reference: ${refNo}`,
+        `Reference: ${displayRefNumbers}`,
         `Amount: $${amountText}`,
         `Status: ${paid ? 'Paid' : 'Credit'}`,
         `Date: ${paymentDate}`,
       ].join('\n'), { width: 220, margin: 1, errorCorrectionLevel: 'M' });
 
-      const storedReceiptDetails = parseReceiptDetails(selectedReceipt.details);
       const purpose = safe(storedReceiptDetails.details || selectedReceipt.ref_subject || 'Bixinta adeegga');
       const payer = safe(storedReceiptDetails.payerName || selectedReceipt.owner_name || 'Macmiilka');
       const location = safe(selectedReceipt.neighborhood || '-');
@@ -904,7 +904,7 @@ export default function FinancialsPage() {
           pdf.setFont('times', 'bold');
           pdf.setFontSize(16);
           pdf.text('Receipt', 15, startY + 40);
-          pdf.setFontSize(10.5);
+          pdf.setFontSize(12);
           const underlinedValue = (
             label: string,
             value: string,
@@ -928,26 +928,26 @@ export default function FinancialsPage() {
           };
 
           underlinedValue('Receipt No:', receiptNo, 132, startY + 39, 63, red);
-          underlinedValue('Magaca Bixiyaha (Payer Name):', rawPayer, 15, startY + 52, 180);
-          underlinedValue('Sumad (Ref):', refNo, 15, startY + 65, 82);
-          underlinedValue('Payment Date:', paymentDate, 108, startY + 65, 87);
-          underlinedValue('Paid Via:', paymentMode, 15, startY + 78, 82);
-          underlinedValue('Faahfaahinta (Details):', rawPurpose, 15, startY + 91, 180);
+          underlinedValue('Magaca Bixiyaha (Payer Name):', rawPayer, 15, startY + 50, 180);
+          underlinedValue('Sumad (Ref):', displayRefNumbers, 15, startY + 59, 88);
+          underlinedValue('Payment Date:', paymentDate, 112, startY + 59, 83);
+          underlinedValue('Paid Via:', paymentMode, 15, startY + 68, 88);
+          underlinedValue('Faahfaahinta (Details):', rawPurpose, 15, startY + 77, 180);
 
           pdf.setDrawColor(17, 24, 39);
-          pdf.line(15, startY + 116, 76, startY + 116);
+          pdf.line(15, startY + 94, 76, startY + 94);
           pdf.setFont('times', 'normal');
           pdf.setFontSize(9.5);
-          pdf.text('Saxiixa Lacag Qabtaha', 15, startY + 122);
-          pdf.addImage(qrCode, 'PNG', 166, startY + 105, 27, 27);
+          pdf.text('Saxiixa Lacag Qabtaha', 15, startY + 100);
+          pdf.addImage(qrCode, 'PNG', 168, startY + 81, 25, 25);
         };
 
         drawReceiptCopy(7, false);
         pdf.setLineDashPattern([2, 2], 0);
         pdf.setDrawColor(17, 24, 39);
-        pdf.line(12, 147.5, 198, 147.5);
+        pdf.line(12, 128, 198, 128);
         pdf.setLineDashPattern([], 0);
-        drawReceiptCopy(153, true);
+        drawReceiptCopy(134, true);
         pdf.save(`Receipt_${receiptNo.replace(/[^a-zA-Z0-9_-]+/g, '_')}.pdf`);
         return;
       }
@@ -1030,7 +1030,7 @@ export default function FinancialsPage() {
           };
           drawField('Magaca Bixiyaha (Payer Name)', invoicePayer, 15, startY + 48, 180);
           drawField('Receipt No', receiptNo, 15, startY + 70, 56);
-          drawField('Sumad (Ref)', refNo, 76, startY + 70, 56);
+          drawField('Sumad (Ref)', displayRefNumbers, 76, startY + 70, 56);
           drawField('Payment Date', paymentDate, 137, startY + 70, 58);
           drawField('Paid Via', paymentMode, 15, startY + 92, 56);
           drawField('Faahfaahinta (Details)', storedReceiptDetails.details || invoicePurpose, 76, startY + 92, 119);
