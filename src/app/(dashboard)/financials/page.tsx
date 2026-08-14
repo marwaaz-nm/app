@@ -804,7 +804,7 @@ export default function FinancialsPage() {
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 30mm;gap:12mm;align-items:end;margin-top:5mm;">
             <div><div style="border-top:1px solid #111827;padding-top:2px;font-size:11px;">Saxiixa Lacag Qabtaha</div></div>
-            <div><div style="border-top:1px solid #111827;padding-top:2px;font-size:11px;">Shaabadda</div></div>
+            <div><div style="padding-top:2px;font-size:11px;">Shaabadda</div></div>
             <img src="${qrCode}" alt="Receipt QR" style="width:28mm;height:28mm;display:block;" />
           </div>
         </section>`;
