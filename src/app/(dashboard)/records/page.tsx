@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Survey } from '@/types';
@@ -24,6 +24,7 @@ import {
 
 export default function RecordsPage() {
   const [records, setRecords] = useState<Survey[]>([]);
+  const fetchRequestId = useRef(0);
   const profileNames = useProfileNames();
   const [usedSurveyIds, setUsedSurveyIds] = useState<Set<number>>(new Set());
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
@@ -65,6 +66,7 @@ export default function RecordsPage() {
 
   // Fetch all records from Supabase
   const fetchRecords = async () => {
+    const requestId = ++fetchRequestId.current;
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -73,6 +75,9 @@ export default function RecordsPage() {
         .order('serial_no', { ascending: false });
 
       if (error) throw error;
+      // Focus, reconnect, and data-change events can overlap. Only the newest request
+      // may update the list, otherwise a slower stale response can hide a new survey.
+      if (requestId !== fetchRequestId.current) return;
       const remoteRecords = (data || []) as Survey[];
       let pendingSurvey: Survey | null = null;
       try {
@@ -93,13 +98,11 @@ export default function RecordsPage() {
     } catch (err) {
       console.error('Error fetching records:', err);
     } finally {
-      setLoading(false);
+      if (requestId === fetchRequestId.current) setLoading(false);
     }
   };
 
-  useEffect(() => {
-    void fetchRecords();
-  }, []);
+  // The refresh hook performs the initial fetch as well as subsequent reconciliations.
   useDataAutoRefresh(fetchRecords);
 
   // Which surveys already have at least one reference issued against them — drives the
