@@ -12,11 +12,12 @@
     "electron:dev": "cross-env GEOSURVEY_APP_URL=http://localhost:3000 electron .",
     "electron:dist": "electron-builder --win",
     "mobile:sync": "cap sync android",
-    "mobile:build": "cd android && gradlew.bat assembleDebug"
+    "mobile:build": "cap sync android && cd android && gradlew.bat assembleDebug"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
     "@capacitor/core": "^8.5.0",
+    "@capacitor/local-notifications": "^8.0.0",
     "@supabase/supabase-js": "^2.110.0",
     "googleapis": "^144.0.0",
     "html2pdf.js": "^0.14.0",

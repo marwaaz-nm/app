@@ -2,13 +2,44 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { Capacitor } from '@capacitor/core';
 import { Bell, Search, ShieldAlert, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import ThemeToggle from '@/components/ThemeToggle';
+import {
+  requestPlatformNotificationPermission,
+  showPlatformNotification,
+} from '@/lib/platformNotifications';
 
-type AlertItem = { id: string; level: 'review' | 'warning' | 'info'; title: string; detail: string; href: string; date?: string };
+type AlertItem = {
+  id: string;
+  level: 'review' | 'warning' | 'info';
+  title: string;
+  detail: string;
+  href: string;
+  date?: string;
+  notificationId?: string;
+};
+
+type NotificationRow = {
+  id: number;
+  title: string;
+  body: string;
+  href: string;
+  created_at: string;
+};
+
+const notificationToAlert = (row: NotificationRow): AlertItem => ({
+  id: `record-${row.id}`,
+  notificationId: String(row.id),
+  level: 'info',
+  title: row.title,
+  detail: row.body,
+  href: row.href,
+  date: row.created_at,
+});
 
 const pageTitles: { match: string; title: string }[] = [
   { match: '/dashboard', title: 'Dashboard' },
@@ -52,9 +83,22 @@ export default function WorkspaceHeader() {
     const controller = new AbortController();
     void (async () => {
       try {
-        const response = await authenticatedWorkspaceFetch('/api/workspace', controller.signal);
+        const [response, notificationResult] = await Promise.all([
+          authenticatedWorkspaceFetch('/api/workspace', controller.signal),
+          supabase
+            .from('app_notifications')
+            .select('id, title, body, href, created_at')
+            .is('read_at', null)
+            .order('created_at', { ascending: false })
+            .limit(20),
+        ]);
         const data = await response.json();
-        if (active && response.ok) setAlerts(data.alerts || []);
+        if (active && response.ok) {
+          const recordAlerts = notificationResult.error
+            ? []
+            : ((notificationResult.data || []) as NotificationRow[]).map(notificationToAlert);
+          setAlerts([...recordAlerts, ...(data.alerts || [])]);
+        }
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') return;
         // Alerts are non-critical; AuthContext handles session changes.
@@ -66,11 +110,73 @@ export default function WorkspaceHeader() {
     };
   }, [loading, pathname, profileId, schemaReady, userId]);
 
+  useEffect(() => {
+    if (loading || !userId || !schemaReady) return;
+    const channel = supabase
+      .channel(`record-notifications-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'app_notifications',
+          filter: `recipient_id=eq.${userId}`,
+        },
+        (payload) => {
+          const row = payload.new as NotificationRow;
+          const alert = notificationToAlert(row);
+          setAlerts((current) => [alert, ...current.filter((item) => item.id !== alert.id)]);
+          void showPlatformNotification({
+            id: alert.id,
+            title: alert.title,
+            body: alert.detail,
+            href: alert.href,
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [loading, schemaReady, userId]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let active = true;
+    let removeListener: (() => Promise<void>) | undefined;
+    void import('@capacitor/local-notifications').then(async ({ LocalNotifications }) => {
+      const handle = await LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
+        const href = event.notification.extra?.href;
+        if (typeof href === 'string' && href.startsWith('/')) router.push(href);
+      });
+      if (!active) await handle.remove();
+      else removeListener = () => handle.remove();
+    });
+    return () => {
+      active = false;
+      if (removeListener) void removeListener();
+    };
+  }, [router]);
+
   const visibleAlerts: AlertItem[] = schemaReady ? alerts : [];
 
-  const navigate = (href: string) => {
+  const navigate = (alert: AlertItem) => {
     setShowAlerts(false);
-    router.push(href);
+    if (alert.notificationId) {
+      setAlerts((current) => current.filter((item) => item.id !== alert.id));
+      void supabase
+        .from('app_notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('id', alert.notificationId);
+    }
+    router.push(alert.href);
+  };
+
+  const toggleAlerts = () => {
+    const nextOpen = !showAlerts;
+    setShowAlerts(nextOpen);
+    if (nextOpen) void requestPlatformNotificationPermission();
   };
 
   return (
@@ -91,10 +197,10 @@ export default function WorkspaceHeader() {
       )}
       <ThemeToggle />
       <div className="relative">
-        <button onClick={() => setShowAlerts(!showAlerts)} className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" aria-label="Ogeysiis"><Bell className="h-4 w-4" />{visibleAlerts.length > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-rose-500 px-1 text-[8px] font-black text-white">{Math.min(visibleAlerts.length, 9)}{visibleAlerts.length > 9 ? '+' : ''}</span>}</button>
+        <button onClick={toggleAlerts} className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" aria-label="Ogeysiis"><Bell className="h-4 w-4" />{visibleAlerts.length > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-rose-500 px-1 text-[8px] font-black text-white">{Math.min(visibleAlerts.length, 9)}{visibleAlerts.length > 9 ? '+' : ''}</span>}</button>
         {showAlerts && <div className="fixed left-3 right-3 top-[4.5rem] md:absolute md:left-auto md:right-0 md:top-12 md:w-[360px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><div><p className="text-xs font-black text-slate-900">Ogeysiisyada shaqada</p><p className="mt-0.5 text-[9px] font-semibold text-slate-400">Waxyaabaha u baahan ficil</p></div><span className="rounded-full bg-rose-50 px-2 py-1 text-[9px] font-black text-rose-600">{visibleAlerts.length}</span></div>
-          <div className="max-h-96 overflow-y-auto p-2">{visibleAlerts.length === 0 ? <div className="p-8 text-center"><Bell className="mx-auto h-7 w-7 text-slate-200" /><p className="mt-2 text-xs font-bold text-slate-500">Wax ogeysiis ah ma jiro.</p></div> : visibleAlerts.map((alert) => <button key={alert.id} onClick={() => navigate(alert.href)} className="flex w-full gap-3 rounded-xl p-3 text-left hover:bg-slate-50"><span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${alert.level === 'review' ? 'bg-amber-50 text-amber-600' : alert.level === 'warning' ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'}`}><ShieldAlert className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-[11px] font-black text-slate-800">{alert.title}</span><span className="mt-1 block truncate text-[9px] font-semibold text-slate-500">{alert.detail}</span></span></button>)}</div>
+          <div className="max-h-96 overflow-y-auto p-2">{visibleAlerts.length === 0 ? <div className="p-8 text-center"><Bell className="mx-auto h-7 w-7 text-slate-200" /><p className="mt-2 text-xs font-bold text-slate-500">Wax ogeysiis ah ma jiro.</p></div> : visibleAlerts.map((alert) => <button key={alert.id} onClick={() => navigate(alert)} className="flex w-full gap-3 rounded-xl p-3 text-left hover:bg-slate-50"><span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${alert.level === 'review' ? 'bg-amber-50 text-amber-600' : alert.level === 'warning' ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'}`}><ShieldAlert className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-[11px] font-black text-slate-800">{alert.title}</span><span className="mt-1 block truncate text-[9px] font-semibold text-slate-500">{alert.detail}</span></span></button>)}</div>
         </div>}
       </div>
       <div className="flex items-center gap-2 border-l border-slate-200 pl-3 md:hidden"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-teal-600 text-[10px] font-black text-white">{profile?.fullname?.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'GS'}</div></div>
