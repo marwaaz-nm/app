@@ -13,6 +13,12 @@ const getAdminClient = () => {
   });
 };
 
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+  Pragma: 'no-cache',
+  Expires: '0',
+};
+
 // Public, unauthenticated — used by the login page, public /verify pages, and
 // (via the shared SettingsContext) by every logged-in page that needs to
 // preview or apply the numbering format, including the Settings page's own
@@ -40,16 +46,16 @@ export async function GET() {
     // defaults, so a fresh database (or one without the migration yet) should not turn
     // a normal login-page request into a noisy 404.
     if (error?.code === 'PGRST116' || error?.code === '42P01' || error?.code === 'PGRST205' || (!error && !data)) {
-      return NextResponse.json({ settings: {} });
+      return NextResponse.json({ settings: {} }, { headers: NO_STORE_HEADERS });
     }
 
     if (error) {
       throw error;
     }
 
-    return NextResponse.json({ settings: data });
+    return NextResponse.json({ settings: data }, { headers: NO_STORE_HEADERS });
   } catch (err) {
     console.error('Error fetching public settings:', err);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Server error' }, { status: 500, headers: NO_STORE_HEADERS });
   }
 }

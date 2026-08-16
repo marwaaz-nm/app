@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 
 export interface AppSettings {
   org_name_so: string;
@@ -80,18 +80,28 @@ const SettingsContext = createContext<SettingsContextType>({
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const requestSequence = useRef(0);
 
   const fetchSettings = useCallback(async () => {
+    const requestId = ++requestSequence.current;
     try {
-      const response = await fetch('/api/public/settings');
+      // Settings are editable runtime data. Never reuse a browser/CDN response here,
+      // especially immediately after saving, or the form is reset to stale values.
+      const response = await fetch(`/api/public/settings?updated=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       if (response.ok) {
         const data = await response.json();
-        setSettings((prev) => ({ ...prev, ...data.settings }));
+        // A slower, older request must not overwrite the result of a save/refetch.
+        if (requestId === requestSequence.current) {
+          setSettings((prev) => ({ ...prev, ...data.settings }));
+        }
       }
     } catch (err) {
       console.error('[Settings] Failed to load app settings:', err);
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
     }
   }, []);
 

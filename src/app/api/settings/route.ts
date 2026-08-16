@@ -58,7 +58,10 @@ export async function GET(req: NextRequest) {
       .single();
 
     if (error || !data) return NextResponse.json({ error: 'Settings not found' }, { status: 404 });
-    return NextResponse.json({ settings: data });
+    return NextResponse.json(
+      { settings: data },
+      { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' } },
+    );
   } catch (err) {
     console.error('Error fetching settings:', err);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
