@@ -21,12 +21,6 @@ export default function NewRecordPage() {
     setLoading(true);
     setError(null);
 
-    if (!draft.polygon_boundary) {
-      setError('Fadlan ku sawir xariiqda dhulka (polygon boundary) maabka hoose ee satellite-ka.');
-      setLoading(false);
-      return;
-    }
-
     try {
       const payload = {
         owner_name: draft.owner_name,
@@ -44,7 +38,7 @@ export default function NewRecordPage() {
         boundary_g_val: draft.boundary_g_val || null,
         boundary_g_neighbor: draft.boundary_g_neighbor || null,
         gps_location: draft.gps_location || null,
-        polygon_boundary: draft.polygon_boundary,
+        polygon_boundary: draft.polygon_boundary || null,
         sketch_area: draft.sketch_area || null,
         sketch_dimensions: draft.sketch_dimensions || null,
         boundary_label_positions: draft.boundary_label_positions || null,

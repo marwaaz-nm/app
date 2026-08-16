@@ -13,26 +13,30 @@ export async function POST(req: NextRequest) {
     const landType = requiredText(body.land_type);
     const polygonBoundary = requiredText(body.polygon_boundary);
 
-    if (!ownerName || !neighborhood || !branch || !landType || !polygonBoundary) {
-      return NextResponse.json({ error: 'Owner, location, land type and polygon are required.' }, { status: 400 });
+    if (!ownerName || !neighborhood || !branch || !landType) {
+      return NextResponse.json({ error: 'Owner, neighborhood, branch and land type are required.' }, { status: 400 });
     }
 
-    const { data: polygonIsValid, error: polygonError } = await viewer.admin.rpc('is_survey_polygon_valid', {
-      poly_text: polygonBoundary,
-    });
-    if (polygonError) throw polygonError;
-    if (!polygonIsValid) return NextResponse.json({ error: 'The polygon coordinates are invalid.' }, { status: 400 });
+    // Drawing a parcel is optional for draft registration. When coordinates are
+    // supplied, retain the full geometry validation and overlap protection.
+    if (polygonBoundary) {
+      const { data: polygonIsValid, error: polygonError } = await viewer.admin.rpc('is_survey_polygon_valid', {
+        poly_text: polygonBoundary,
+      });
+      if (polygonError) throw polygonError;
+      if (!polygonIsValid) return NextResponse.json({ error: 'The polygon coordinates are invalid.' }, { status: 400 });
 
-    const { data: overlaps, error: overlapError } = await viewer.admin.rpc('check_survey_overlap', {
-      poly_text: polygonBoundary,
-      exclude_survey_id: null,
-    });
-    if (overlapError) throw overlapError;
-    if (Array.isArray(overlaps) && overlaps.length > 0) {
-      return NextResponse.json({
-        error: 'This parcel overlaps an existing survey.',
-        overlaps,
-      }, { status: 409 });
+      const { data: overlaps, error: overlapError } = await viewer.admin.rpc('check_survey_overlap', {
+        poly_text: polygonBoundary,
+        exclude_survey_id: null,
+      });
+      if (overlapError) throw overlapError;
+      if (Array.isArray(overlaps) && overlaps.length > 0) {
+        return NextResponse.json({
+          error: 'This parcel overlaps an existing survey.',
+          overlaps,
+        }, { status: 409 });
+      }
     }
 
     const { data: surveyNo, error: surveyNoError } = await viewer.admin.rpc('next_survey_number');
@@ -54,7 +58,7 @@ export async function POST(req: NextRequest) {
       boundary_g_val: requiredText(body.boundary_g_val) || null,
       boundary_g_neighbor: requiredText(body.boundary_g_neighbor) || null,
       gps_location: requiredText(body.gps_location) || null,
-      polygon_boundary: polygonBoundary,
+      polygon_boundary: polygonBoundary || null,
       sketch_area: requiredText(body.sketch_area) || null,
       sketch_dimensions: requiredText(body.sketch_dimensions) || null,
       boundary_label_positions: requiredText(body.boundary_label_positions) || null,
