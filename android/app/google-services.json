@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "765136676969",
+    "project_id": "marwaazpn-app",
+    "storage_bucket": "marwaazpn-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:765136676969:android:476295d6d1402bdc211af8",
+        "android_client_info": {
+          "package_name": "com.marwaazpn.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBtR705EmwKhzNCaKvx5DTtGhsuuOIOvvk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

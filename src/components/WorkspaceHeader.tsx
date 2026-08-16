@@ -197,6 +197,47 @@ export default function WorkspaceHeader() {
   }, [loading, schemaReady, userId]);
 
   useEffect(() => {
+    if (loading || !userId || !schemaReady || !Capacitor.isNativePlatform()) return;
+    let active = true;
+    const listenerHandles: Array<{ remove: () => Promise<void> }> = [];
+
+    void import('@capacitor/push-notifications').then(async ({ PushNotifications }) => {
+      const registration = await PushNotifications.addListener('registration', (token) => {
+        if (!active) return;
+        void supabase.rpc('register_push_device_token', {
+          target_token: token.value,
+          target_platform: Capacitor.getPlatform(),
+        });
+      });
+      const received = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        const href = typeof notification.data?.href === 'string' ? notification.data.href : '/dashboard';
+        void showPlatformNotification({
+          id: `push-${notification.id}`,
+          title: notification.title || 'Marwaazpn App',
+          body: notification.body || 'Ogeysiis cusub ayaa ku soo dhacay.',
+          href,
+        });
+      });
+      const action = await PushNotifications.addListener('pushNotificationActionPerformed', (event) => {
+        const href = event.notification.data?.href;
+        if (typeof href === 'string' && href.startsWith('/')) router.push(href);
+      });
+      listenerHandles.push(registration, received, action);
+
+      const current = await PushNotifications.checkPermissions();
+      const permission = current.receive === 'prompt'
+        ? await PushNotifications.requestPermissions()
+        : current;
+      if (permission.receive === 'granted') await PushNotifications.register();
+    });
+
+    return () => {
+      active = false;
+      listenerHandles.forEach((handle) => void handle.remove());
+    };
+  }, [loading, router, schemaReady, userId]);
+
+  useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     let active = true;
     let removeListener: (() => Promise<void>) | undefined;
