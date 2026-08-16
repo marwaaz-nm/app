@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { Compass, Fullscreen, Navigation, Loader2, MapPin, MousePointer2, PencilRuler, ZoomIn } from 'lucide-react';
 import L from 'leaflet';
 import { useModal } from '@/context/ModalContext';
@@ -846,34 +847,58 @@ export default function MiniMap({
     onSketchDetailsChange(detailsString);
   };
 
-  const getLiveLocation = () => {
-    if (!navigator.geolocation) {
-      showAlert('Cillad', 'Browser-kaagu ma ogola Geolocation.', 'error');
-      return;
-    }
-
+  const getLiveLocation = async () => {
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
-        setIsAtCurrentLocation(true);
-        setLocationAccuracy(Math.round(accuracy));
-        onGpsChange(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
-        
-        if (mapRef.current) {
-          // Just settle on the resolved point (the marker itself shows the live-location
-          // pulse) rather than drawing a separate accuracy circle across the map.
-          mapRef.current.flyTo([latitude, longitude], Math.max(mapRef.current.getZoom(), 19), { duration: 1.1 });
+    try {
+      let coords: { latitude: number; longitude: number; accuracy: number };
+
+      if (Capacitor.isNativePlatform()) {
+        const { Geolocation } = await import('@capacitor/geolocation');
+        let permission = await Geolocation.checkPermissions();
+        if (permission.location === 'prompt' || permission.location === 'prompt-with-rationale') {
+          permission = await Geolocation.requestPermissions();
         }
-        setLocating(false);
-      },
-      (err) => {
-        console.error('Error fetching location:', err);
-        showAlert('Cillad', 'Ma suuragalin in GPS-kaaga la soo helo.', 'error');
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
+        if (permission.location !== 'granted' && permission.coarseLocation !== 'granted') {
+          throw new Error('LOCATION_PERMISSION_DENIED');
+        }
+        const position = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        });
+        coords = position.coords;
+      } else {
+        if (!navigator.geolocation) throw new Error('GEOLOCATION_UNAVAILABLE');
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+          });
+        });
+        coords = position.coords;
+      }
+
+      const { latitude, longitude, accuracy } = coords;
+      setIsAtCurrentLocation(true);
+      setLocationAccuracy(Math.round(accuracy));
+      onGpsChange(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+      mapRef.current?.flyTo(
+        [latitude, longitude],
+        Math.max(mapRef.current.getZoom(), 19),
+        { duration: 1.1 },
+      );
+    } catch (error) {
+      console.error('Error fetching location:', error);
+      const denied = error instanceof Error && error.message === 'LOCATION_PERMISSION_DENIED';
+      showAlert(
+        'Cillad',
+        denied ? 'Fadlan Settings-ka telefoonka ka oggolow Location-ka app-kan.' : 'Ma suuragalin in GPS-kaaga la soo helo.',
+        'error',
+      );
+    } finally {
+      setLocating(false);
+    }
   };
 
   const handleGpsInputChange = (value: string) => {

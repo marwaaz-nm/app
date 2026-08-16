@@ -9,7 +9,7 @@ import { useModal } from '@/context/ModalContext';
 import { useSettings } from '@/context/SettingsContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
-import { formatReferenceNumber } from '@/lib/numbering';
+import { formatReferenceNumber, numericIdentifier } from '@/lib/numbering';
 import { generateVerificationToken } from '@/lib/verificationToken';
 import DetailsModal from '@/components/DetailsModal';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
@@ -765,7 +765,7 @@ export default function ReferencesPage() {
                       onClick={() => setSelectedRef(r)}
                       className="grid grid-cols-[64px_1fr_auto_20px] items-center gap-3 px-1 py-3.5 cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-50"
                     >
-                      <span className="truncate text-xs font-black text-teal-600">{r.ref_number}</span>
+                      <span className="truncate text-xs font-black text-teal-600">{numericIdentifier(r.ref_number)}</span>
                       <div className="min-w-0">
                         <h4 className="truncate text-xs font-extrabold text-slate-800">{r.subject}</h4>
                         {r.surveys && (

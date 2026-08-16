@@ -12,6 +12,7 @@ import { ListLoadingSkeleton } from '@/components/Skeleton';
 import { useProfileNames, resolveCreatorName } from '@/lib/useProfileNames';
 import { displayStatus, type SurveyDisplayStatus } from '@/lib/surveyCompleteness';
 import { PENDING_SURVEY_KEY, useDataAutoRefresh } from '@/lib/useDataAutoRefresh';
+import { numericIdentifier } from '@/lib/numbering';
 import {
   Plus,
   Search,
@@ -469,7 +470,7 @@ export default function RecordsPage() {
                       onClick={() => setSelectedRecord(record)}
                       className="grid grid-cols-[52px_1fr_auto_40px] items-center gap-3 px-1 py-3.5 cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-50"
                     >
-                      <span className="truncate text-xs font-black text-slate-500">{record.survey_no || record.serial_no}</span>
+                      <span className="truncate text-xs font-black text-slate-500">{numericIdentifier(record.survey_no || record.serial_no)}</span>
                       <div className="min-w-0">
                         <h4 className="truncate text-xs font-extrabold text-slate-800">{record.owner_name}</h4>
                         <p className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-slate-500">

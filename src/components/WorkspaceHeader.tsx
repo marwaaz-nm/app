@@ -204,10 +204,19 @@ export default function WorkspaceHeader() {
     void import('@capacitor/push-notifications').then(async ({ PushNotifications }) => {
       const registration = await PushNotifications.addListener('registration', (token) => {
         if (!active) return;
-        void supabase.rpc('register_push_device_token', {
-          target_token: token.value,
-          target_platform: Capacitor.getPlatform(),
-        });
+        void supabase.auth.getSession().then(async ({ data }) => {
+          const accessToken = data.session?.access_token;
+          if (!accessToken) throw new Error('No authenticated session for push registration.');
+          const response = await fetch('/api/notifications/register', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ token: token.value, platform: Capacitor.getPlatform() }),
+          });
+          if (!response.ok) throw new Error(`Push registration failed (${response.status}).`);
+        }).catch((error) => console.error('[Push] Device registration failed:', error));
       });
       const received = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
         const href = typeof notification.data?.href === 'string' ? notification.data.href : '/dashboard';

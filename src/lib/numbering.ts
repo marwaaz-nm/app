@@ -43,3 +43,10 @@ export function formatReferenceNumber({
       return `${cleanPrefix}-${year4}-${paddedSeq}`;
   }
 }
+
+/** Return the final numeric component for compact mobile list labels. */
+export function numericIdentifier(value: string | number | null | undefined): string {
+  const source = String(value ?? '').trim();
+  const groups = source.match(/\d+/g);
+  return groups?.[groups.length - 1] || source;
+}
