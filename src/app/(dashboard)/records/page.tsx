@@ -10,12 +10,11 @@ import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
 import { useProfileNames, resolveCreatorName } from '@/lib/useProfileNames';
-import { displayStatus } from '@/lib/surveyCompleteness';
+import { displayStatus, type SurveyDisplayStatus } from '@/lib/surveyCompleteness';
 import { PENDING_SURVEY_KEY, useDataAutoRefresh } from '@/lib/useDataAutoRefresh';
 import {
   Plus,
   Search,
-  ChevronRight,
   Calendar,
   Info,
   Sliders,
@@ -28,7 +27,6 @@ export default function RecordsPage() {
   const profileNames = useProfileNames();
   const [usedSurveyIds, setUsedSurveyIds] = useState<Set<number>>(new Set());
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
-  const [filteredRecords, setFilteredRecords] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Search & Filter state
@@ -56,13 +54,10 @@ export default function RecordsPage() {
     setSearchAvailable(true);
   }, [setSearchAvailable]);
 
-  const statusClass = (status: Survey['status']) => ({
+  const statusClass = (status: SurveyDisplayStatus) => ({
     Draft: 'bg-slate-100 text-slate-600',
-    'Pending Review': 'bg-amber-50 text-amber-700',
-    Approved: 'bg-emerald-50 text-emerald-700',
-    Rejected: 'bg-rose-50 text-rose-700',
-    Archived: 'bg-violet-50 text-violet-700',
-  }[status || 'Draft']);
+    Completed: 'bg-emerald-50 text-emerald-700',
+  }[status]);
 
   // Fetch all records from Supabase
   const fetchRecords = async () => {
@@ -93,7 +88,6 @@ export default function RecordsPage() {
         ? [pendingSurvey, ...remoteRecords]
         : remoteRecords;
       setRecords(nextRecords);
-      setFilteredRecords(nextRecords);
       if (remoteHasPending) window.sessionStorage.removeItem(PENDING_SURVEY_KEY);
     } catch (err) {
       console.error('Error fetching records:', err);
@@ -117,7 +111,7 @@ export default function RecordsPage() {
   }, []);
 
   // Filter application
-  useEffect(() => {
+  const filteredRecords = useMemo(() => {
     let result = [...records];
 
     // 1. Search Query (Magaca / Neighborhood)
@@ -162,7 +156,7 @@ export default function RecordsPage() {
       result = result.filter(r => r.boundary_g_val?.includes(searchG));
     }
 
-    setFilteredRecords(result);
+    return result;
   }, [search, filterXaafada, filterLaanta, startDate, endDate, searchW, searchB, searchK, searchG, records]);
 
   const sortedRecords = useMemo(() => {
