@@ -10,7 +10,12 @@ const path = require('node:path');
 // Overridable so the packaged app can point at a different environment (e.g. staging)
 // without a rebuild, and so `npm run electron:dev` can point at a local dev server.
 const APP_URL = process.env.GEOSURVEY_APP_URL || 'https://app.marwaazpn.com';
-const APP_ICON = path.join(__dirname, '..', 'build', 'icon.png');
+const APP_ICON = path.join(
+  __dirname,
+  '..',
+  'build',
+  process.platform === 'win32' ? 'icon.ico' : 'icon.png',
+);
 
 // Keep the transparent Marwaaz logo attached to Windows taskbar grouping and native
 // notifications instead of letting Windows fall back to Electron's default identity.

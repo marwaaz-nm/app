@@ -50,6 +50,7 @@
     "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "png-to-ico": "^3.0.2",
     "tailwindcss": "^4",
     "typescript": "^5"
   },
@@ -59,13 +60,16 @@
     "files": [
       "electron/**/*",
       "build/icon.png",
-      "package.json"
+      "build/icon.ico",
+      "package.json",
+      "!node_modules/**/*"
     ],
+    "npmRebuild": false,
     "directories": {
       "output": "dist-electron"
     },
     "win": {
-      "icon": "build/icon.png",
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "portable"
