@@ -12,6 +12,10 @@ const path = require('node:path');
 const APP_URL = process.env.GEOSURVEY_APP_URL || 'https://app.marwaazpn.com';
 const APP_ICON = path.join(__dirname, '..', 'build', 'icon.png');
 
+// Keep the transparent Marwaaz logo attached to Windows taskbar grouping and native
+// notifications instead of letting Windows fall back to Electron's default identity.
+app.setAppUserModelId('com.marwaaz.notary.geosurveypro');
+
 let mainWindow = null;
 
 function createWindow() {
