@@ -41,6 +41,38 @@ const notificationToAlert = (row: NotificationRow): AlertItem => ({
   date: row.created_at,
 });
 
+const deliveredNotificationKey = (userId: string) => `marwaazpn-delivered-notifications:${userId}`;
+
+const readDeliveredNotificationIds = (userId: string): string[] => {
+  try {
+    const value = localStorage.getItem(deliveredNotificationKey(userId));
+    return value ? JSON.parse(value) as string[] : [];
+  } catch {
+    return [];
+  }
+};
+
+const markNotificationDelivered = (userId: string, notificationId: string) => {
+  const ids = readDeliveredNotificationIds(userId);
+  if (ids.includes(notificationId)) return;
+  localStorage.setItem(
+    deliveredNotificationKey(userId),
+    JSON.stringify([notificationId, ...ids].slice(0, 100)),
+  );
+};
+
+async function showNativeNotificationOnce(userId: string, alert: AlertItem) {
+  if (!Capacitor.isNativePlatform() || !alert.notificationId) return;
+  if (readDeliveredNotificationIds(userId).includes(alert.notificationId)) return;
+  const displayed = await showPlatformNotification({
+    id: alert.id,
+    title: alert.title,
+    body: alert.detail,
+    href: alert.href,
+  });
+  if (displayed) markNotificationDelivered(userId, alert.notificationId);
+}
+
 const pageTitles: { match: string; title: string }[] = [
   { match: '/dashboard', title: 'Dashboard' },
   { match: '/references', title: 'Reference Records' },
@@ -98,6 +130,20 @@ export default function WorkspaceHeader() {
             ? []
             : ((notificationResult.data || []) as NotificationRow[]).map(notificationToAlert);
           setAlerts([...recordAlerts, ...(data.alerts || [])]);
+          if (Capacitor.isNativePlatform() && recordAlerts.length > 0) {
+            const storageKey = deliveredNotificationKey(userId);
+            if (localStorage.getItem(storageKey) === null) {
+              // Establish a baseline on first install so old unread rows do not flood the phone.
+              recordAlerts.forEach((alert) => {
+                if (alert.notificationId) markNotificationDelivered(userId, alert.notificationId);
+              });
+            } else {
+              await requestPlatformNotificationPermission();
+              for (const alert of [...recordAlerts].reverse()) {
+                await showNativeNotificationOnce(userId, alert);
+              }
+            }
+          }
         }
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -126,12 +172,16 @@ export default function WorkspaceHeader() {
           const row = payload.new as NotificationRow;
           const alert = notificationToAlert(row);
           setAlerts((current) => [alert, ...current.filter((item) => item.id !== alert.id)]);
-          void showPlatformNotification({
-            id: alert.id,
-            title: alert.title,
-            body: alert.detail,
-            href: alert.href,
-          });
+          if (Capacitor.isNativePlatform()) {
+            void showNativeNotificationOnce(userId, alert);
+          } else {
+            void showPlatformNotification({
+              id: alert.id,
+              title: alert.title,
+              body: alert.detail,
+              href: alert.href,
+            });
+          }
         },
       )
       .subscribe();
@@ -139,6 +189,11 @@ export default function WorkspaceHeader() {
     return () => {
       void supabase.removeChannel(channel);
     };
+  }, [loading, schemaReady, userId]);
+
+  useEffect(() => {
+    if (loading || !userId || !schemaReady || !Capacitor.isNativePlatform()) return;
+    void requestPlatformNotificationPermission();
   }, [loading, schemaReady, userId]);
 
   useEffect(() => {
