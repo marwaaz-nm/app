@@ -36,34 +36,74 @@ import {
   Trash2
 } from 'lucide-react';
 
+function capitalizeWords(str?: string | null): string {
+  if (!str) return '-';
+  const trimmed = str.trim();
+  if (!trimmed) return '-';
+  return trimmed
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function formatSurveyBoundaries(s?: Reference['surveys']): string {
   if (!s) return '';
   const parts: string[] = [];
   if (s.boundary_g_val || s.boundary_g_neighbor) {
     const rawVal = (s.boundary_g_val || '').trim();
     const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'M'}` : '-';
-    const neighbor = s.boundary_g_neighbor || '-';
+    const neighbor = capitalizeWords(s.boundary_g_neighbor);
     parts.push(`Galbeed= ${val} waxaana ka xiga ${neighbor}`);
   }
   if (s.boundary_w_val || s.boundary_w_neighbor) {
     const rawVal = (s.boundary_w_val || '').trim();
     const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'm'}` : '-';
-    const neighbor = s.boundary_w_neighbor || '-';
+    const neighbor = capitalizeWords(s.boundary_w_neighbor);
     parts.push(`Waqooyi=${val} waxaana ka xiga ${neighbor}`);
   }
   if (s.boundary_k_val || s.boundary_k_neighbor) {
     const rawVal = (s.boundary_k_val || '').trim();
     const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'm'}` : '-';
-    const neighbor = s.boundary_k_neighbor || '-';
+    const neighbor = capitalizeWords(s.boundary_k_neighbor);
     parts.push(`Koonfur=${val} waxaana ka xiga ${neighbor}`);
   }
   if (s.boundary_b_val || s.boundary_b_neighbor) {
     const rawVal = (s.boundary_b_val || '').trim();
     const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'M'}` : '-';
-    const neighbor = s.boundary_b_neighbor || '-';
+    const neighbor = capitalizeWords(s.boundary_b_neighbor);
     parts.push(`Bari=${val} waxaana ka xiga ${neighbor}`);
   }
   return parts.join(', ');
+}
+
+function formatSurveyBoundariesHtml(s?: Reference['surveys']): string {
+  if (!s) return '';
+  const parts: string[] = [];
+  if (s.boundary_g_val || s.boundary_g_neighbor) {
+    const rawVal = (s.boundary_g_val || '').trim();
+    const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'M'}` : '-';
+    const neighbor = capitalizeWords(s.boundary_g_neighbor);
+    parts.push(`<b>Galbeed= ${val}</b> <span style="font-weight: normal;">waxaana ka xiga</span> <b>${neighbor}</b>`);
+  }
+  if (s.boundary_w_val || s.boundary_w_neighbor) {
+    const rawVal = (s.boundary_w_val || '').trim();
+    const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'm'}` : '-';
+    const neighbor = capitalizeWords(s.boundary_w_neighbor);
+    parts.push(`<b>Waqooyi=${val}</b> <span style="font-weight: normal;">waxaana ka xiga</span> <b>${neighbor}</b>`);
+  }
+  if (s.boundary_k_val || s.boundary_k_neighbor) {
+    const rawVal = (s.boundary_k_val || '').trim();
+    const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'm'}` : '-';
+    const neighbor = capitalizeWords(s.boundary_k_neighbor);
+    parts.push(`<b>Koonfur=${val}</b> <span style="font-weight: normal;">waxaana ka xiga</span> <b>${neighbor}</b>`);
+  }
+  if (s.boundary_b_val || s.boundary_b_neighbor) {
+    const rawVal = (s.boundary_b_val || '').trim();
+    const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'M'}` : '-';
+    const neighbor = capitalizeWords(s.boundary_b_neighbor);
+    parts.push(`<b>Bari=${val}</b> <span style="font-weight: normal;">waxaana ka xiga</span> <b>${neighbor}</b>`);
+  }
+  return `<span style="font-family: Arial, sans-serif;">${parts.join(', ')}</span>`;
 }
 
 export default function ReferencesPage() {
@@ -146,12 +186,16 @@ export default function ReferencesPage() {
       .catch((err) => { console.error('Error generating QR code:', err); setQrDataUrl(null); });
   }, [selectedRef]);
 
-  const handleCopyBoundaries = async (text: string) => {
-    if (!text) return;
+  const handleCopyBoundaries = async (survey?: Reference['surveys']) => {
+    if (!survey) return;
+    const plainText = formatSurveyBoundaries(survey);
+    const htmlContent = formatSurveyBoundariesHtml(survey);
+    if (!plainText) return;
+
     try {
       if (navigator.clipboard && window.ClipboardItem) {
-        const plainBlob = new Blob([text], { type: 'text/plain' });
-        const htmlBlob = new Blob([`<span style="font-family: inherit; font-size: inherit;">${text}</span>`], { type: 'text/html' });
+        const plainBlob = new Blob([plainText], { type: 'text/plain' });
+        const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
         await navigator.clipboard.write([
           new ClipboardItem({
             'text/plain': plainBlob,
@@ -159,14 +203,14 @@ export default function ReferencesPage() {
           }),
         ]);
       } else {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(plainText);
       }
       setBoundaryCopied(true);
       setTimeout(() => setBoundaryCopied(false), 2000);
     } catch (err) {
       console.error('Error copying boundary text:', err);
       try {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(plainText);
         setBoundaryCopied(true);
         setTimeout(() => setBoundaryCopied(false), 2000);
       } catch {
@@ -973,7 +1017,7 @@ export default function ReferencesPage() {
                           </span>
                           <button
                             type="button"
-                            onClick={() => handleCopyBoundaries(formatSurveyBoundaries(selectedRef.surveys))}
+                            onClick={() => handleCopyBoundaries(selectedRef.surveys)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-200 bg-white hover:bg-teal-50 text-[11px] font-bold text-teal-700 shadow-2xs transition-all active:scale-95 cursor-pointer"
                             title="Koobiyeey Soohdimaha Sahanka"
                           >
@@ -990,8 +1034,61 @@ export default function ReferencesPage() {
                             )}
                           </button>
                         </div>
-                        <p className="text-xs font-bold text-slate-800 leading-relaxed select-all bg-white p-3 rounded-xl border border-teal-100/60 shadow-xs">
-                          {formatSurveyBoundaries(selectedRef.surveys)}
+                        <p className="text-xs text-slate-800 leading-relaxed select-all bg-white p-3 rounded-xl border border-teal-100/60 shadow-xs font-sans">
+                          {selectedRef.surveys && (
+                            <>
+                              {(() => {
+                                const s = selectedRef.surveys;
+                                const elements: React.ReactNode[] = [];
+                                if (s.boundary_g_val || s.boundary_g_neighbor) {
+                                  const val = s.boundary_g_val ? `${s.boundary_g_val}${s.boundary_g_val.toLowerCase().endsWith('m') ? '' : 'M'}` : '-';
+                                  elements.push(
+                                    <span key="g">
+                                      <strong className="font-bold text-slate-900">Galbeed= {val}</strong>{' '}
+                                      <span className="font-normal text-slate-600">waxaana ka xiga</span>{' '}
+                                      <strong className="font-bold text-slate-900">{capitalizeWords(s.boundary_g_neighbor)}</strong>
+                                    </span>
+                                  );
+                                }
+                                if (s.boundary_w_val || s.boundary_w_neighbor) {
+                                  const val = s.boundary_w_val ? `${s.boundary_w_val}${s.boundary_w_val.toLowerCase().endsWith('m') ? '' : 'm'}` : '-';
+                                  elements.push(
+                                    <span key="w">
+                                      <strong className="font-bold text-slate-900">Waqooyi={val}</strong>{' '}
+                                      <span className="font-normal text-slate-600">waxaana ka xiga</span>{' '}
+                                      <strong className="font-bold text-slate-900">{capitalizeWords(s.boundary_w_neighbor)}</strong>
+                                    </span>
+                                  );
+                                }
+                                if (s.boundary_k_val || s.boundary_k_neighbor) {
+                                  const val = s.boundary_k_val ? `${s.boundary_k_val}${s.boundary_k_val.toLowerCase().endsWith('m') ? '' : 'm'}` : '-';
+                                  elements.push(
+                                    <span key="k">
+                                      <strong className="font-bold text-slate-900">Koonfur={val}</strong>{' '}
+                                      <span className="font-normal text-slate-600">waxaana ka xiga</span>{' '}
+                                      <strong className="font-bold text-slate-900">{capitalizeWords(s.boundary_k_neighbor)}</strong>
+                                    </span>
+                                  );
+                                }
+                                if (s.boundary_b_val || s.boundary_b_neighbor) {
+                                  const val = s.boundary_b_val ? `${s.boundary_b_val}${s.boundary_b_val.toLowerCase().endsWith('m') ? '' : 'M'}` : '-';
+                                  elements.push(
+                                    <span key="b">
+                                      <strong className="font-bold text-slate-900">Bari={val}</strong>{' '}
+                                      <span className="font-normal text-slate-600">waxaana ka xiga</span>{' '}
+                                      <strong className="font-bold text-slate-900">{capitalizeWords(s.boundary_b_neighbor)}</strong>
+                                    </span>
+                                  );
+                                }
+                                return elements.map((el, i) => (
+                                  <React.Fragment key={i}>
+                                    {i > 0 && ', '}
+                                    {el}
+                                  </React.Fragment>
+                                ));
+                              })()}
+                            </>
+                          )}
                         </p>
                       </div>
                     )}
