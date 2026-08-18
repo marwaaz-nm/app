@@ -38,7 +38,7 @@ export function notifyDataChanged() {
 
 const THROTTLE_WINDOW_MS = 3000;
 
-export function useDataAutoRefresh(refresh: () => void | Promise<void>, intervalMs = 60000) {
+export function useDataAutoRefresh(refresh: () => void | Promise<void>, intervalMs = 300000) {
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
   const lastRunRef = useRef(0);
