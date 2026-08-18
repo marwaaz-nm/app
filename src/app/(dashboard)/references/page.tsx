@@ -83,25 +83,33 @@ function formatSurveyBoundariesHtml(s?: Reference['surveys']): string {
     const rawVal = (s.boundary_g_val || '').trim();
     const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'M'}` : '-';
     const neighbor = capitalizeWords(s.boundary_g_neighbor);
-    parts.push(`<b>Galbeed= ${val}</b> <span style="font-weight: normal;">waxaana ka xiga</span> <b>${neighbor}</b>`);
+    parts.push(
+      `<span style="font-family: Arial, sans-serif; font-weight: 700; mso-bidi-font-weight: bold;">Galbeed= ${val}</span> <span style="font-family: Arial, sans-serif; font-weight: 400; font-style: normal; mso-bidi-font-weight: normal;">waxaana ka xiga</span> <span style="font-family: Arial, sans-serif; font-weight: 700; mso-bidi-font-weight: bold;">${neighbor}</span>`
+    );
   }
   if (s.boundary_w_val || s.boundary_w_neighbor) {
     const rawVal = (s.boundary_w_val || '').trim();
     const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'm'}` : '-';
     const neighbor = capitalizeWords(s.boundary_w_neighbor);
-    parts.push(`<b>Waqooyi=${val}</b> <span style="font-weight: normal;">waxaana ka xiga</span> <b>${neighbor}</b>`);
+    parts.push(
+      `<span style="font-family: Arial, sans-serif; font-weight: 700; mso-bidi-font-weight: bold;">Waqooyi=${val}</span> <span style="font-family: Arial, sans-serif; font-weight: 400; font-style: normal; mso-bidi-font-weight: normal;">waxaana ka xiga</span> <span style="font-family: Arial, sans-serif; font-weight: 700; mso-bidi-font-weight: bold;">${neighbor}</span>`
+    );
   }
   if (s.boundary_k_val || s.boundary_k_neighbor) {
     const rawVal = (s.boundary_k_val || '').trim();
     const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'm'}` : '-';
     const neighbor = capitalizeWords(s.boundary_k_neighbor);
-    parts.push(`<b>Koonfur=${val}</b> <span style="font-weight: normal;">waxaana ka xiga</span> <b>${neighbor}</b>`);
+    parts.push(
+      `<span style="font-family: Arial, sans-serif; font-weight: 700; mso-bidi-font-weight: bold;">Koonfur=${val}</span> <span style="font-family: Arial, sans-serif; font-weight: 400; font-style: normal; mso-bidi-font-weight: normal;">waxaana ka xiga</span> <span style="font-family: Arial, sans-serif; font-weight: 700; mso-bidi-font-weight: bold;">${neighbor}</span>`
+    );
   }
   if (s.boundary_b_val || s.boundary_b_neighbor) {
     const rawVal = (s.boundary_b_val || '').trim();
     const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'M'}` : '-';
     const neighbor = capitalizeWords(s.boundary_b_neighbor);
-    parts.push(`<b>Bari=${val}</b> <span style="font-weight: normal;">waxaana ka xiga</span> <b>${neighbor}</b>`);
+    parts.push(
+      `<span style="font-family: Arial, sans-serif; font-weight: 700; mso-bidi-font-weight: bold;">Bari=${val}</span> <span style="font-family: Arial, sans-serif; font-weight: 400; font-style: normal; mso-bidi-font-weight: normal;">waxaana ka xiga</span> <span style="font-family: Arial, sans-serif; font-weight: 700; mso-bidi-font-weight: bold;">${neighbor}</span>`
+    );
   }
   return `<span style="font-family: Arial, sans-serif;">${parts.join(', ')}</span>`;
 }

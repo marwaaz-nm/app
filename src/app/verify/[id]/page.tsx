@@ -86,8 +86,8 @@ export default function PublicReferencePage({ params }: { params: Promise<{ id: 
         <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-teal-600 via-teal-600 to-emerald-600 shadow-lg">
           <div className="flex flex-col items-center px-6 pb-6 pt-8 text-center">
             <div
-              className={`flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-4 border-white/30 shadow-lg ${
-                settings.logo_url ? 'bg-white p-2' : 'bg-white/15 text-white'
+              className={`flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-white/30 shadow-lg ${
+                settings.logo_url ? 'bg-transparent' : 'bg-white/15 text-white'
               }`}
             >
               {settings.logo_url ? (

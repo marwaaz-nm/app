@@ -46,8 +46,8 @@ export default function LoginPage() {
       <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white p-8 shadow-xl border border-slate-100">
         <div className="text-center mb-8">
           <div
-            className={`mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl shadow-sm ${
-              settings.logo_url ? 'border border-slate-200 bg-white p-2' : 'border border-teal-100 bg-teal-50 text-teal-600'
+            className={`mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl ${
+              settings.logo_url ? 'bg-transparent' : 'border border-teal-100 bg-teal-50 text-teal-600 shadow-sm'
             }`}
           >
             {settings.logo_url ? (

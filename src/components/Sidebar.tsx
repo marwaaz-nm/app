@@ -114,8 +114,8 @@ export default function Sidebar() {
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div className="flex items-center gap-2.5 px-5 pb-5 pt-5">
             <div
-              className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[14px] shadow-[0_8px_22px_rgba(37,99,235,0.22)] ${
-                settings.logo_url ? 'border border-slate-200 bg-white p-1' : 'bg-teal-600 text-white'
+              className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[14px] ${
+                settings.logo_url ? 'bg-transparent' : 'bg-teal-600 text-white shadow-[0_8px_22px_rgba(37,99,235,0.22)]'
               }`}
             >
               {settings.logo_url ? (
