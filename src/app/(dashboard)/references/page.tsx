@@ -106,6 +106,7 @@ export default function ReferencesPage() {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [qrCopied, setQrCopied] = useState(false);
+  const [boundaryCopied, setBoundaryCopied] = useState(false);
 
   // Connected survey details modal
   const [viewingSurvey, setViewingSurvey] = useState<Survey | null>(null);
@@ -132,13 +133,47 @@ export default function ReferencesPage() {
   };
 
   useEffect(() => {
-    if (!selectedRef) { setQrDataUrl(null); return; }
+    if (!selectedRef) {
+      setQrDataUrl(null);
+      setBoundaryCopied(false);
+      return;
+    }
     setLinkCopied(false);
     setQrCopied(false);
+    setBoundaryCopied(false);
     QRCode.toDataURL(publicVerifyUrl(selectedRef), { margin: 1, width: 220 })
       .then(setQrDataUrl)
       .catch((err) => { console.error('Error generating QR code:', err); setQrDataUrl(null); });
   }, [selectedRef]);
+
+  const handleCopyBoundaries = async (text: string) => {
+    if (!text) return;
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        const plainBlob = new Blob([text], { type: 'text/plain' });
+        const htmlBlob = new Blob([`<span style="font-family: inherit; font-size: inherit;">${text}</span>`], { type: 'text/html' });
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': plainBlob,
+            'text/html': htmlBlob,
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
+      setBoundaryCopied(true);
+      setTimeout(() => setBoundaryCopied(false), 2000);
+    } catch (err) {
+      console.error('Error copying boundary text:', err);
+      try {
+        await navigator.clipboard.writeText(text);
+        setBoundaryCopied(true);
+        setTimeout(() => setBoundaryCopied(false), 2000);
+      } catch {
+        // ignore
+      }
+    }
+  };
 
   const handleCopyLink = async () => {
     if (!selectedRef) return;
@@ -767,14 +802,10 @@ export default function ReferencesPage() {
                             </td>
                             <td
                               className="px-6 py-4 max-w-[280px] lg:max-w-[360px]"
-                              title={
-                                r.details
-                                  ? (formatSurveyBoundaries(r.surveys) ? `${r.details} | ${formatSurveyBoundaries(r.surveys)}` : r.details)
-                                  : (formatSurveyBoundaries(r.surveys) || '')
-                              }
+                              title={r.details || ''}
                             >
                               <p className="truncate text-slate-500 font-medium text-xs">
-                                {r.details || formatSurveyBoundaries(r.surveys) || '-'}
+                                {r.details || '-'}
                               </p>
                             </td>
                             <td className="px-6 py-4">
@@ -933,10 +964,32 @@ export default function ReferencesPage() {
                       </div>
                     </button>
 
-                    {/* Soohdimaha Sahanka (Boundaries Text) */}
+                    {/* Soohdimaha Sahanka (Boundaries Text with Copy Button) */}
                     {formatSurveyBoundaries(selectedRef.surveys) && (
-                      <div className="p-4 rounded-2xl bg-teal-50/30 border border-teal-100/80 space-y-1.5">
-                        <span className="block text-[10px] font-extrabold uppercase tracking-wider text-teal-700">SOOHDIMAHA SAHANKA</span>
+                      <div className="p-4 rounded-2xl bg-teal-50/30 border border-teal-100/80 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="block text-[10px] font-extrabold uppercase tracking-wider text-teal-700">
+                            SOOHDIMAHA SAHANKA
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyBoundaries(formatSurveyBoundaries(selectedRef.surveys))}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-200 bg-white hover:bg-teal-50 text-[11px] font-bold text-teal-700 shadow-2xs transition-all active:scale-95 cursor-pointer"
+                            title="Koobiyeey Soohdimaha Sahanka"
+                          >
+                            {boundaryCopied ? (
+                              <>
+                                <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                <span className="text-emerald-700 font-bold">La koobiyeeyay!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3.5 w-3.5 text-teal-600" />
+                                <span>Copy Soohdimaha</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                         <p className="text-xs font-bold text-slate-800 leading-relaxed select-all bg-white p-3 rounded-xl border border-teal-100/60 shadow-xs">
                           {formatSurveyBoundaries(selectedRef.surveys)}
                         </p>
@@ -948,7 +1001,7 @@ export default function ReferencesPage() {
                 <div className="space-y-2">
                   <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-400">FAAHFAAHIN (NOTES/DETAILS)</span>
                   <div className="p-4 rounded-2xl bg-slate-50/40 border border-slate-200 text-sm text-slate-800 min-h-[100px] leading-relaxed">
-                    {selectedRef.details || (selectedRef.surveys && formatSurveyBoundaries(selectedRef.surveys)) || 'No additional notes provided.'}
+                    {selectedRef.details || 'No additional notes provided.'}
                   </div>
                 </div>
 
