@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDriveAdminClient } from '@/lib/driveSupabase';
-import { findConnectionByChannelId, processDriveChanges } from '@/lib/driveWatch';
+import {
+  claimDriveChangeProcessing,
+  findConnectionByChannelId,
+  finishDriveChangeProcessing,
+  processDriveChanges,
+  releaseDriveChangeProcessing,
+} from '@/lib/driveWatch';
+
+const MAX_DRAIN_PASSES = 3;
 
 // Google Drive's push-notification endpoint for every connection's watch channel. This
 // is publicly reachable by design (Drive can't send our normal Supabase session bearer
@@ -27,8 +35,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    await processDriveChanges(driveAdmin, lookup.conn, lookup.connectionId, lookup.pageToken);
-    return NextResponse.json({ ok: true });
+    const claim = await claimDriveChangeProcessing(driveAdmin, lookup.connectionId);
+    if (!claim.acquired) return NextResponse.json({ ok: true, deduplicated: true });
+
+    const startedAt = Date.now();
+    let processed = 0;
+    let removed = 0;
+    let passes = 0;
+    try {
+      let repeat: boolean;
+      do {
+        // Re-read the cursor on a drain pass because the previous pass advances it.
+        const current = passes === 0
+          ? lookup
+          : await findConnectionByChannelId(driveAdmin, channelId);
+        if (!current?.pageToken) break;
+        const result = await processDriveChanges(driveAdmin, current.conn, current.connectionId, current.pageToken);
+        processed += result.processed;
+        removed += result.removed;
+        passes += 1;
+        repeat = await finishDriveChangeProcessing(driveAdmin, lookup.connectionId, claim.distributed);
+      } while (repeat && passes < MAX_DRAIN_PASSES);
+
+      console.log(JSON.stringify({
+        level: 'info',
+        message: 'Drive webhook processed',
+        connectionId: lookup.connectionId,
+        processed,
+        removed,
+        passes,
+        durationMs: Date.now() - startedAt,
+      }));
+      return NextResponse.json({ ok: true, processed, removed });
+    } finally {
+      await releaseDriveChangeProcessing(driveAdmin, lookup.connectionId, claim.distributed);
+    }
   } catch (error) {
     console.error('[drive-webhook]', error);
     // A transient failure (e.g. Drive/Supabase hiccup) is worth a retry from Google's

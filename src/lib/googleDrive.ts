@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { Readable } from 'stream';
 import { google, drive_v3 } from 'googleapis';
 
 const WORD_MIME_TYPES = [
@@ -321,6 +322,32 @@ export async function downloadFile(conn: DriveConnection, fileId: string): Promi
 
   return {
     buffer: Buffer.from(contentResponse.data),
+    name: metaResponse.data.name || 'document',
+    mimeType: metaResponse.data.mimeType || 'application/octet-stream',
+  };
+}
+
+export async function downloadFileStream(
+  conn: DriveConnection,
+  fileId: string,
+): Promise<{ stream: ReadableStream<Uint8Array>; name: string; mimeType: string }> {
+  const drive = getClient(conn);
+  const metaResponse: { data: drive_v3.Schema$File } = await drive.files.get({
+    fileId,
+    fields: 'name, mimeType',
+    supportsAllDrives: true,
+  });
+
+  const contentResponse = await drive.files.get(
+    { fileId, alt: 'media', supportsAllDrives: true },
+    { responseType: 'stream' },
+  );
+
+  const nodeStream = contentResponse.data as unknown as Readable;
+  const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
+
+  return {
+    stream: webStream,
     name: metaResponse.data.name || 'document',
     mimeType: metaResponse.data.mimeType || 'application/octet-stream',
   };

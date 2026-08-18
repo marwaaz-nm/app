@@ -154,7 +154,7 @@ export default function WorkspaceHeader() {
       active = false;
       controller.abort();
     };
-  }, [loading, pathname, profileId, schemaReady, userId]);
+  }, [loading, profileId, schemaReady, userId]);
 
   useEffect(() => {
     if (loading || !userId || !schemaReady) return;

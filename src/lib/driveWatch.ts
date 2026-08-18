@@ -11,10 +11,86 @@ import {
   type DriveConnection,
 } from '@/lib/googleDrive';
 import { extractDocxText } from '@/lib/docxText';
-import { upsertIndexedDocuments, deleteIndexedDocuments } from '@/lib/driveIndex';
+import { upsertIndexedDocuments, deleteIndexedDocuments, getIndexedFileMap, type IndexedDocument } from '@/lib/driveIndex';
 
 const MODERN_DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const WEBHOOK_PATH = '/api/drive-webhook';
+const DOCX_EXTRACTION_CONCURRENCY = 3;
+
+type ProcessingClaim = { acquired: boolean; distributed: boolean };
+type LocalProcessingState = { pending: boolean };
+const localProcessing = new Map<number, LocalProcessingState>();
+let processingRpcAvailable: boolean | null = null;
+
+function isMissingProcessingRpc(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === '42883'
+    || error.code === 'PGRST202'
+    || Boolean(error.message?.includes('claim_drive_watch_processing'));
+}
+
+// The database lease coordinates separate Vercel instances. The in-memory fallback
+// keeps deployments safe while the migration is being rolled out, and still dedupes
+// overlapping notifications that land on the same warm instance.
+export async function claimDriveChangeProcessing(admin: SupabaseClient, connectionId: number): Promise<ProcessingClaim> {
+  if (processingRpcAvailable === false) return claimLocalDriveChangeProcessing(connectionId);
+
+  const { data, error } = await admin.rpc('claim_drive_watch_processing', {
+    p_connection_id: connectionId,
+    p_lease_seconds: 120,
+  });
+  if (!error) {
+    processingRpcAvailable = true;
+    return { acquired: data === true, distributed: true };
+  }
+  if (!isMissingProcessingRpc(error)) throw error;
+  processingRpcAvailable = false;
+
+  return claimLocalDriveChangeProcessing(connectionId);
+}
+
+function claimLocalDriveChangeProcessing(connectionId: number): ProcessingClaim {
+  const current = localProcessing.get(connectionId);
+  if (current) {
+    current.pending = true;
+    return { acquired: false, distributed: false };
+  }
+  localProcessing.set(connectionId, { pending: false });
+  return { acquired: true, distributed: false };
+}
+
+export async function finishDriveChangeProcessing(
+  admin: SupabaseClient,
+  connectionId: number,
+  distributed: boolean,
+): Promise<boolean> {
+  if (distributed) {
+    const { data, error } = await admin.rpc('finish_drive_watch_processing', { p_connection_id: connectionId });
+    if (error) throw error;
+    return data === true;
+  }
+
+  const current = localProcessing.get(connectionId);
+  if (current?.pending) {
+    current.pending = false;
+    return true;
+  }
+  localProcessing.delete(connectionId);
+  return false;
+}
+
+export async function releaseDriveChangeProcessing(
+  admin: SupabaseClient,
+  connectionId: number,
+  distributed: boolean,
+): Promise<void> {
+  if (distributed) {
+    const { error } = await admin.rpc('release_drive_watch_processing', { p_connection_id: connectionId });
+    if (error) console.error('[drive-webhook] failed to release processing lease', { connectionId, error: error.message });
+  } else {
+    localProcessing.delete(connectionId);
+  }
+}
 
 export type WatchStatus = { active: boolean; expiresAt: string | null };
 
@@ -118,28 +194,60 @@ export async function registerWatch(
 export async function processDriveChanges(admin: SupabaseClient, conn: DriveConnection, connectionId: number, pageToken: string): Promise<{ processed: number; removed: number }> {
   const { changes, newStartPageToken } = await listDriveChanges(conn, pageToken);
 
-  const toDelete: string[] = [];
-  const toUpsert = changes.filter((c) => !c.removed && c.file && !c.file.trashed && c.file.mimeType === MODERN_DOCX_MIME);
-  for (const c of changes) {
-    if (c.removed || c.file?.trashed) toDelete.push(c.fileId);
-  }
+  // A change log can contain several entries for the same file. Only its latest state
+  // matters; parsing every intermediate version wastes the majority of webhook CPU.
+  const latestByFileId = new Map<string, (typeof changes)[number]>();
+  for (const change of changes) latestByFileId.set(change.fileId, change);
+  const latestChanges = Array.from(latestByFileId.values());
+
+  const toDelete = latestChanges
+    .filter((change) => change.removed || change.file?.trashed)
+    .map((change) => change.fileId);
+  const upsertCandidates = latestChanges.filter(
+    (change) => !change.removed
+      && change.file
+      && !change.file.trashed
+      && change.file.mimeType === MODERN_DOCX_MIME,
+  );
 
   if (toDelete.length > 0) await deleteIndexedDocuments(admin, connectionId, toDelete);
 
   let processed = 0;
-  if (toUpsert.length > 0) {
-    const docs = await Promise.all(toUpsert.map(async (c) => {
-      try {
-        const buffer = await downloadFileContent(conn, c.fileId);
-        const text = await extractDocxText(buffer);
-        return { fileId: c.fileId, fileName: c.file!.name, webViewLink: c.file!.webViewLink, modifiedTime: c.file!.modifiedTime, text };
-      } catch {
-        return null;
-      }
-    }));
-    const okDocs = docs.filter((d): d is NonNullable<typeof d> => d !== null);
-    await upsertIndexedDocuments(admin, connectionId, okDocs);
-    processed = okDocs.length;
+  if (upsertCandidates.length > 0) {
+    const indexedMap = await getIndexedFileMap(admin, connectionId);
+    const toUpsert = upsertCandidates.filter((change) => {
+      const indexedTime = indexedMap.get(change.fileId);
+      const liveTime = change.file?.modifiedTime;
+      if (!indexedTime || !liveTime) return true;
+      return new Date(indexedTime).getTime() !== new Date(liveTime).getTime();
+    });
+
+    for (let offset = 0; offset < toUpsert.length; offset += DOCX_EXTRACTION_CONCURRENCY) {
+      const batch = toUpsert.slice(offset, offset + DOCX_EXTRACTION_CONCURRENCY);
+      const docs = await Promise.all(batch.map(async (change): Promise<IndexedDocument | null> => {
+        try {
+          const buffer = await downloadFileContent(conn, change.fileId);
+          const text = await extractDocxText(buffer);
+          return {
+            fileId: change.fileId,
+            fileName: change.file!.name,
+            webViewLink: change.file!.webViewLink,
+            modifiedTime: change.file!.modifiedTime,
+            text,
+          };
+        } catch (error) {
+          console.error('[drive-webhook] document extraction failed', {
+            connectionId,
+            fileId: change.fileId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return null;
+        }
+      }));
+      const okDocs = docs.filter((doc): doc is IndexedDocument => doc !== null);
+      await upsertIndexedDocuments(admin, connectionId, okDocs);
+      processed += okDocs.length;
+    }
   }
 
   if (newStartPageToken) {

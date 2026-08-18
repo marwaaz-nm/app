@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError, requireViewer } from '@/lib/server-auth';
 import { getDriveAdminClient } from '@/lib/driveSupabase';
-import { downloadFile } from '@/lib/googleDrive';
+import { downloadFileStream } from '@/lib/googleDrive';
 import { getDriveConnection } from '@/lib/driveConnections';
 
 function contentDisposition(name: string): string {
@@ -20,8 +20,8 @@ export async function GET(req: NextRequest) {
     }
     const conn = await getDriveConnection(getDriveAdminClient(), connectionId);
 
-    const { buffer, name, mimeType } = await downloadFile(conn, fileId);
-    return new NextResponse(new Uint8Array(buffer), {
+    const { stream, name, mimeType } = await downloadFileStream(conn, fileId);
+    return new NextResponse(stream as BodyInit, {
       headers: {
         'Content-Type': mimeType,
         'Content-Disposition': contentDisposition(name),

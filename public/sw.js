@@ -1,5 +1,5 @@
 /* Marwaazpn offline worker: app shell cache, per-session data cache, and survey sync queue. */
-const VERSION = 'marwaazpn-offline-v4';
+const VERSION = 'marwaazpn-offline-v5';
 const SHELL_CACHE = `${VERSION}-shell`;
 const DATA_CACHE_PREFIX = `${VERSION}-data-`;
 const DB_NAME = 'marwaazpn-offline';
@@ -25,6 +25,8 @@ self.addEventListener('activate', (event) => {
     const names = await caches.keys();
     await Promise.all(names.filter((name) => name.startsWith('marwaazpn-offline-') && !name.startsWith(VERSION)).map((name) => caches.delete(name)));
     await self.clients.claim();
+    const windows = await self.clients.matchAll({ type: 'window' });
+    await Promise.all(windows.map((client) => client.navigate(client.url)));
     await broadcastQueueStatus();
   })());
 });

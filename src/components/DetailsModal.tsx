@@ -695,8 +695,8 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             logging: false,
             backgroundColor: '#ffffff'
           });
-          // Target ratio matches the Page 3 image box: ~655px wide x 550px tall.
-          const satCropped = cropCanvasToAspect(satCanvas, 655 / 800);
+          // Match the tall satellite frame in the supplied second-page template.
+          const satCropped = cropCanvasToAspect(satCanvas, 658 / 780);
           satImage = satCropped.toDataURL('image/jpeg', 0.95);
         } catch (e) {
           console.error('Failed to capture satellite map', e);
@@ -724,21 +724,12 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           Object.values(parseDirectionPositions(record.boundary_label_positions)).forEach((position) => {
             if (position) pdfSketchBounds.extend([position.lat, position.lng]);
           });
-          sketchMap?.fitBounds(pdfSketchBounds, { animate: false, padding: [32, 32] });
+          sketchMap?.fitBounds(pdfSketchBounds, { animate: false, padding: [20, 20] });
         }
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const restoreSketch = prepareMapForCapture(sketchContainer);
 
-        const areaBox = sketchMapContainerRef.current.querySelector('.modal-area-box') as HTMLElement;
-        const originalAreaHTML = areaBox ? areaBox.innerHTML : '';
-        if (areaBox) {
-          const strongEl = areaBox.querySelector('strong');
-          const areaNum = strongEl ? strongEl.innerText.replace(' m²', '').replace('m²', '').trim() : '';
-          areaBox.innerHTML = `<div style="line-height: 1.3;">Area =<br/>${areaNum}</div>`;
-        }
-
-        // The downloaded report intentionally omits the center Area badge. Keep it in
-        // the live editor/details view and hide it only for this canvas capture.
+        // The supplied template does not show the total-area badge inside the sketch.
         const areaMarker = sketchContainer.querySelector('.sketch-area-label') as HTMLElement | null;
         const originalAreaDisplay = areaMarker?.style.display || '';
         if (areaMarker) areaMarker.style.display = 'none';
@@ -803,9 +794,6 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           originalStyles.forEach((style, layer) => {
             layer.setStyle(style);
           });
-          if (areaBox) {
-            areaBox.innerHTML = originalAreaHTML;
-          }
           if (areaMarker) areaMarker.style.display = originalAreaDisplay;
           restoreSketch();
           sketchContainer.style.width = originalSketchWidth;
@@ -878,7 +866,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
       printContainer.innerHTML = `
         <!-- Page 1: Official Land Survey Form -->
-        <div style="width:750px;min-height:1040px;padding:32px 38px 28px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;background:#ffffff;color:#000000;position:relative;">
+        <div class="survey-pdf-page" style="width:750px;height:1060px;padding:32px 38px 28px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;background:#ffffff;color:#000000;position:relative;overflow:hidden;">
           ${watermarkHTML}
           <div style="position:relative;z-index:1;">
             ${headerHTML}
@@ -970,7 +958,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         <div class="html2pdf__page-break" style="page-break-after: always; height: 0;"></div>
 
         <!-- Page 2: Technical Sketch and Satellite Location -->
-        <div style="width:750px;min-height:1040px;padding:32px 38px 28px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;background:#ffffff;color:#000000;position:relative;">
+        <div class="survey-pdf-page" style="width:750px;height:1060px;padding:32px 38px 28px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;background:#ffffff;color:#000000;position:relative;overflow:hidden;">
           ${watermarkHTML}
           <div style="position:relative;z-index:1;">
             ${headerHTML}
@@ -1010,20 +998,26 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         </div>
       `;
 
-      // Match the supplied two-page Survey_Report_SN_6 reference exactly: classic
-      // centered masthead, blue data tables and sketch on page 1; GPS heading and a
-      // full-height satellite image on page 2.
-      const classicHeader = `
-        <div style="display:flex;align-items:center;justify-content:center;gap:26px;height:122px;">
-          <img src="/icon.png" style="width:94px;height:94px;object-fit:contain;" />
-          <div style="text-align:left;font-weight:700;line-height:1.18;">
-            <div style="font-size:25px;color:#0865ed;">${settings.org_name_so || 'Nootaayo Marwaaz'}</div>
-            <div style="font-size:21px;color:#c40000;text-align:center;margin:5px 0;direction:rtl;">كاتب العدل مرواز</div>
-            <div style="font-size:22px;color:#000000;">${settings.org_name_en || 'Marwaaz Public Notary'}</div>
+      // The supplied Word/PDF template is the visual authority for this export.
+      const classicHeader = (includeSomaliTitle: boolean) => `
+        <div style="display:grid;grid-template-columns:1fr 104px 1fr;align-items:center;height:90px;font-family:Arial,sans-serif;">
+          <div style="text-align:center;font-weight:800;line-height:1.25;white-space:nowrap;">
+            <div style="font-size:14px;color:#0865ed;">Federal Republic of Somalia</div>
+            <div style="font-size:14px;color:#c40000;">Marwaaz Public Notary</div>
+            <div style="font-size:12px;color:#1f2937;">Baidoa, Somalia</div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:center;">
+            <img src="/icon.png" alt="Marwaaz Public Notary" style="width:82px;height:82px;object-fit:contain;display:block;" />
+          </div>
+          <div style="text-align:center;font-weight:800;line-height:1.25;white-space:nowrap;direction:rtl;">
+            <div style="font-size:14px;color:#0865ed;">جمهورية الصومال الفيدرالية</div>
+            <div style="font-size:14px;color:#c40000;">كاتب العدل مرواز</div>
+            <div style="font-size:12px;color:#1f2937;">بيدوا، الصومال</div>
           </div>
         </div>
-        <div style="height:3px;background:#153b75;margin-bottom:14px;"></div>`;
-      const contactLine = `<div style="border-top:2px solid #111827;margin:10px 38px 0;padding-top:7px;text-align:center;font-size:12px;line-height:1.2;white-space:nowrap;">Tel: ${settings.contact_phone || ''} Email: <span style="color:#0000ee;text-decoration:underline;">${settings.contact_email || ''}</span></div>`;
+        ${includeSomaliTitle ? `<div style="text-align:center;font-weight:800;line-height:1.15;margin:1px 0 8px;"><div style="font-size:14px;color:#0865ed;">Jamhuuriyadda Federaalka Soomaaliya</div><div style="font-size:14px;color:#c40000;">Nootaayo Marwaaz</div></div>` : ''}
+        <div style="height:3px;background:#0b2f63;margin-bottom:10px;"></div>`;
+      const contactLine = `<div style="border-top:1.5px solid #111827;margin:7px 18px 0;padding-top:6px;text-align:center;font-size:11px;line-height:1.2;white-space:nowrap;">Tel: +252 61 7 41 41 41 / +252 61 5 92 96 94 Email: <span style="color:#0000ee;text-decoration:underline;">info@marwaazpn.com | marwaaznotary@gmail.com</span></div>`;
       const sideRows = [
         ['Waqooyi / North', cleanVal(record.boundary_w_val), record.boundary_w_neighbor || '-'],
         ['Bari / East', cleanVal(record.boundary_b_val), record.boundary_b_neighbor || '-'],
@@ -1032,40 +1026,43 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       ].map(([side, length, neighbour]) => `<tr><td style="font-weight:700;">${side}</td><td>${length}m</td><td>${neighbour}</td></tr>`).join('');
 
       printContainer.innerHTML = `
-        <div class="survey-pdf-page" style="width:750px;height:1060px;padding:24px 34px 16px;box-sizing:border-box;display:flex;flex-direction:column;font:14px/1.2 Arial,sans-serif;background:#fff;color:#000;position:relative;overflow:hidden;">
+        <div class="survey-pdf-page" style="width:750px;height:1060px;padding:24px 42px 20px;box-sizing:border-box;display:flex;flex-direction:column;font:12px/1.15 Arial,sans-serif;background:#fff;color:#000;position:relative;overflow:hidden;">
           <div style="position:absolute;left:205px;top:350px;width:330px;height:330px;opacity:.06;"><img src="/icon.png" style="width:100%;height:100%;object-fit:contain;" /></div>
-          <div style="position:relative;z-index:1;">${classicHeader}
-            <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:700;padding:0 12px 6px;"><span>Sumad No: ${record.survey_no || record.serial_no}</span><span>Taariikh: ${issueDate}</span></div>
-            <div style="font-size:21px;font-weight:800;text-align:center;margin:0 0 6px;">WARBIXINTA RASMIGA AH EE DHULKA</div>
-            <table class="classic-survey-table" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:16px;margin-bottom:15px;">
+          <div style="position:relative;z-index:1;">${classicHeader(true)}
+            <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:0 5px 6px;"><span>Sumad No: ${record.survey_no || record.serial_no}</span><span>Taariikh: ${issueDate}</span></div>
+            <div style="font-size:14px;font-weight:800;text-align:center;margin:0 0 6px;">WARBIXINTA RASMIGA AH EE DHULKA</div>
+            <table class="classic-survey-table" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px;margin-bottom:11px;">
               <tr><th>Milkiilaha / Owner</th><th>Goobta (Location):</th></tr>
               <tr><td>${record.owner_name}</td><td>${record.neighborhood}${record.branch ? ' - ' + record.branch : ''}</td></tr>
               <tr><th>GPS Coordinates</th><th>Cabirka Guud / Total Area</th></tr>
               <tr><td>Latitude: ${latVal} Longitude: ${lngVal}</td><td>${areaClean} m²</td></tr>
             </table>
-            <div style="font-size:16px;font-weight:800;line-height:1.15;margin:0 4px 8px;white-space:nowrap;">Cabirka Iyo Soohdimaha Dhulka /Plot Measurements &amp; Neighboring Directions</div>
-            <table class="classic-survey-table" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:15px;margin-bottom:10px;">
-              <tr><th style="width:35%;">Jihada / Side</th><th style="width:25%;">Cabirka / Length (M)</th><th>Deriska / Neighbour</th></tr>
+            <div style="font-size:14px;font-weight:800;line-height:1.15;margin:0 4px 8px;white-space:normal;text-align:center;">Cabirka Iyo Soohdimaha Dhulka /Plot Measurements &amp; Neighboring Directions</div>
+            <table class="classic-survey-table measurement-table" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px;margin-bottom:10px;">
+              <tr><th style="width:24%;">Jihada / Side</th><th style="width:29%;">Cabirka / Length (M)</th><th style="width:47%;">Deriska / Neighbour</th></tr>
               ${sideRows}
             </table>
-            <div style="font-size:16px;font-weight:800;margin:0 4px 8px;">Jaantuska Cabbirka iyo Bedka Dhulka</div>
-            <div style="height:455px;border:2px solid #1683df;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+            <div style="font-size:14px;font-weight:800;margin:0 4px 8px;">Jaantuska Cabbirka iyo Bedka Dhulka</div>
+            <div style="height:400px;border:1px solid #1683df;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;">
               ${sketchImage ? `<img src="${sketchImage}" style="width:100%;height:100%;object-fit:contain;display:block;" />` : ''}
             </div>
           </div>
           <div style="margin-top:auto;position:relative;z-index:1;">${contactLine}</div>
         </div>
         <div class="html2pdf__page-break" style="page-break-after:always;height:0;"></div>
-        <div class="survey-pdf-page" style="width:750px;height:1060px;padding:26px 46px 16px;box-sizing:border-box;display:flex;flex-direction:column;font:14px/1.2 Arial,sans-serif;background:#fff;color:#000;overflow:hidden;">
-          <div style="height:52px;border:1.5px solid #111;display:flex;align-items:center;justify-content:center;text-align:center;font-size:21px;font-weight:800;margin-bottom:9px;padding:0 10px;box-sizing:border-box;">GPS Ir Latitude&nbsp; <span style="color:#0000ee;">(${latVal}, ${lngVal})</span>&nbsp; Longitude</div>
-          <div style="height:800px;border:2px solid #1683df;background:#e2e8f0;overflow:hidden;">
+        <div class="survey-pdf-page" style="width:750px;height:1060px;padding:20px 46px 20px;box-sizing:border-box;display:flex;flex-direction:column;font:14px/1.2 Arial,sans-serif;background:#fff;color:#000;overflow:hidden;">
+          <div>${classicHeader(true)}</div>
+          <div style="height:46px;border:1.5px solid #111;display:flex;align-items:center;justify-content:center;text-align:center;font-size:14px;font-weight:800;margin:8px 0 14px;padding:0 10px;box-sizing:border-box;">GPS Ir Latitude&nbsp; <span style="color:#0000ee;">(${latVal}, ${lngVal})</span>&nbsp; Longitude</div>
+          <div style="height:695px;border:1px solid #1683df;background:#e2e8f0;overflow:hidden;">
             ${satImage ? `<img src="${satImage}" style="width:100%;height:100%;display:block;" />` : ''}
           </div>
           <div style="margin-top:auto;">${contactLine}</div>
         </div>
         <style>
-          .classic-survey-table th{background:#0b79bd;color:#fff;text-align:left;font-size:16px;font-weight:800;padding:5px 7px;border:1px solid #111;line-height:1.15;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;box-sizing:border-box;}
-          .classic-survey-table td{font-size:15px;padding:5px 7px;border:1px solid #111;line-height:1.15;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;box-sizing:border-box;}
+          .classic-survey-table th{background:#0b79bd;color:#fff;text-align:left;font:800 16px/1.15 Arial,sans-serif;padding:8px 9px;border:1px solid #b4c7d3;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;box-sizing:border-box;}
+          .classic-survey-table td{text-align:left;font:400 14px/1.15 Arial,sans-serif;padding:8px 9px;border:1px solid #b4c7d3;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;box-sizing:border-box;}
+          .measurement-table th:nth-child(2),.measurement-table td:nth-child(2){text-align:center;}
+          .classic-survey-table tbody tr:nth-child(even) td{background:#e7f3f7;}
         </style>`;
 
       offscreenHost.appendChild(printContainer);
@@ -1100,10 +1097,36 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         if (index > 0) pdf.addPage('a4', 'portrait');
         pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.98), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
       }
-      pdf.save(`Survey_Report_SN_${record.serial_no}_${record.owner_name.replace(/\s+/g, '_')}.pdf`);
-      showAlert('Guul', 'PDF-ka waa la soo dejiyay.', 'success');
+      const fileName = `Survey_Report_SN_${record.serial_no}_${record.owner_name.replace(/\s+/g, '_')}.pdf`;
+      const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.matchMedia('(pointer: coarse)').matches;
+
+      if (isMobileDevice) {
+        const pdfBlob = pdf.output('blob');
+        const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+        const shareData: ShareData = { files: [pdfFile], title: fileName };
+
+        if (typeof navigator.share === 'function' && (!navigator.canShare || navigator.canShare(shareData))) {
+          await navigator.share(shareData);
+          showAlert('Guul', 'PDF-ka waa la diyaariyey. Ka dooro Save ama app-ka aad rabto.', 'success');
+        } else {
+          const blobUrl = URL.createObjectURL(pdfBlob);
+          const downloadLink = document.createElement('a');
+          downloadLink.href = blobUrl;
+          downloadLink.download = fileName;
+          downloadLink.rel = 'noopener';
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          downloadLink.remove();
+          window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+          showAlert('Guul', 'PDF-ka waa la soo dejiyay.', 'success');
+        }
+      } else {
+        pdf.save(fileName);
+        showAlert('Guul', 'PDF-ka waa la soo dejiyay.', 'success');
+      }
 
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Error generating PDF:', err);
       showAlert('Cillad', 'Ma suuragalin in PDF-ka la soo dejiyo.', 'error');
     } finally {

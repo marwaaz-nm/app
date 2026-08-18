@@ -199,10 +199,7 @@ export default function DriveConnectionsPanel() {
     }
   };
 
-  // Several sync requests run concurrently per round instead of one at a time — each
-  // one is a separate server invocation with its own time budget, so N at once gets
-  // roughly N times the documents through per round instead of serializing them.
-  const SYNC_CONCURRENCY = 4;
+  // Sequential batching prevents multiple serverless instances from competing for CPU/RAM on Vercel.
   const SYNC_MAX_ROUNDS = 2000;
 
   const handleSync = async (conn: Connection) => {
@@ -211,29 +208,26 @@ export default function DriveConnectionsPanel() {
     try {
       let totalProcessed = 0;
       for (let round = 0; round < SYNC_MAX_ROUNDS; round++) {
-        const responses = await Promise.all(
-          Array.from({ length: SYNC_CONCURRENCY }, () => authenticatedFetch(`/api/drive-connections/${conn.id}/sync`, { method: 'POST' })),
-        );
-        const bodies = await Promise.all(responses.map((r) => r.json()));
-
-        let roundProcessed = 0;
-        let minPending = Infinity;
-        let firstError: string | null = null;
-        for (let i = 0; i < responses.length; i++) {
-          if (!responses[i].ok) { firstError = firstError || bodies[i]?.error || 'Isku-dheelitirku wuu fashilmay.'; continue; }
-          const progress: SyncProgress = bodies[i].progress;
-          roundProcessed += progress.processedThisBatch;
-          minPending = Math.min(minPending, progress.totalPending);
+        const response = await authenticatedFetch(`/api/drive-connections/${conn.id}/sync`, { method: 'POST' });
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body?.error || 'Isku-dheelitirku wuu fashilmay.');
         }
-        if (firstError && roundProcessed === 0) throw new Error(firstError);
 
-        totalProcessed += roundProcessed;
-        const remaining = minPending === Infinity ? 0 : minPending;
+        const progress: SyncProgress = body.progress;
+        totalProcessed += progress.processedThisBatch;
+        const remaining = progress.totalPending;
+
         setSyncNote((prev) => ({
           ...prev,
-          [conn.id]: remaining <= 0 ? 'Dhammaystiray, cusboonaysiinaya...' : `${totalProcessed} la keydiyay, ~${remaining} ka hadhay...`,
+          [conn.id]: progress.done || remaining <= 0
+            ? 'Dhammaystiray, cusboonaysiinaya...'
+            : `${totalProcessed} la keydiyay, ~${remaining} ka hadhay...`,
         }));
-        if (remaining <= 0) break;
+
+        if (progress.done || remaining <= 0) break;
+        // Brief pause between rounds to allow server resources to settle smoothly
+        await new Promise((resolve) => setTimeout(resolve, 150));
       }
       await loadStatus(conn.id);
       setSyncNote((prev) => ({ ...prev, [conn.id]: '' }));

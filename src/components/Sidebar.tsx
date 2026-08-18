@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -24,7 +24,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
-import { supabase } from '@/lib/supabase';
 
 type NavItem = { href: string; label: string; mobileLabel: string; icon: typeof ChartNoAxesCombined; alwaysVisible?: boolean };
 
@@ -94,34 +93,6 @@ export default function Sidebar() {
     .filter((group) => group.items.length > 0);
 
   const permittedNavigation = permittedGroups.flatMap((group) => group.items);
-  const canSeeDriveFiles = permittedNavigation.some((item) => item.href === '/drive-files');
-
-  // Drive Files' first load is a live Google Drive API call (connections list, then the
-  // root folder listing) — both cached server-side, but the cache starts cold every time.
-  // Warming it here, right after login, means it's already hot by the time someone
-  // actually clicks into Drive Files instead of them watching it load from scratch.
-  const drivePrefetchedRef = useRef(false);
-  useEffect(() => {
-    if (!canSeeDriveFiles || drivePrefetchedRef.current) return;
-    drivePrefetchedRef.current = true;
-    void (async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-        const headers = { Authorization: `Bearer ${session.access_token}` };
-        const response = await fetch('/api/drive-connections', { headers });
-        if (!response.ok) return;
-        const result = await response.json();
-        const connections: { id: number }[] = result.connections || [];
-        if (connections.length === 1) {
-          void fetch(`/api/drive-files?connectionId=${connections[0].id}`, { headers });
-        }
-      } catch {
-        // Best-effort warm-up only — Drive Files will simply load from cold if this fails.
-      }
-    })();
-  }, [canSeeDriveFiles]);
-
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   const primaryMobileNav = PRIMARY_MOBILE_HREFS

@@ -6,14 +6,10 @@ import { extractDocxText } from '@/lib/docxText';
 import { getIndexedFileMap, upsertIndexedDocuments, deleteIndexedDocuments, type IndexedDocument } from '@/lib/driveIndex';
 
 const MODERN_DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-// Kept comfortably under typical serverless function time limits — a sync call that
-// hits this budget simply reports it's not done yet, and the caller invokes it again to
-// continue where it left off.
-const SYNC_TIME_BUDGET_MS = 8000;
-// Downloading is I/O-bound (waiting on Drive's response), not CPU-bound, so one call can
-// safely have many downloads in flight at once — this is the main lever for how many
-// documents one call gets through inside its time budget.
-const DOWNLOAD_BATCH_SIZE = 15;
+// Kept comfortably under Vercel serverless function time limits and prevents long-running CPU locks.
+const SYNC_TIME_BUDGET_MS = 6000;
+// Balanced batch size to keep network download and XML extraction lightweight per iteration.
+const DOWNLOAD_BATCH_SIZE = 8;
 
 // A full sync of a large connection takes many batched calls in a row (each one time-
 // boxed to stay under serverless limits). Re-listing every file across the whole folder
@@ -68,21 +64,13 @@ export async function syncConnectionIndex(admin: SupabaseClient, conn: DriveConn
     return { totalLive: liveDocs.length, totalPending: 0, processedThisBatch: 0, removedThisBatch: staleIds.length, done: true };
   }
 
-  // The client fires several of these calls concurrently for real throughput (separate
-  // requests, not just concurrent downloads within one) — see DriveConnectionsPanel's
-  // sync loop. Each call independently recomputes "pending" from the same live/indexed
-  // diff, so without this, concurrent calls would all start at index 0 and redundantly
-  // race for the exact same documents. Starting from a random offset (wrapping around)
-  // spreads concurrent calls across different documents instead.
-  const startOffset = Math.floor(Math.random() * pending.length);
-
   const t0 = Date.now();
   let processed = 0;
   let taken = 0;
   while (taken < pending.length && Date.now() - t0 < SYNC_TIME_BUDGET_MS) {
     const batch: typeof pending = [];
     for (let k = 0; k < DOWNLOAD_BATCH_SIZE && taken < pending.length; k++, taken++) {
-      batch.push(pending[(startOffset + taken) % pending.length]);
+      batch.push(pending[taken]);
     }
 
     const docs = await Promise.all(batch.map(async (file): Promise<IndexedDocument | null> => {

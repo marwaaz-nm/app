@@ -23,17 +23,26 @@ function decodeEntities(value: string): string {
   });
 }
 
-// Word breaks a paragraph's text into multiple <w:t> runs; a run ending mid-word and the
-// next starting immediately (no <w:t xml:space="preserve">) would otherwise glue words
-// together, so a space is inserted between adjacent runs before tags are stripped.
+// Word stores text runs in <w:t> elements. Extracting text runs directly is
+// significantly faster and avoids performing expensive regex replacements across
+// megabytes of styling and layout XML markup.
 export async function extractDocxText(buffer: Buffer): Promise<string> {
   const zip = await JSZip.loadAsync(buffer);
   const documentXml = zip.file('word/document.xml');
   if (!documentXml) return '';
 
   const xml = await documentXml.async('text');
-  const withSpacedRuns = xml.replace(/></g, '> <');
-  const withoutTags = withSpacedRuns.replace(/<[^>]+>/g, ' ');
-  const decoded = decodeEntities(withoutTags);
-  return decoded.replace(/\s+/g, ' ').trim();
+  const matches = xml.match(/<w:t(?:\s+[^>]*)?>([\s\S]*?)<\/w:t>/g);
+  if (!matches || matches.length === 0) return '';
+
+  const textPieces: string[] = [];
+  for (let i = 0; i < matches.length; i++) {
+    const raw = matches[i].replace(/^<w:t(?:\s+[^>]*)?>|<\/w:t>$/g, '');
+    if (raw) {
+      textPieces.push(decodeEntities(raw));
+    }
+  }
+
+  return textPieces.join(' ').replace(/\s+/g, ' ').trim();
 }
+

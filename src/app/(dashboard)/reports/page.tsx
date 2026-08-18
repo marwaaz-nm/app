@@ -32,7 +32,8 @@ export default function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
       const token = await accessToken();
       const response = await fetch('/api/reports', { headers: { Authorization: `Bearer ${token}` } });
@@ -41,27 +42,18 @@ export default function ReportsPage() {
       setData(result);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Report-ka lama soo qaadi karin.');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const token = await accessToken();
-        const response = await fetch('/api/reports', { headers: { Authorization: `Bearer ${token}` } });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Report-ka lama soo qaadi karin.');
-        if (active) setData(result);
-      } catch (loadError) {
-        if (active) setError(loadError instanceof Error ? loadError.message : 'Report-ka lama soo qaadi karin.');
-      } finally { if (active) setLoading(false); }
-    })();
-    return () => { active = false; };
+    void load();
   }, []);
 
   async function downloadReport(format: 'csv' | 'geojson' | 'backup') {
-    setDownloading(format); setError(null);
+    setDownloading(format);
+    setError(null);
     try {
       const token = await accessToken();
       const response = await fetch(`/api/reports?format=${format}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -74,11 +66,15 @@ export default function ReportsPage() {
       const name = disposition.match(/filename="([^"]+)"/)?.[1] || `marwaazpn-app-${format}`;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
-      anchor.href = url; anchor.download = name; anchor.click();
+      anchor.href = url;
+      anchor.download = name;
+      anchor.click();
       URL.revokeObjectURL(url);
     } catch (downloadError) {
       setError(downloadError instanceof Error ? downloadError.message : 'Download-ku wuu fashilmay.');
-    } finally { setDownloading(null); }
+    } finally {
+      setDownloading(null);
+    }
   }
 
   const summary = data?.summary;
