@@ -96,6 +96,18 @@ export interface Reference {
     owner_name: string;
     serial_no: number;
     survey_no?: string | null;
+    neighborhood?: string;
+    branch?: string;
+    land_type?: string;
+    sketch_area?: string;
+    boundary_w_val?: string;
+    boundary_w_neighbor?: string;
+    boundary_b_val?: string;
+    boundary_b_neighbor?: string;
+    boundary_k_val?: string;
+    boundary_k_neighbor?: string;
+    boundary_g_val?: string;
+    boundary_g_neighbor?: string;
   } | null;
 }
 

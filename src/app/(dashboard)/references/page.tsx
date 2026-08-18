@@ -36,6 +36,36 @@ import {
   Trash2
 } from 'lucide-react';
 
+function formatSurveyBoundaries(s?: Reference['surveys']): string {
+  if (!s) return '';
+  const parts: string[] = [];
+  if (s.boundary_g_val || s.boundary_g_neighbor) {
+    const rawVal = (s.boundary_g_val || '').trim();
+    const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'M'}` : '-';
+    const neighbor = s.boundary_g_neighbor || '-';
+    parts.push(`Galbeed= ${val} waxaana ka xiga ${neighbor}`);
+  }
+  if (s.boundary_w_val || s.boundary_w_neighbor) {
+    const rawVal = (s.boundary_w_val || '').trim();
+    const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'm'}` : '-';
+    const neighbor = s.boundary_w_neighbor || '-';
+    parts.push(`Waqooyi=${val} waxaana ka xiga ${neighbor}`);
+  }
+  if (s.boundary_k_val || s.boundary_k_neighbor) {
+    const rawVal = (s.boundary_k_val || '').trim();
+    const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'm'}` : '-';
+    const neighbor = s.boundary_k_neighbor || '-';
+    parts.push(`Koonfur=${val} waxaana ka xiga ${neighbor}`);
+  }
+  if (s.boundary_b_val || s.boundary_b_neighbor) {
+    const rawVal = (s.boundary_b_val || '').trim();
+    const val = rawVal ? `${rawVal}${rawVal.toLowerCase().endsWith('m') ? '' : 'M'}` : '-';
+    const neighbor = s.boundary_b_neighbor || '-';
+    parts.push(`Bari=${val} waxaana ka xiga ${neighbor}`);
+  }
+  return parts.join(', ');
+}
+
 export default function ReferencesPage() {
   const { user } = useAuth();
   const { showAlert, showConfirm } = useModal();
@@ -83,6 +113,7 @@ export default function ReferencesPage() {
 
   const handleViewSurvey = async (surveyId: number) => {
     setLoadingSurvey(true);
+
     try {
       const { data, error } = await supabase.from('surveys').select('*').eq('id', surveyId).single();
       if (error) throw error;
@@ -163,7 +194,19 @@ export default function ReferencesPage() {
             id,
             serial_no,
             survey_no,
-            owner_name
+            owner_name,
+            neighborhood,
+            branch,
+            land_type,
+            sketch_area,
+            boundary_w_val,
+            boundary_w_neighbor,
+            boundary_b_val,
+            boundary_b_neighbor,
+            boundary_k_val,
+            boundary_k_neighbor,
+            boundary_g_val,
+            boundary_g_neighbor
           )
         `)
         .order('created_at', { ascending: false });
@@ -722,9 +765,16 @@ export default function ReferencesPage() {
                                 {r.subject}
                               </span>
                             </td>
-                            <td className="px-6 py-4 max-w-[280px] lg:max-w-[360px]" title={r.details || ''}>
+                            <td
+                              className="px-6 py-4 max-w-[280px] lg:max-w-[360px]"
+                              title={
+                                r.details
+                                  ? (formatSurveyBoundaries(r.surveys) ? `${r.details} | ${formatSurveyBoundaries(r.surveys)}` : r.details)
+                                  : (formatSurveyBoundaries(r.surveys) || '')
+                              }
+                            >
                               <p className="truncate text-slate-500 font-medium text-xs">
-                                {r.details || '-'}
+                                {r.details || formatSurveyBoundaries(r.surveys) || '-'}
                               </p>
                             </td>
                             <td className="px-6 py-4">
@@ -860,33 +910,45 @@ export default function ReferencesPage() {
 
                 {/* Survey Connection Panel */}
                 {selectedRef.surveys && (
-                  <button
-                    type="button"
-                    onClick={() => handleViewSurvey(selectedRef.surveys!.id)}
-                    disabled={loadingSurvey}
-                    className="w-full p-5 bg-teal-50/40 border border-teal-100 rounded-2xl space-y-1 text-left transition-colors hover:bg-teal-50 cursor-pointer disabled:opacity-60"
-                  >
-                    <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-1">CONNECTED LAND SURVEY</span>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 text-slate-855 font-extrabold text-sm">
-                        <span className="h-2 w-2 rounded-full bg-teal-500" />
-                        <span className="text-teal-700 underline decoration-teal-300 underline-offset-2">
-                          Sahan Lr: {selectedRef.surveys.survey_no || selectedRef.surveys.serial_no} — {selectedRef.surveys.owner_name}
-                        </span>
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => handleViewSurvey(selectedRef.surveys!.id)}
+                      disabled={loadingSurvey}
+                      className="w-full p-4 bg-teal-50/40 border border-teal-100 rounded-2xl space-y-1 text-left transition-colors hover:bg-teal-50 cursor-pointer disabled:opacity-60"
+                    >
+                      <span className="block text-[10px] font-extrabold uppercase tracking-wider text-teal-600 mb-1">CONNECTED LAND SURVEY</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-slate-800 font-extrabold text-sm">
+                          <span className="h-2 w-2 rounded-full bg-teal-500" />
+                          <span className="text-teal-700 underline decoration-teal-300 underline-offset-2">
+                            Sahan Lr: {selectedRef.surveys.survey_no || selectedRef.surveys.serial_no} — {selectedRef.surveys.owner_name}
+                          </span>
+                        </div>
+                        {loadingSurvey ? (
+                          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-teal-600" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 shrink-0 text-teal-500" />
+                        )}
                       </div>
-                      {loadingSurvey ? (
-                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-teal-600" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 shrink-0 text-teal-500" />
-                      )}
-                    </div>
-                  </button>
+                    </button>
+
+                    {/* Soohdimaha Sahanka (Boundaries Text) */}
+                    {formatSurveyBoundaries(selectedRef.surveys) && (
+                      <div className="p-4 rounded-2xl bg-teal-50/30 border border-teal-100/80 space-y-1.5">
+                        <span className="block text-[10px] font-extrabold uppercase tracking-wider text-teal-700">SOOHDIMAHA SAHANKA</span>
+                        <p className="text-xs font-bold text-slate-800 leading-relaxed select-all bg-white p-3 rounded-xl border border-teal-100/60 shadow-xs">
+                          {formatSurveyBoundaries(selectedRef.surveys)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 <div className="space-y-2">
                   <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-400">FAAHFAAHIN (NOTES/DETAILS)</span>
                   <div className="p-4 rounded-2xl bg-slate-50/40 border border-slate-200 text-sm text-slate-800 min-h-[100px] leading-relaxed">
-                    {selectedRef.details || 'No additional notes provided.'}
+                    {selectedRef.details || (selectedRef.surveys && formatSurveyBoundaries(selectedRef.surveys)) || 'No additional notes provided.'}
                   </div>
                 </div>
 
