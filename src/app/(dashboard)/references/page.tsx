@@ -693,9 +693,9 @@ export default function ReferencesPage() {
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase">
                       <th className="px-6 py-4">Sumad (Ref)</th>
                       <th className="px-6 py-4">Ujeedo</th>
+                      <th className="px-6 py-4">Faahfaahin</th>
                       <th className="px-6 py-4">Status</th>
                       <th className="px-6 py-4">Record Creator</th>
-                      <th className="px-6 py-4 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100/60 bg-white">
@@ -714,13 +714,18 @@ export default function ReferencesPage() {
                             onClick={() => setSelectedRef(r)}
                             className="hover:bg-slate-50/80 transition-all cursor-pointer group"
                           >
-                            <td className="px-6 py-4 font-black text-teal-600 group-hover:text-teal-600">
+                            <td className="px-6 py-4 font-black text-teal-600 group-hover:text-teal-700">
                               {r.ref_number}
                             </td>
                             <td className="px-6 py-4">
-                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-655 text-xs font-extrabold">
+                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-700 text-xs font-extrabold">
                                 {r.subject}
                               </span>
+                            </td>
+                            <td className="px-6 py-4 max-w-[280px] lg:max-w-[360px]" title={r.details || ''}>
+                              <p className="truncate text-slate-500 font-medium text-xs">
+                                {r.details || '-'}
+                              </p>
                             </td>
                             <td className="px-6 py-4">
                               <span className={`inline-flex items-center gap-1.5 px-3 py-1 border rounded-full text-xs font-extrabold tracking-wide uppercase ${getStatusBadgeClass(r.status)}`}>
@@ -729,11 +734,6 @@ export default function ReferencesPage() {
                             </td>
                             <td className="px-6 py-4 text-slate-600 font-bold">
                               {resolveCreatorName(r.created_by, profileNames) || '-'}
-                            </td>
-                            <td className="px-6 py-4 text-center">
-                              <button className="bg-slate-50 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 text-slate-600 text-xs font-extrabold py-1.5 px-4 rounded-xl cursor-pointer transition-colors shadow-sm">
-                                View
-                              </button>
                             </td>
                           </tr>
                         ))}
@@ -760,30 +760,35 @@ export default function ReferencesPage() {
                     )}
                     <div className="divide-y divide-slate-100/60">
                       {group.items.map(r => (
-                    <div
-                      key={r.id}
-                      onClick={() => setSelectedRef(r)}
-                      className="grid grid-cols-[64px_1fr_auto_20px] items-center gap-3 px-1 py-3.5 cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-50"
-                    >
-                      <span className="truncate text-xs font-black text-teal-600">{numericIdentifier(r.ref_number)}</span>
-                      <div className="min-w-0">
-                        <h4 className="truncate text-xs font-extrabold text-slate-800">{r.subject}</h4>
-                        {r.surveys && (
-                          <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-500">
-                            Sahan {r.surveys.survey_no || r.surveys.serial_no} — {r.surveys.owner_name}
-                          </p>
-                        )}
-                        {resolveCreatorName(r.created_by, profileNames) && (
-                          <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">
-                            Added by {resolveCreatorName(r.created_by, profileNames)}
-                          </p>
-                        )}
-                      </div>
-                      <span className={`inline-flex items-center justify-self-end whitespace-nowrap px-2 py-0.5 rounded-full border text-[10px] font-extrabold uppercase ${getStatusBadgeClass(r.status)}`}>
-                        {r.status}
-                      </span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
-                    </div>
+                        <div
+                          key={r.id}
+                          onClick={() => setSelectedRef(r)}
+                          className="grid grid-cols-[64px_1fr_auto_20px] items-center gap-3 px-1 py-3.5 cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-50"
+                        >
+                          <span className="truncate text-xs font-black text-teal-600">{numericIdentifier(r.ref_number)}</span>
+                          <div className="min-w-0">
+                            <h4 className="truncate text-xs font-extrabold text-slate-800">{r.subject}</h4>
+                            {r.details && (
+                              <p className="mt-0.5 truncate text-[10px] font-medium text-slate-500" title={r.details}>
+                                {r.details}
+                              </p>
+                            )}
+                            {r.surveys && (
+                              <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-500">
+                                Sahan {r.surveys.survey_no || r.surveys.serial_no} — {r.surveys.owner_name}
+                              </p>
+                            )}
+                            {resolveCreatorName(r.created_by, profileNames) && (
+                              <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">
+                                Added by {resolveCreatorName(r.created_by, profileNames)}
+                              </p>
+                            )}
+                          </div>
+                          <span className={`inline-flex items-center justify-self-end whitespace-nowrap px-2 py-0.5 rounded-full border text-[10px] font-extrabold uppercase ${getStatusBadgeClass(r.status)}`}>
+                            {r.status}
+                          </span>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -793,8 +798,6 @@ export default function ReferencesPage() {
           )}
         </div>
       )}
-
-      {/* Reference Details Modal with Status Stepper */}
       {selectedRef && (
         <div className="fixed inset-0 z-[1300] flex items-start justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-4xl bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
