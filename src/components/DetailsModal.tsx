@@ -887,7 +887,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
               <div style="border:1px solid #dce7ef;padding:8px 10px;border-radius:6px;background:#ffffff;"><span style="font-size:8px;color:#64748b;font-weight:800;">NOOCA DHULKA</span><br/><strong>${record.land_type || '-'}</strong></div>
               <div style="border:1px solid #dce7ef;padding:8px 10px;border-radius:6px;background:#ffffff;"><span style="font-size:8px;color:#64748b;font-weight:800;">GPS LATITUDE</span><br/><strong>${latVal}</strong></div>
               <div style="border:1px solid #dce7ef;padding:8px 10px;border-radius:6px;background:#ffffff;"><span style="font-size:8px;color:#64748b;font-weight:800;">GPS LONGITUDE</span><br/><strong>${lngVal}</strong></div>
-              <div style="grid-column:1 / -1;border:1px solid #b8d8ee;padding:8px 10px;border-radius:6px;background:#edf7fd;text-align:center;"><span style="font-size:8px;color:#64748b;font-weight:800;">BEDKA GUUD / TOTAL AREA</span><br/><strong style="font-size:14px;color:#168b35;">${areaClean} m²</strong></div>
+              <div style="grid-column:1 / -1;border:1px solid #b8d8ee;padding:8px 10px;border-radius:6px;background:#edf7fd;text-align:left;"><span style="font-size:8px;color:#64748b;font-weight:800;">BEDKA GUUD / TOTAL AREA</span><br/><strong style="font-size:14px;color:#168b35;">${areaClean} m²</strong></div>
             </div>
 
             <!-- Table 1: PLOT MEASUREMENTS -->
@@ -896,26 +896,26 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
               <table style="width:100%;border-collapse:collapse;border:1px solid #bfd2df;font-size:11px;">
                 <thead>
                   <tr style="background:#17324d;color:#ffffff;">
-                    <th style="padding:8px 12px;border:1.5px solid #000000;text-align:center;width:40%;font-weight:bold;">Side</th>
-                    <th style="padding:8px 12px;border:1.5px solid #000000;text-align:center;width:60%;font-weight:bold;">Length (m)</th>
+                    <th style="padding:8px 12px;border:1.5px solid #000000;text-align:left;vertical-align:middle;width:40%;font-weight:bold;">Side</th>
+                    <th style="padding:8px 12px;border:1.5px solid #000000;text-align:left;vertical-align:middle;width:60%;font-weight:bold;">Length (m)</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr style="border-bottom:1px solid #000000;">
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">North</td>
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${cleanVal(record.boundary_w_val)}</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">North</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">${cleanVal(record.boundary_w_val)}</td>
                   </tr>
                   <tr style="border-bottom:1px solid #000000;">
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">East</td>
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${cleanVal(record.boundary_b_val)}</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">East</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">${cleanVal(record.boundary_b_val)}</td>
                   </tr>
                   <tr style="border-bottom:1px solid #000000;">
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">West</td>
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${cleanVal(record.boundary_g_val)}</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">West</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">${cleanVal(record.boundary_g_val)}</td>
                   </tr>
                   <tr style="border-bottom:1px solid #000000;">
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">South</td>
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${cleanVal(record.boundary_k_val)}</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">South</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">${cleanVal(record.boundary_k_val)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -927,26 +927,26 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
               <table style="width:100%;border-collapse:collapse;border:1px solid #bfd2df;font-size:11px;">
                 <thead>
                   <tr style="background:#168b35;color:#ffffff;">
-                    <th style="padding:8px 12px;border:1.5px solid #000000;text-align:center;width:40%;font-weight:bold;">Direction</th>
-                    <th style="padding:8px 12px;border:1.5px solid #000000;text-align:center;width:60%;font-weight:bold;">What is next to the land?</th>
+                    <th style="padding:8px 12px;border:1.5px solid #000000;text-align:left;vertical-align:middle;width:40%;font-weight:bold;">Direction</th>
+                    <th style="padding:8px 12px;border:1.5px solid #000000;text-align:left;vertical-align:middle;width:60%;font-weight:bold;">What is next to the land?</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr style="border-bottom:1px solid #000000;">
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">North</td>
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${record.boundary_w_neighbor || '-'}</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">North</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">${record.boundary_w_neighbor || '-'}</td>
                   </tr>
                   <tr style="border-bottom:1px solid #000000;">
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">East</td>
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${record.boundary_b_neighbor || '-'}</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">East</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">${record.boundary_b_neighbor || '-'}</td>
                   </tr>
                   <tr style="border-bottom:1px solid #000000;">
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">West</td>
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${record.boundary_g_neighbor || '-'}</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">West</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">${record.boundary_g_neighbor || '-'}</td>
                   </tr>
                   <tr style="border-bottom:1px solid #000000;">
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">South</td>
-                    <td style="padding:8px 12px;border:1px solid #000000;text-align:center;">${record.boundary_k_neighbor || '-'}</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">South</td>
+                    <td style="padding:8px 12px;border:1px solid #000000;text-align:left;vertical-align:middle;">${record.boundary_k_neighbor || '-'}</td>
                   </tr>
                 </tbody>
               </table>
@@ -1059,9 +1059,8 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           <div style="margin-top:auto;">${contactLine}</div>
         </div>
         <style>
-          .classic-survey-table th{background:#0b79bd;color:#fff;text-align:left;font:800 16px/1.15 Arial,sans-serif;padding:8px 9px;border:1px solid #b4c7d3;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;box-sizing:border-box;}
-          .classic-survey-table td{text-align:left;font:400 14px/1.15 Arial,sans-serif;padding:8px 9px;border:1px solid #b4c7d3;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;box-sizing:border-box;}
-          .measurement-table th:nth-child(2),.measurement-table td:nth-child(2){text-align:center;}
+          .classic-survey-table th{background:#0b79bd;color:#fff;text-align:left;font:800 15px/1.15 Arial,sans-serif;padding:8px 12px;border:1px solid #b4c7d3;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;box-sizing:border-box;}
+          .classic-survey-table td{text-align:left;font:400 14px/1.15 Arial,sans-serif;padding:8px 12px;border:1px solid #b4c7d3;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;box-sizing:border-box;}
           .classic-survey-table tbody tr:nth-child(even) td{background:#e7f3f7;}
         </style>`;
 
