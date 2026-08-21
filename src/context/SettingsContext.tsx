@@ -40,6 +40,10 @@ export interface SurveyPdfDesignSettings {
   showFooter: boolean;
   sections: { summary: boolean; boundaries: boolean; sketch: boolean; certification: boolean };
   notes: string;
+  fontSizes?: { title: number; subtitle: number; body: number; section: number; footer: number };
+  positions?: Record<string, { x: number; y: number }>;
+  sketchSize?: { width: number; height: number };
+  mapSize?: { width: number; height: number };
 }
 
 // Used until /api/public/settings resolves (or if the app_settings migration
@@ -80,6 +84,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     title: 'LAND SURVEY REPORT', subtitle: 'Warbixinta Sahanka Dhulka', accent: '#2563eb',
     font: 'Arial', density: 'comfortable', showLogo: true, showFooter: true,
     sections: { summary: true, boundaries: true, sketch: true, certification: true }, notes: '',
+    fontSizes: { title: 25, subtitle: 12, body: 12, section: 11, footer: 8 },
+    positions: {}, sketchSize: { width: 100, height: 230 }, mapSize: { width: 100, height: 650 },
   },
 };
 

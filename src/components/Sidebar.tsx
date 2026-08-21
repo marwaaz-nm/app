@@ -16,7 +16,6 @@ import {
   Lock,
   LogOut,
   MapPinned,
-  FilePenLine,
   MoreHorizontal,
   Settings,
   Users,
@@ -43,7 +42,6 @@ const navigationGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { href: '/explorer', label: 'Map Explorer', mobileLabel: 'Explorer', icon: Compass },
       { href: '/records', label: 'Survey Records', mobileLabel: 'Surveys', icon: Layers },
-      { href: '/survey-designer', label: 'Survey PDF Studio', mobileLabel: 'PDF Studio', icon: FilePenLine },
       { href: '/transfers', label: 'Land Transfers', mobileLabel: 'Transfers', icon: ArrowLeftRight },
     ],
   },

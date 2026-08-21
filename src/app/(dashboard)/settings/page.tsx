@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
@@ -25,9 +26,10 @@ import {
   Smartphone,
   Download,
   ChevronRight,
+  FileText,
 } from 'lucide-react';
 
-type Tab = 'account' | 'organization' | 'options' | 'drive' | 'archive' | 'desktop';
+type Tab = 'account' | 'organization' | 'options' | 'pdf' | 'drive' | 'archive' | 'desktop';
 
 const DESKTOP_INSTALLER_PARTS = 5;
 const DESKTOP_INSTALLER_SIZE = 100583387;
@@ -90,7 +92,7 @@ export default function SettingsPage() {
   const { profile, refetchProfile } = useAuth();
   const { settings, loading: settingsLoading, refetch: refetchSettings } = useSettings();
   const { showAlert } = useModal();
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || profile?.role === 'SuperAdmin';
   const canManageDriveConnections = profile?.username === 'samanor';
 
   const searchParams = useSearchParams();
@@ -98,7 +100,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const t = searchParams ? (searchParams.get('tab') as Tab) : null;
-    if (t && ['account', 'organization', 'options', 'drive', 'archive', 'desktop'].includes(t)) {
+    if (t && ['account', 'organization', 'options', 'pdf', 'drive', 'archive', 'desktop'].includes(t)) {
       setTab(t);
     }
   }, [searchParams]);
@@ -410,6 +412,7 @@ export default function SettingsPage() {
     { id: 'account', label: 'Xisaabta (Account)', sublabel: 'Profile & Password', icon: UserCircle },
     { id: 'organization', label: 'Nootaayo (Notary)', sublabel: 'Org info & Logo', icon: Building2, adminOnly: true },
     { id: 'options', label: 'Liisaska (Options)', sublabel: 'Numbering & Format', icon: ListChecks, adminOnly: true },
+    { id: 'pdf', label: 'Survey PDF Template', sublabel: 'A4 design editor', icon: FileText, adminOnly: true },
     { id: 'drive', label: 'Drive Connections', sublabel: 'Google Drive sync', icon: Cloud, adminOnly: true, hidden: !canManageDriveConnections },
     { id: 'archive', label: 'Document Archive', sublabel: 'Archive Drive config', icon: Archive, adminOnly: true },
     { id: 'desktop', label: 'Desktop App', sublabel: 'Windows & Mobile app', icon: Monitor },
@@ -679,6 +682,21 @@ export default function SettingsPage() {
           {tab === 'drive' && canManageDriveConnections && <DriveConnectionsPanel />}
 
           {tab === 'archive' && isAdmin && <ArchiveDriveConfigPanel />}
+
+          {tab === 'pdf' && isAdmin && (
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-xl bg-teal-50 p-3 text-teal-600"><FileText className="h-5 w-5" /></div>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">Survey PDF Template Editor</h3>
+                    <p className="mt-1 max-w-xl text-xs font-semibold leading-5 text-slate-500">Hal mar ku diyaari labada bog ee A4: dhaqaaji qoraallada, beddel font size-ka, resize sketch-ka, oo habee map-ka bogga labaad. Template-kan ayaa loo isticmaalaa survey PDF kasta.</p>
+                  </div>
+                </div>
+                <Link href="/survey-designer" className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-teal-600 px-5 py-3 text-xs font-bold text-white shadow-lg shadow-teal-600/20">Fur Template Editor <ChevronRight className="h-4 w-4" /></Link>
+              </div>
+            </div>
+          )}
 
           {tab === 'desktop' && (
             <div className="space-y-5">
