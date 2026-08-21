@@ -432,6 +432,36 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Premium Horizontal Navigation Tabs Bar */}
+      <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar">
+        {visibleTabs.map((t) => {
+          const Icon = t.icon;
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => {
+                setTab(t.id);
+                if (typeof window !== 'undefined') {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('tab', t.id);
+                  window.history.replaceState({}, '', url.toString());
+                }
+              }}
+              className={`flex items-center gap-2 shrink-0 rounded-2xl px-4 py-2.5 text-xs font-bold transition-all duration-200 cursor-pointer ${
+                active
+                  ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/20'
+                  : 'bg-white border border-slate-200/80 text-slate-600 hover:bg-slate-50 hover:text-slate-950 shadow-2xs'
+              }`}
+            >
+              <Icon className={`h-4 w-4 ${active ? 'text-white' : 'text-slate-400'}`} />
+              <span>{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Active Tab Content Workspace */}
       <div className="space-y-4">
         {tab === 'account' && (

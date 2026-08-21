@@ -2,28 +2,22 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import {
   Archive,
   ArrowLeftRight,
   BarChart3,
-  Building2,
   ChartNoAxesCombined,
-  ChevronDown,
   ChevronRight,
-  Cloud,
   Compass,
   Files,
   FolderSearch,
   Layers,
-  ListChecks,
   Lock,
   LogOut,
   MapPinned,
-  Monitor,
   MoreHorizontal,
   Settings,
-  UserCircle,
   Users,
   Wallet,
   X,
@@ -32,15 +26,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 
 type NavItem = { href: string; label: string; mobileLabel: string; icon: typeof ChartNoAxesCombined; alwaysVisible?: boolean };
-
-const settingsSubItems = [
-  { id: 'account', label: 'Xisaabta (Account)', tab: 'account', icon: UserCircle },
-  { id: 'organization', label: 'Nootaayo (Notary)', tab: 'organization', icon: Building2, adminOnly: true },
-  { id: 'options', label: 'Liisaska (Options)', tab: 'options', icon: ListChecks, adminOnly: true },
-  { id: 'drive', label: 'Drive Connections', tab: 'drive', icon: Cloud, adminOnly: true, samanorOnly: true },
-  { id: 'archive', label: 'Document Archive', tab: 'archive', icon: Archive, adminOnly: true },
-  { id: 'desktop', label: 'Desktop App', tab: 'desktop', icon: Monitor },
-];
 
 // Grouped by what the user is actually doing, rather than one long flat list — makes the
 // 11+ menu items scannable instead of a wall of undifferentiated links.
@@ -90,8 +75,6 @@ const PRIMARY_MOBILE_HREFS = ['/dashboard', '/explorer', '/records', '/reference
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const activeTab = searchParams ? searchParams.get('tab') || 'account' : 'account';
   const { profile, logout } = useAuth();
   const { settings } = useSettings();
   const isAdmin = profile?.role === 'Admin' || profile?.role === 'SuperAdmin';
@@ -168,83 +151,38 @@ export default function Sidebar() {
                     {group.items.map((item) => {
                       const Icon = item.icon;
                       const active = isActive(item.href);
-                      const isSettings = item.href === '/settings';
 
                       return (
-                        <div key={item.href} className="space-y-1">
-                          <Link
-                            href={item.href}
-                            aria-current={active ? 'page' : undefined}
-                            className={`group relative flex min-h-11 items-center gap-2.5 rounded-xl px-2.5 py-2 transition-all duration-200 ${
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          aria-current={active ? 'page' : undefined}
+                          className={`group relative flex min-h-11 items-center gap-2.5 rounded-xl px-2.5 py-2 transition-all duration-200 ${
+                            active
+                              ? 'bg-teal-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.2)]'
+                              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+                          }`}
+                        >
+                          <span
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] transition-colors ${
                               active
-                                ? 'bg-teal-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.2)]'
-                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+                                ? 'bg-white/15 text-white'
+                                : 'bg-slate-100 text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700'
                             }`}
                           >
-                            <span
-                              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] transition-colors ${
-                                active
-                                  ? 'bg-white/15 text-white'
-                                  : 'bg-slate-100 text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700'
-                              }`}
-                            >
-                              <Icon className="h-[17px] w-[17px]" strokeWidth={2.2} />
-                            </span>
-                            <span className="min-w-0 flex-1 truncate text-[13px] font-bold tracking-[-0.01em]">
-                              {item.label}
-                            </span>
-                            {isSettings ? (
-                              <ChevronDown
-                                className={`h-4 w-4 transition-transform duration-200 ${
-                                  active ? 'rotate-180 text-white/80' : 'text-slate-300 group-hover:text-slate-500'
-                                }`}
-                              />
-                            ) : (
-                              <ChevronRight
-                                className={`h-4 w-4 transition-all ${
-                                  active
-                                    ? 'translate-x-0 text-white/70 opacity-100'
-                                    : '-translate-x-1 text-slate-300 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'
-                                }`}
-                              />
-                            )}
-                          </Link>
-
-                          {/* Nested Sub-Sidebar Menu inside Main Sidebar Card */}
-                          {isSettings && active && (
-                            <div className="ml-3.5 space-y-1 border-l-2 border-slate-200/80 pl-2.5 py-1 transition-all">
-                              {settingsSubItems
-                                .filter(
-                                  (sub) =>
-                                    (!sub.adminOnly || isAdmin) &&
-                                    (!sub.samanorOnly || profile?.username === 'samanor')
-                                )
-                                .map((sub) => {
-                                  const SubIcon = sub.icon;
-                                  const isSubActive = activeTab === sub.tab;
-
-                                  return (
-                                    <Link
-                                      key={sub.id}
-                                      href={`/settings?tab=${sub.tab}`}
-                                      className={`group flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-all ${
-                                        isSubActive
-                                          ? 'bg-teal-50 text-teal-700 font-black shadow-2xs'
-                                          : 'text-slate-500 hover:bg-slate-100/70 hover:text-slate-900 font-semibold'
-                                      }`}
-                                    >
-                                      <SubIcon
-                                        className={`h-3.5 w-3.5 shrink-0 ${
-                                          isSubActive ? 'text-teal-600' : 'text-slate-400 group-hover:text-slate-600'
-                                        }`}
-                                      />
-                                      <span className="truncate text-[11px]">{sub.label}</span>
-                                    </Link>
-                                  );
-                                })}
-                            </div>
-                          )}
-                        </div>
+                            <Icon className="h-[17px] w-[17px]" strokeWidth={2.2} />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-[13px] font-bold tracking-[-0.01em]">
+                            {item.label}
+                          </span>
+                          <ChevronRight
+                            className={`h-4 w-4 transition-all ${
+                              active
+                                ? 'translate-x-0 text-white/70 opacity-100'
+                                : '-translate-x-1 text-slate-300 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'
+                            }`}
+                          />
+                        </Link>
                       );
                     })}
                   </div>
@@ -252,7 +190,6 @@ export default function Sidebar() {
               ))}
             </div>
           </nav>
-
         </div>
 
         <div className="relative border-t border-slate-200 bg-slate-50/80 p-3">
