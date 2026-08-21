@@ -232,6 +232,7 @@ CREATE TABLE public.app_settings (
     expense_number_next_seq INT NOT NULL DEFAULT 1,
     expense_number_format TEXT NOT NULL DEFAULT 'PREFIX-YYYY-SEQ',
     expense_number_digits INT NOT NULL DEFAULT 3,
+    survey_pdf_design JSONB NOT NULL DEFAULT '{"title":"LAND SURVEY REPORT","subtitle":"Warbixinta Sahanka Dhulka","accent":"#2563eb","font":"Arial","density":"comfortable","showLogo":true,"showFooter":true,"sections":{"summary":true,"boundaries":true,"sketch":true,"certification":true},"notes":""}'::jsonb,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_by UUID REFERENCES auth.users(id)
 );

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useSettings } from '@/context/SettingsContext';
+import { useAuth } from '@/context/AuthContext';
 import type { Survey } from '@/types';
 
 type SectionKey = 'summary' | 'boundaries' | 'sketch' | 'certification';
@@ -58,13 +59,16 @@ function PlotSketch({ survey, accent }: { survey: Survey; accent: string }) {
 }
 
 export default function SurveyDesignerPage() {
-  const { settings } = useSettings();
+  const { settings, refetch: refetchSettings } = useSettings();
+  const { profile } = useAuth();
   const previewRef = useRef<HTMLDivElement>(null);
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
   const [panelOpen, setPanelOpen] = useState(true);
   const [step, setStep] = useState(1);
   const [design, setDesign] = useState<Design>(defaultDesign);
@@ -72,13 +76,46 @@ export default function SurveyDesignerPage() {
   useEffect(() => { void (async () => {
     setLoading(true);
     const { data } = await supabase.from('surveys').select('*').order('serial_no', { ascending: false });
-    const rows = (data || []) as Survey[]; setSurveys(rows); setSelectedId(rows[0]?.id ?? null); setLoading(false);
+    const rows = (data || []) as Survey[];
+    const requestedId = Number(new URLSearchParams(window.location.search).get('survey'));
+    setSurveys(rows);
+    setSelectedId(rows.some((row) => row.id === requestedId) ? requestedId : rows[0]?.id ?? null);
+    setLoading(false);
   })(); }, []);
+
+  useEffect(() => {
+    const saved = settings.survey_pdf_design;
+    // The shared settings response is external state and can arrive after this editor mounts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDesign({ ...defaultDesign, ...saved, sections: { ...defaultDesign.sections, ...saved.sections } });
+  }, [settings.survey_pdf_design]);
 
   const selected = surveys.find((s) => s.id === selectedId) || null;
   const filtered = useMemo(() => surveys.filter((s) => `${s.owner_name} ${s.serial_no} ${s.survey_no || ''}`.toLowerCase().includes(search.toLowerCase())), [surveys, search]);
   const update = <K extends keyof Design>(key: K, value: Design[K]) => setDesign((d) => ({ ...d, [key]: value }));
   const toggleSection = (key: SectionKey) => setDesign((d) => ({ ...d, sections: { ...d.sections, [key]: !d.sections[key] } }));
+
+  const saveTemplate = async () => {
+    setSavingTemplate(true);
+    setSaveMessage('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Fadlan dib u gal system-ka.');
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ survey_pdf_design: design }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Template-ka lama kaydin.');
+      await refetchSettings();
+      setSaveMessage('Template-ka guud waa la kaydiyey. Dhammaan survey PDF-yada ayaa isticmaali doona.');
+    } catch (error) {
+      setSaveMessage(error instanceof Error ? error.message : 'Template-ka lama kaydin.');
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
 
   const downloadPdf = async () => {
     if (!previewRef.current || !selected) return;
@@ -107,8 +144,10 @@ export default function SurveyDesignerPage() {
     <div className="mx-auto max-w-[1600px] space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div><div className="flex items-center gap-2"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 text-white"><FileText className="h-5 w-5"/></span><div><h1 className="text-lg font-black">Survey PDF Studio</h1><p className="text-xs font-medium text-slate-500">Ku samee, ku hubi, kuna soo saar PDF-ga survey-ga gudaha system-ka.</p></div></div></div>
-        <div className="flex items-center gap-2"><button onClick={() => window.print()} disabled={!selected} className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-4 text-xs font-bold hover:bg-slate-50 disabled:opacity-40"><Printer className="h-4 w-4"/> Print</button><button onClick={downloadPdf} disabled={!selected || exporting} className="flex h-10 items-center gap-2 rounded-xl bg-teal-600 px-4 text-xs font-bold text-white shadow-lg shadow-teal-600/20 disabled:opacity-50">{exporting ? <Loader2 className="h-4 w-4 animate-spin"/> : <Download className="h-4 w-4"/>}{exporting ? 'Diyaarinaya...' : 'Download PDF'}</button></div>
+        <div className="flex flex-wrap items-center gap-2">{(profile?.role === 'Admin' || profile?.role === 'SuperAdmin') && <button onClick={saveTemplate} disabled={savingTemplate} className="flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white shadow-lg shadow-emerald-600/20 disabled:opacity-50">{savingTemplate ? <Loader2 className="h-4 w-4 animate-spin"/> : <Check className="h-4 w-4"/>}{savingTemplate ? 'Kaydinaya...' : 'Kaydi Template-ka Guud'}</button>}<button onClick={() => window.print()} disabled={!selected} className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-4 text-xs font-bold hover:bg-slate-50 disabled:opacity-40"><Printer className="h-4 w-4"/> Print</button><button onClick={downloadPdf} disabled={!selected || exporting} className="flex h-10 items-center gap-2 rounded-xl bg-teal-600 px-4 text-xs font-bold text-white shadow-lg shadow-teal-600/20 disabled:opacity-50">{exporting ? <Loader2 className="h-4 w-4 animate-spin"/> : <Download className="h-4 w-4"/>}{exporting ? 'Diyaarinaya...' : 'Download PDF'}</button></div>
       </header>
+
+      {saveMessage && <div className={`rounded-xl border px-4 py-3 text-xs font-bold ${saveMessage.includes('waa la kaydiyey') ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{saveMessage}</div>}
 
       <div className="grid grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-white p-2">
         {steps.map((label, i) => <button key={label} onClick={() => setStep(i+1)} className={`flex items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-[11px] font-extrabold ${step === i+1 ? 'bg-teal-600 text-white' : step > i+1 ? 'bg-emerald-50 text-emerald-700' : 'text-slate-400'}`}><span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20">{step > i+1 ? <Check className="h-3 w-3"/> : i+1}</span><span className="hidden sm:inline">{label}</span></button>)}

@@ -513,6 +513,13 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
     : record.built_details
   );
   const handlePrintPDF = async () => {
+    // All survey PDFs now use the single organization-wide template configured in
+    // Survey PDF Studio. Opening the selected record there prevents legacy one-off
+    // layouts from drifting away from the saved design.
+    if (settings.survey_pdf_design) {
+      window.location.assign(`/survey-designer?survey=${record.id}`);
+      return;
+    }
     if (!record) return;
 
     const styleEl = document.createElement('style');

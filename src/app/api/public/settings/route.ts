@@ -37,7 +37,8 @@ export async function GET() {
         ref_number_prefix, ref_number_next_seq, ref_number_format, ref_number_digits,
         survey_number_prefix, survey_number_next_seq, survey_number_format, survey_number_digits,
         receipt_number_prefix, receipt_number_next_seq, receipt_number_format, receipt_number_digits,
-        expense_number_prefix, expense_number_next_seq, expense_number_format, expense_number_digits
+        expense_number_prefix, expense_number_next_seq, expense_number_format, expense_number_digits,
+        survey_pdf_design
       `)
       .eq('id', 1)
       .single();

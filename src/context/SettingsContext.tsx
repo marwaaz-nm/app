@@ -27,6 +27,19 @@ export interface AppSettings {
   expense_number_next_seq: number;
   expense_number_format: string;
   expense_number_digits: number;
+  survey_pdf_design: SurveyPdfDesignSettings;
+}
+
+export interface SurveyPdfDesignSettings {
+  title: string;
+  subtitle: string;
+  accent: string;
+  font: 'Arial' | 'Georgia' | 'Times New Roman';
+  density: 'comfortable' | 'compact';
+  showLogo: boolean;
+  showFooter: boolean;
+  sections: { summary: boolean; boundaries: boolean; sketch: boolean; certification: boolean };
+  notes: string;
 }
 
 // Used until /api/public/settings resolves (or if the app_settings migration
@@ -63,6 +76,11 @@ const DEFAULT_SETTINGS: AppSettings = {
   expense_number_next_seq: 1,
   expense_number_format: 'PREFIX-YYYY-SEQ',
   expense_number_digits: 3,
+  survey_pdf_design: {
+    title: 'LAND SURVEY REPORT', subtitle: 'Warbixinta Sahanka Dhulka', accent: '#2563eb',
+    font: 'Arial', density: 'comfortable', showLogo: true, showFooter: true,
+    sections: { summary: true, boundaries: true, sketch: true, certification: true }, notes: '',
+  },
 };
 
 interface SettingsContextType {
