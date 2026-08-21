@@ -1430,7 +1430,7 @@ export default function FinancialsPage() {
                     <th className="px-6 py-4 text-center">Status / Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100/60 bg-white">
+                <tbody className="divide-y divide-slate-200/80 bg-white">
                   {(groupedReferencesWithReceipts ?? [{ key: 'all', label: '', items: sortedReferencesWithReceipts }]).map((group) => (
                     <React.Fragment key={group.key}>
                       {receiptGroupBy !== 'none' && (
@@ -1553,7 +1553,7 @@ export default function FinancialsPage() {
                     {group.label}
                   </div>
                 )}
-                <div className="divide-y divide-slate-100/60">
+                <div className="divide-y divide-slate-200/80">
               {group.items.map((ref) => {
                 const receipts = ref.receipts || [];
                 const paidAmount = receipts
@@ -1667,7 +1667,7 @@ export default function FinancialsPage() {
                     <th className="px-6 py-4 text-center">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100/60 bg-white">
+                <tbody className="divide-y divide-slate-200/80 bg-white">
                   {sortedExpenses.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="px-6 py-12 text-center text-slate-400 italic">
@@ -1760,7 +1760,7 @@ export default function FinancialsPage() {
                       {group.label}
                     </div>
                   )}
-                  <div className="divide-y divide-slate-100/60">
+                  <div className="divide-y divide-slate-200/80">
                     {group.items.map((e) => (
                       <div
                         key={e.id}

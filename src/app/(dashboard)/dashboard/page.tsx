@@ -386,7 +386,7 @@ export default function DashboardPage() {
               <Clock3 className="h-5 w-5 text-slate-300" />
             </div>
 
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-slate-200/80">
               {loading ? (
                 Array.from({ length: 5 }).map((_, index) => (
                   <div key={index} className="flex animate-pulse items-center gap-3 px-4 py-3.5 sm:px-5">

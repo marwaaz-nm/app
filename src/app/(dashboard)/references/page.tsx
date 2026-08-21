@@ -9,7 +9,7 @@ import { useModal } from '@/context/ModalContext';
 import { useSettings } from '@/context/SettingsContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
-import { formatReferenceNumber, numericIdentifier } from '@/lib/numbering';
+import { formatReferenceNumber } from '@/lib/numbering';
 import { generateVerificationToken } from '@/lib/verificationToken';
 import DetailsModal from '@/components/DetailsModal';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
@@ -828,7 +828,7 @@ export default function ReferencesPage() {
                       <th className="px-6 py-4">Record Creator</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100/60 bg-white">
+                  <tbody className="divide-y divide-slate-200/80 bg-white">
                     {(groupedReferences ?? [{ key: 'all', label: '', items: sortedReferences }]).map((group) => (
                       <React.Fragment key={group.key}>
                         {groupBy !== 'none' && (
@@ -878,7 +878,7 @@ export default function ReferencesPage() {
 
               {/* MOBILE LIST */}
               <div className="md:hidden mb-12">
-                <div className="grid grid-cols-[64px_1fr_auto_20px] items-center gap-3 border-b border-slate-200 px-1 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                <div className="grid grid-cols-[92px_minmax(0,1fr)_auto_16px] items-center gap-2 border-b border-slate-200 px-1 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
                   <span>Ref No.</span>
                   <span>Title</span>
                   <span>Status</span>
@@ -891,14 +891,14 @@ export default function ReferencesPage() {
                         {group.label}
                       </div>
                     )}
-                    <div className="divide-y divide-slate-100/60">
+                    <div className="divide-y divide-slate-200/80">
                       {group.items.map(r => (
                         <div
                           key={r.id}
                           onClick={() => setSelectedRef(r)}
-                          className="grid grid-cols-[64px_1fr_auto_20px] items-center gap-3 px-1 py-3.5 cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-50"
+                          className="grid grid-cols-[92px_minmax(0,1fr)_auto_16px] items-center gap-2 px-1 py-3.5 cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-50"
                         >
-                          <span className="truncate text-xs font-black text-teal-600">{numericIdentifier(r.ref_number)}</span>
+                          <span className="break-words text-[10px] font-black leading-tight text-teal-600">{r.ref_number}</span>
                           <div className="min-w-0">
                             <h4 className="truncate text-xs font-extrabold text-slate-800">{r.subject}</h4>
                             {r.details && (

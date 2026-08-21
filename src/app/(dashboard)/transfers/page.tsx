@@ -578,7 +578,7 @@ export default function TransfersPage() {
                       <th className="px-6 py-4 text-center">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100/60 bg-white">
+                  <tbody className="divide-y divide-slate-200/80 bg-white">
                     {(groupedTransfers ?? [{ key: 'all', label: '', items: sortedTransfers }]).map((group) => (
                       <React.Fragment key={group.key}>
                         {groupBy !== 'none' && (
@@ -662,7 +662,7 @@ export default function TransfersPage() {
                         {group.label}
                       </div>
                     )}
-                    <div className="divide-y divide-slate-100/60">
+                    <div className="divide-y divide-slate-200/80">
                       {group.items.map(t => (
                         <div
                           key={t.id}

@@ -303,7 +303,7 @@ export default function UsersPage() {
                   <th className="px-6 py-4 text-center">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100/60 bg-white">
+              <tbody className="divide-y divide-slate-200/80 bg-white">
                 {users.map(u => {
                   const admin = isUserAdmin(u);
                   return (
@@ -389,7 +389,7 @@ export default function UsersPage() {
             <span>Role</span>
             <span className="text-center">Action</span>
           </div>
-          <div className="divide-y divide-slate-100/60">
+          <div className="divide-y divide-slate-200/80">
             {users.map(u => {
               const admin = isUserAdmin(u);
               return (

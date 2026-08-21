@@ -557,7 +557,7 @@ export default function DriveFilesPage() {
                 </p>
               </div>
             ) : viewMode === 'list' ? (
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-slate-200/80">
                 {sortedItems.map((item) => (
                   <li key={item.id}>
                     {item.kind === 'folder' ? (
