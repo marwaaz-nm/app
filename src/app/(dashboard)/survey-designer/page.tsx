@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
 import {
-  Check, ChevronLeft, ChevronRight, Download, FileText, Loader2, Palette,
-  PanelLeftClose, PanelLeftOpen, Printer, RefreshCw, Search, Settings2,
+  Check, ChevronLeft, ChevronRight, Download, FileText, Loader2,
+  PanelLeftClose, PanelLeftOpen, Printer, RefreshCw, Search,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useSettings } from '@/context/SettingsContext';
@@ -84,7 +85,18 @@ export default function SurveyDesignerPage() {
     setExporting(true);
     try {
       const mod = await import('html2pdf.js'); const html2pdf = mod.default || mod;
-      await html2pdf().set({ margin: 0, filename: `Survey_${selected.survey_no || selected.serial_no}_${selected.owner_name.replace(/\W+/g, '_')}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }, pagebreak: { mode: ['css', 'legacy'] } }).from(previewRef.current).save();
+      // html2pdf.js supports `pagebreak` at runtime, although v0.14's bundled
+      // Html2PdfOptions declaration omits it. Passing a typed variable preserves the
+      // supported option without weakening this call (or the project) with `any`.
+      const pdfOptions = {
+        margin: 0,
+        filename: `Survey_${selected.survey_no || selected.serial_no}_${selected.owner_name.replace(/\W+/g, '_')}.pdf`,
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+        pagebreak: { mode: ['css', 'legacy'] },
+      };
+      await html2pdf().set(pdfOptions).from(previewRef.current).save();
     } finally { setExporting(false); }
   };
 
@@ -113,7 +125,7 @@ export default function SurveyDesignerPage() {
         <section className="relative min-w-0 rounded-2xl border border-slate-200 bg-slate-200/70 p-3 md:p-6">
           <button onClick={() => setPanelOpen(!panelOpen)} title="Toggle editor" className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm">{panelOpen ? <PanelLeftClose className="h-4 w-4"/> : <PanelLeftOpen className="h-4 w-4"/>}</button>
           {!selected ? <div className="flex min-h-[700px] items-center justify-center text-sm font-bold text-slate-400">Dooro survey si preview-gu u soo baxo.</div> : <div className="mx-auto max-w-[794px] overflow-auto shadow-2xl"><div ref={previewRef} className="survey-pdf-preview min-h-[1123px] bg-white p-[52px] text-slate-900" style={{ fontFamily: design.font, '--pdf-accent': design.accent } as React.CSSProperties}>
-            <div className="flex items-start justify-between border-b-4 pb-5" style={{ borderColor: design.accent }}><div className="flex items-center gap-4">{design.showLogo && settings.logo_url ? <img src={settings.logo_url} alt="Logo" className="h-16 w-16 object-contain"/> : <div className="flex h-16 w-16 items-center justify-center rounded-xl text-white" style={{ background: design.accent }}><FileText className="h-8 w-8"/></div>}<div><p className="text-[18px] font-black">{settings.org_name_so}</p><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{settings.org_name_en}</p></div></div><div className="text-right"><p className="text-[10px] font-bold text-slate-400">SURVEY NO.</p><p className="text-xl font-black" style={{ color: design.accent }}>#{selected.survey_no || selected.serial_no}</p><p className="mt-1 text-[9px] text-slate-500">{selected.created_at ? new Date(selected.created_at).toLocaleDateString('en-GB') : ''}</p></div></div>
+            <div className="flex items-start justify-between border-b-4 pb-5" style={{ borderColor: design.accent }}><div className="flex items-center gap-4">{design.showLogo && settings.logo_url ? <Image src={settings.logo_url} alt="Logo" width={64} height={64} unoptimized className="h-16 w-16 object-contain"/> : <div className="flex h-16 w-16 items-center justify-center rounded-xl text-white" style={{ background: design.accent }}><FileText className="h-8 w-8"/></div>}<div><p className="text-[18px] font-black">{settings.org_name_so}</p><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{settings.org_name_en}</p></div></div><div className="text-right"><p className="text-[10px] font-bold text-slate-400">SURVEY NO.</p><p className="text-xl font-black" style={{ color: design.accent }}>#{selected.survey_no || selected.serial_no}</p><p className="mt-1 text-[9px] text-slate-500">{selected.created_at ? new Date(selected.created_at).toLocaleDateString('en-GB') : ''}</p></div></div>
             <div className="py-7 text-center"><h1 className="text-[25px] font-black tracking-tight">{design.title}</h1><p className="mt-1 text-[12px] font-semibold" style={{ color: design.accent }}>{design.subtitle}</p></div>
             {design.sections.summary && <section className="mb-6"><h2 className="mb-2 rounded-md px-3 py-2 text-[11px] font-black uppercase tracking-wider text-white" style={{ background: design.accent }}>01 · Xogta Guud / General Information</h2><div className="grid grid-cols-2 gap-x-8">{field('Magaca Milkiilaha', selected.owner_name)}{field('Nooca Dhulka', selected.land_type)}{field('Xaafadda', selected.neighborhood)}{field('Laanta', selected.branch)}{field('Aagga / Vicinity', selected.vicinity)}{field('GPS Location', selected.gps_location)}{field('Baaxadda', selected.sketch_area)}{field('Faahfaahinta Dhismaha', selected.built_details)}</div></section>}
             {design.sections.boundaries && <section className="mb-6"><h2 className="mb-3 rounded-md px-3 py-2 text-[11px] font-black uppercase tracking-wider text-white" style={{ background: design.accent }}>02 · Xuduudaha & Cabbirrada</h2><table className="w-full border-collapse text-[11px]"><thead><tr className="bg-slate-100"><th className="border border-slate-300 p-2 text-left">Jiho</th><th className="border border-slate-300 p-2 text-left">Cabbir</th><th className="border border-slate-300 p-2 text-left">Deris / Xad</th></tr></thead><tbody>{[['Waqooyi',selected.boundary_w_val,selected.boundary_w_neighbor],['Bari',selected.boundary_b_val,selected.boundary_b_neighbor],['Koonfur',selected.boundary_k_val,selected.boundary_k_neighbor],['Galbeed',selected.boundary_g_val,selected.boundary_g_neighbor]].map((r) => <tr key={r[0]}><td className="border border-slate-300 p-2 font-bold">{r[0]}</td><td className="border border-slate-300 p-2">{r[1] || '—'}</td><td className="border border-slate-300 p-2">{r[2] || '—'}</td></tr>)}</tbody></table></section>}
