@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
 import {
@@ -290,7 +291,13 @@ function Draggable({
   };
   return (
     <div
-      className={`absolute ${className}`}
+      data-pdf-block={id}
+      onClick={() =>
+        window.dispatchEvent(
+          new CustomEvent("pdf-block-select", { detail: id })
+        )
+      }
+      className={`absolute cursor-pointer transition-shadow ${className}`}
       style={{ left: `${point.x}%`, top: `${point.y}%` }}
     >
       {editable && (
@@ -473,6 +480,50 @@ export default function SurveyDesignerPage() {
         if (data) setSurvey(data as Survey);
       });
   }, []);
+  useEffect(() => {
+    const textKeyByBlock: Partial<Record<BlockId, string>> = {
+      header: "orgSo",
+      title: "title",
+      summary: "section1",
+      boundaries: "section2",
+      sketch: "section3",
+      mapTitle: "mapTitle",
+      footer: "footer",
+    };
+    const onBlockSelect = (event: Event) => {
+      const block = (event as CustomEvent<BlockId>).detail;
+      setSelectedElement(block);
+      const textKey = textKeyByBlock[block];
+      if (textKey) {
+        setSelectedText(textKey);
+        setSelectedWord("0");
+      }
+      document
+        .querySelectorAll<HTMLElement>("[data-pdf-block]")
+        .forEach((element) => {
+          element.style.outline =
+            element.dataset.pdfBlock === block ? "2px solid #f59e0b" : "";
+          element.style.outlineOffset =
+            element.dataset.pdfBlock === block ? "4px" : "";
+        });
+      document
+        .getElementById("context-editor")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    const onCellSelect = (event: Event) => {
+      setSelectedCell((event as CustomEvent<string>).detail);
+      setSelectedElement("boundaries");
+      document
+        .getElementById("context-editor")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    window.addEventListener("pdf-block-select", onBlockSelect);
+    window.addEventListener("pdf-cell-select", onCellSelect);
+    return () => {
+      window.removeEventListener("pdf-block-select", onBlockSelect);
+      window.removeEventListener("pdf-cell-select", onCellSelect);
+    };
+  }, []);
   const update = <K extends keyof Design>(key: K, value: Design[K]) =>
     setDesign((d) => ({ ...d, [key]: value }));
   const move = (id: BlockId, p: Point) =>
@@ -565,6 +616,13 @@ export default function SurveyDesignerPage() {
   const download = async () => {
     if (!page1Ref.current || !page2Ref.current) return;
     setExporting(true);
+    const selectedNodes = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-pdf-block]")
+    );
+    selectedNodes.forEach((element) => {
+      element.style.outline = "";
+      element.style.outlineOffset = "";
+    });
     try {
       const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
         import("html2canvas"),
@@ -602,6 +660,12 @@ export default function SurveyDesignerPage() {
         }_${survey.owner_name.replace(/\W+/g, "_")}.pdf`
       );
     } finally {
+      selectedNodes
+        .filter((element) => element.dataset.pdfBlock === selectedElement)
+        .forEach((element) => {
+          element.style.outline = "2px solid #f59e0b";
+          element.style.outlineOffset = "4px";
+        });
       setExporting(false);
     }
   };
@@ -760,6 +824,17 @@ export default function SurveyDesignerPage() {
               ))}
             </div>
             <div className="space-y-3 border-t pt-4">
+              <div
+                id="context-editor"
+                className="rounded-lg border border-amber-200 bg-amber-50 p-2"
+              >
+                <p className="text-[9px] font-bold text-amber-700">
+                  HADDA LA EDIT-GAREYNAYO
+                </p>
+                <p className="mt-0.5 text-xs font-black text-amber-900">
+                  {blockChoices.find(([key]) => key === selectedElement)?.[1]}
+                </p>
+              </div>
               <p className="text-[10px] font-black">DELETE / RESTORE ELEMENT</p>
               <select
                 value={selectedElement}
@@ -1284,6 +1359,13 @@ function cellStyle(design: Design, key: string, header = false) {
     borderStyle: "solid",
   };
 }
+function selectCell(event: ReactMouseEvent, key: string) {
+  event.stopPropagation();
+  window.dispatchEvent(new CustomEvent("pdf-cell-select", { detail: key }));
+  window.dispatchEvent(
+    new CustomEvent("pdf-block-select", { detail: "boundaries" })
+  );
+}
 type PageProps = {
   design: Design;
   survey: Survey;
@@ -1421,18 +1503,21 @@ function PageOne({
                 <th
                   className="border p-2"
                   style={cellStyle(design, "h0", true)}
+                  onClick={(event) => selectCell(event, "h0")}
                 >
                   Jiho
                 </th>
                 <th
                   className="border p-2"
                   style={cellStyle(design, "h1", true)}
+                  onClick={(event) => selectCell(event, "h1")}
                 >
                   Cabbir
                 </th>
                 <th
                   className="border p-2"
                   style={cellStyle(design, "h2", true)}
+                  onClick={(event) => selectCell(event, "h2")}
                 >
                   Deris / Xad
                 </th>
@@ -1451,6 +1536,9 @@ function PageOne({
                       key={i}
                       className="border p-2"
                       style={cellStyle(design, `r${rowIndex}c${i}`)}
+                      onClick={(event) =>
+                        selectCell(event, `r${rowIndex}c${i}`)
+                      }
                     >
                       {v}
                     </td>
