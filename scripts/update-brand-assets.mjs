@@ -6,10 +6,64 @@ import pngToIco from 'png-to-ico';
 const source = process.argv[2] || path.resolve('marwaazpn logo.png');
 if (!fs.existsSync(source)) throw new Error(`Source logo not found at: ${source}`);
 
-// Use the original logo file as-is without modifying pixels, adding shapes, or filtering
+// Extract clean circular seal emblem by clearing the outer white square box
+async function prepareCleanCircularSealBuffer(filePath) {
+  const { data, info } = await sharp(filePath).raw().toBuffer({ resolveWithObject: true });
+  const width = info.width;
+  const height = info.height;
+  const cx = width / 2;
+  const cy = height / 2;
+
+  // Outer green ring radius in original marwaazpn logo.png (645x644)
+  const outerSealRadius = (Math.min(width, height) / 2) * 0.826;
+  const newBuffer = Buffer.alloc(data.length);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const a = data[idx + 3];
+
+      const dx = x - cx;
+      const dy = y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > outerSealRadius) {
+        newBuffer[idx] = 0;
+        newBuffer[idx + 1] = 0;
+        newBuffer[idx + 2] = 0;
+        newBuffer[idx + 3] = 0;
+      } else if (dist > outerSealRadius - 3) {
+        const alphaFactor = (outerSealRadius - dist) / 3;
+        const newAlpha = Math.round(a * Math.max(0, Math.min(1, alphaFactor)));
+        newBuffer[idx] = r;
+        newBuffer[idx + 1] = g;
+        newBuffer[idx + 2] = b;
+        newBuffer[idx + 3] = newAlpha;
+      } else {
+        newBuffer[idx] = r;
+        newBuffer[idx + 1] = g;
+        newBuffer[idx + 2] = b;
+        newBuffer[idx + 3] = a;
+      }
+    }
+  }
+
+  return sharp(newBuffer, {
+    raw: { width, height, channels: 4 },
+  })
+    .trim({ threshold: 5 })
+    .png()
+    .toBuffer();
+}
+
+const cleanSealPngBuffer = await prepareCleanCircularSealBuffer(source);
+
 const squarePng = (size, padding = 0) => {
   const innerSize = size - padding * 2;
-  return sharp(source)
+  return sharp(cleanSealPngBuffer)
     .resize(innerSize, innerSize, {
       fit: 'contain',
       background: { r: 0, g: 0, b: 0, alpha: 0 },
@@ -52,11 +106,12 @@ await Promise.all([
   ...androidTasks,
 ]);
 
-// Convert the generated PNG directly to Windows ICO format for Electron desktop shell
+// Convert the generated transparent PNG directly to Windows ICO format for Electron desktop shell
 const convertToIco = pngToIco.default || pngToIco;
 const icoBuffer = await convertToIco(path.resolve('build/icon.png'));
 fs.writeFileSync(path.resolve('build/icon.ico'), icoBuffer);
 
-console.log(`Successfully generated desktop & app brand assets directly from: ${source}`);
+console.log(`Successfully generated transparent desktop & app brand assets from: ${source}`);
+
 
 
