@@ -101,6 +101,7 @@ export function NotificationProvider({
     const { error } = await supabase
       .from("app_notifications")
       .update({ read_at: new Date().toISOString() })
+      .eq("recipient_id", userId)
       .in("id", ids);
     if (error) {
       setUnread((current) => {
@@ -108,7 +109,7 @@ export function NotificationProvider({
         return [...current, ...unread.filter((item) => !known.has(item.id))];
       });
     }
-  }, [unread]);
+  }, [unread, userId]);
 
   const value = useMemo<NotificationContextValue>(
     () => ({

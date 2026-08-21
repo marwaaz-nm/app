@@ -133,6 +133,7 @@ export default function WorkspaceHeader() {
           supabase
             .from("app_notifications")
             .select("id, title, body, href, created_at")
+            .eq("recipient_id", userId)
             .is("read_at", null)
             .order("created_at", { ascending: false })
             .limit(20),
@@ -333,7 +334,8 @@ export default function WorkspaceHeader() {
       void supabase
         .from("app_notifications")
         .update({ read_at: new Date().toISOString() })
-        .eq("id", alert.notificationId);
+        .eq("id", alert.notificationId)
+        .eq("recipient_id", userId);
     }
     router.push(alert.href);
   };
