@@ -470,53 +470,66 @@ export default function SettingsPage() {
 
   const visibleTabs = tabs.filter((t) => (!t.adminOnly || isAdmin) && !t.hidden);
 
+  const selectTab = (nextTab: Tab) => {
+    setTab(nextTab);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', nextTab);
+      window.history.replaceState({}, '', url.toString());
+    }
+  };
+
   return (
-    <div className="p-4 md:p-8 mx-auto space-y-6 text-slate-800 w-full max-w-4xl">
-      {/* Top Settings Header */}
-      <div className="flex items-center gap-3.5 bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200/80 shadow-sm w-full">
-        <div className="bg-teal-50 text-teal-600 p-3 rounded-2xl border border-teal-100/80 shrink-0">
-          <SettingsIcon className="h-6 w-6" />
-        </div>
-        <div>
-          <h2 className="text-base md:text-xl font-black text-slate-900 leading-tight">Settings</h2>
-          <p className="hidden sm:block text-[11px] md:text-xs text-slate-500 font-semibold mt-0.5">
-            Maamulka xisaabtaada, nootaayada, iyo liisaska system-ka.
-          </p>
-        </div>
-      </div>
+    <div className="mx-auto w-full max-w-7xl p-4 text-slate-800 md:p-6 lg:p-8">
+      <div className="grid items-start gap-5 md:grid-cols-[240px_minmax(0,1fr)] lg:gap-7">
+        <aside className="md:sticky md:top-4">
+          <div className="flex gap-2 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white p-2 shadow-sm no-scrollbar md:flex-col md:overflow-visible md:rounded-3xl md:p-3">
+            <div className="hidden border-b border-slate-100 px-3 pb-3 pt-2 md:block">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Settings Menu</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Dooro qaybta aad rabto.</p>
+            </div>
+            {visibleTabs.map((t) => {
+              const Icon = t.icon;
+              const active = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => selectTab(t.id)}
+                  className={`group flex min-w-[175px] shrink-0 items-center gap-3 rounded-xl px-3 py-3 text-left transition-all md:min-w-0 ${
+                    active
+                      ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/20'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+                  }`}
+                >
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700'}`}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-black">{t.label}</span>
+                    <span className={`mt-0.5 block truncate text-[9px] font-semibold ${active ? 'text-white/70' : 'text-slate-400'}`}>{t.sublabel}</span>
+                  </span>
+                  <ChevronRight className={`hidden h-4 w-4 md:block ${active ? 'text-white/70' : 'text-slate-300'}`} />
+                </button>
+              );
+            })}
+          </div>
+        </aside>
 
-      {/* Premium Horizontal Navigation Tabs Bar */}
-      <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar">
-        {visibleTabs.map((t) => {
-          const Icon = t.icon;
-          const active = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => {
-                setTab(t.id);
-                if (typeof window !== 'undefined') {
-                  const url = new URL(window.location.href);
-                  url.searchParams.set('tab', t.id);
-                  window.history.replaceState({}, '', url.toString());
-                }
-              }}
-              className={`flex items-center gap-2 shrink-0 rounded-2xl px-4 py-2.5 text-xs font-bold transition-all duration-200 cursor-pointer ${
-                active
-                  ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/20'
-                  : 'bg-white border border-slate-200/80 text-slate-600 hover:bg-slate-50 hover:text-slate-950 shadow-2xs'
-              }`}
-            >
-              <Icon className={`h-4 w-4 ${active ? 'text-white' : 'text-slate-400'}`} />
-              <span>{t.label}</span>
-            </button>
-          );
-        })}
-      </div>
+        <div className="min-w-0 space-y-5">
+          <div className="flex items-center gap-3.5 bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200/80 shadow-sm w-full">
+            <div className="bg-teal-50 text-teal-600 p-3 rounded-2xl border border-teal-100/80 shrink-0">
+              <SettingsIcon className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="text-base md:text-xl font-black text-slate-900 leading-tight">Settings</h2>
+              <p className="hidden sm:block text-[11px] md:text-xs text-slate-500 font-semibold mt-0.5">
+                Maamulka xisaabtaada, nootaayada, iyo liisaska system-ka.
+              </p>
+            </div>
+          </div>
 
-      {/* Active Tab Content Workspace */}
-      <div className="space-y-4">
+          <div className="space-y-4">
         {tab === 'account' && (
             <div className="space-y-4">
               <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-4 shadow-sm">
@@ -830,6 +843,8 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+          </div>
+        </div>
       </div>
     </div>
   );
