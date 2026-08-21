@@ -898,7 +898,9 @@ export default function ReferencesPage() {
                           onClick={() => setSelectedRef(r)}
                           className="grid grid-cols-[92px_minmax(0,1fr)_auto_16px] items-center gap-2 px-1 py-3.5 cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-50"
                         >
-                          <span className="break-words text-[10px] font-black leading-tight text-teal-600">{r.ref_number}</span>
+                          <span className="break-words text-[10px] font-black leading-tight text-teal-600">
+                            {r.ref_number.includes('/') ? r.ref_number.split('/').slice(1).join('/') : r.ref_number}
+                          </span>
                           <div className="min-w-0">
                             <h4 className="truncate text-xs font-extrabold text-slate-800">{r.subject}</h4>
                             {r.details && (
