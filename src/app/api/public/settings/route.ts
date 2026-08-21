@@ -37,8 +37,7 @@ export async function GET() {
         ref_number_prefix, ref_number_next_seq, ref_number_format, ref_number_digits,
         survey_number_prefix, survey_number_next_seq, survey_number_format, survey_number_digits,
         receipt_number_prefix, receipt_number_next_seq, receipt_number_format, receipt_number_digits,
-        expense_number_prefix, expense_number_next_seq, expense_number_format, expense_number_digits,
-        survey_pdf_design
+        expense_number_prefix, expense_number_next_seq, expense_number_format, expense_number_digits
       `)
       .eq('id', 1)
       .single();
@@ -54,7 +53,19 @@ export async function GET() {
       throw error;
     }
 
-    return NextResponse.json({ settings: data }, { headers: NO_STORE_HEADERS });
+    // The PDF-template migration can trail an app deployment. Fetch this optional
+    // column separately so a missing column never takes branding/settings—and thus
+    // the whole client app—offline with a 500 response.
+    const { data: pdfSettings } = await supabaseAdmin
+      .from('app_settings')
+      .select('survey_pdf_design')
+      .eq('id', 1)
+      .maybeSingle();
+
+    return NextResponse.json(
+      { settings: { ...data, ...(pdfSettings || {}) } },
+      { headers: NO_STORE_HEADERS },
+    );
   } catch (err) {
     console.error('Error fetching public settings:', err);
     return NextResponse.json({ error: 'Server error' }, { status: 500, headers: NO_STORE_HEADERS });
