@@ -1,11 +1,12 @@
-'use client';
+"use client";
 
-import React, { useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import Sidebar from '@/components/Sidebar';
-import WorkspaceHeader from '@/components/WorkspaceHeader';
-import { MobileSearchProvider } from '@/context/MobileSearchContext';
-import { usePathname, useRouter } from 'next/navigation';
+import React, { useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+import Sidebar from "@/components/Sidebar";
+import WorkspaceHeader from "@/components/WorkspaceHeader";
+import { MobileSearchProvider } from "@/context/MobileSearchContext";
+import { NotificationProvider } from "@/context/NotificationContext";
+import { usePathname, useRouter } from "next/navigation";
 
 export default function DashboardLayout({
   children,
@@ -18,16 +19,38 @@ export default function DashboardLayout({
 
   // Route protection based on permitted_menus
   useEffect(() => {
-    if (!loading && user && profile && profile.role !== 'Admin' && profile.role !== 'SuperAdmin') {
-      const standardRoutes = ['/references', '/explorer', '/records', '/transfers', '/financials', '/reports', '/drive-files', '/customers', '/document-archive'];
-      const currentBaseRoute = standardRoutes.find(route => pathname.startsWith(route));
-      
+    if (
+      !loading &&
+      user &&
+      profile &&
+      profile.role !== "Admin" &&
+      profile.role !== "SuperAdmin"
+    ) {
+      const standardRoutes = [
+        "/references",
+        "/explorer",
+        "/records",
+        "/transfers",
+        "/financials",
+        "/reports",
+        "/drive-files",
+        "/customers",
+        "/document-archive",
+      ];
+      const currentBaseRoute = standardRoutes.find((route) =>
+        pathname.startsWith(route)
+      );
+
       if (currentBaseRoute) {
-        const permittedMenus = Array.isArray(profile.permitted_menus) ? profile.permitted_menus : [];
+        const permittedMenus = Array.isArray(profile.permitted_menus)
+          ? profile.permitted_menus
+          : [];
         const missingMenu = !permittedMenus.includes(currentBaseRoute);
-        const missingReportAction = currentBaseRoute === '/reports' && !profile.permitted_actions?.includes('report.view');
+        const missingReportAction =
+          currentBaseRoute === "/reports" &&
+          !profile.permitted_actions?.includes("report.view");
         if (missingMenu || missingReportAction) {
-          router.push('/dashboard');
+          router.push("/dashboard");
         }
       }
     }
@@ -54,30 +77,34 @@ export default function DashboardLayout({
   // The map explorer manages its own full-bleed viewport (no scroll, no bottom-nav
   // clearance needed) — the shared scrollable/padded main would otherwise push part
   // of the map out of view behind the fixed mobile nav.
-  const isFullBleed = pathname.startsWith('/explorer');
+  const isFullBleed = pathname.startsWith("/explorer");
 
   return (
-    <div className="flex h-dvh w-screen overflow-hidden bg-slate-50 text-slate-900">
-      {/* Navigation Shell */}
-      <Sidebar />
+    <NotificationProvider>
+      <div className="flex h-dvh w-screen overflow-hidden bg-slate-50 text-slate-900">
+        {/* Navigation Shell */}
+        <Sidebar />
 
-      {/* Content column: header stays fixed in place, only the middle area scrolls */}
-      <MobileSearchProvider>
-        <div className="flex-1 flex flex-col min-w-0 h-full relative bg-slate-50">
-          <WorkspaceHeader />
-          <main
-            className={
-              isFullBleed
-                ? 'flex-1 min-h-0 overflow-hidden bg-slate-50'
-                : 'flex-1 min-h-0 overflow-y-auto pb-[calc(6rem_+_env(safe-area-inset-bottom))] md:pb-0 bg-slate-50'
-            }
-          >
-            <div className={isFullBleed ? 'w-full h-full' : 'w-full min-h-full'}>
-              {children}
-            </div>
-          </main>
-        </div>
-      </MobileSearchProvider>
-    </div>
+        {/* Content column: header stays fixed in place, only the middle area scrolls */}
+        <MobileSearchProvider>
+          <div className="flex-1 flex flex-col min-w-0 h-full relative bg-slate-50">
+            <WorkspaceHeader />
+            <main
+              className={
+                isFullBleed
+                  ? "flex-1 min-h-0 overflow-hidden bg-slate-50"
+                  : "flex-1 min-h-0 overflow-y-auto pb-[calc(6rem_+_env(safe-area-inset-bottom))] md:pb-0 bg-slate-50"
+              }
+            >
+              <div
+                className={isFullBleed ? "w-full h-full" : "w-full min-h-full"}
+              >
+                {children}
+              </div>
+            </main>
+          </div>
+        </MobileSearchProvider>
+      </div>
+    </NotificationProvider>
   );
 }
