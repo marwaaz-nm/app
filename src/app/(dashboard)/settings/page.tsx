@@ -660,25 +660,14 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleDesktopDownload}
-            disabled={downloadingDesktop}
-            className="inline-flex items-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:bg-slate-300 px-5 py-3 text-xs font-bold text-white shadow-md cursor-pointer disabled:cursor-wait transition-all"
+          <a
+            href="/downloads/Marwaazpn-App-Setup.exe"
+            download="Marwaazpn-App-Setup.exe"
+            className="inline-flex items-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 px-5 py-3 text-xs font-bold text-white shadow-md cursor-pointer transition-all"
           >
-            {downloadingDesktop ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            {downloadingDesktop
-              ? `Soo dejinaya (${desktopDownloadProgress}/${DESKTOP_INSTALLER_PARTS})`
-              : 'Soo Deji (Windows .exe)'}
-          </button>
-
-          {downloadingDesktop && (
-            <p className="text-xs font-bold text-teal-700" aria-live="polite">
-              {desktopDownloadEta === null
-                ? 'Waqtiga haray waa la xisaabinayaa…'
-                : `Qiyaastii ${desktopDownloadEta} seconds ayaa haray`}
-            </p>
-          )}
+            <Download className="h-4 w-4" />
+            Soo Deji (Windows .exe)
+          </a>
 
           <p className="text-[11px] text-slate-400 font-medium">
             Installer-kan wuxuu u shaqeeyaa Windows 10/11. Kadib install-ka, app-ka wuxuu ku xirnaan doonaa internet-ka isla xogta browser-ka aad isticmaasho.
