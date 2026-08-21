@@ -2,9 +2,11 @@ export interface Profile {
   id: string;
   username: string;
   fullname: string;
-  role: 'Admin' | 'User' | 'SuperAdmin';
+  role: "Admin" | "User" | "SuperAdmin";
   permitted_menus?: string[];
   permitted_actions?: string[];
+  notifications_enabled?: boolean;
+  notification_menu_preferences?: Record<string, boolean>;
   created_at?: string;
 }
 
@@ -42,7 +44,12 @@ export interface Survey {
   rejection_reason?: string;
 }
 
-export type SurveyStatus = 'Draft' | 'Pending Review' | 'Approved' | 'Rejected' | 'Archived';
+export type SurveyStatus =
+  | "Draft"
+  | "Pending Review"
+  | "Approved"
+  | "Rejected"
+  | "Archived";
 
 export interface SurveyRevision {
   id: number;
@@ -83,7 +90,7 @@ export interface Reference {
   survey_id?: number | null;
   subject: string;
   details?: string;
-  status: 'In Progress' | 'Completed' | 'Picked Up';
+  status: "In Progress" | "Completed" | "Picked Up";
   issue_date?: string;
   created_at?: string;
   created_by?: string;
@@ -117,8 +124,8 @@ export interface Receipt {
   reference_id: number;
   details?: string;
   amount: number;
-  status: 'Paid' | 'Credit';
-  payment_mode: 'EVC Plus' | 'eDahab' | 'Jeeb' | 'Cash';
+  status: "Paid" | "Credit";
+  payment_mode: "EVC Plus" | "eDahab" | "Jeeb" | "Cash";
   payment_date: string;
   created_at?: string;
   created_by?: string;

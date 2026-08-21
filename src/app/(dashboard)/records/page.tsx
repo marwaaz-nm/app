@@ -12,6 +12,7 @@ import { ListLoadingSkeleton } from '@/components/Skeleton';
 import { useProfileNames, resolveCreatorName } from '@/lib/useProfileNames';
 import { displayStatus, type SurveyDisplayStatus } from '@/lib/surveyCompleteness';
 import { PENDING_SURVEY_KEY, useDataAutoRefresh } from '@/lib/useDataAutoRefresh';
+import { useNotifications } from '@/context/NotificationContext';
 import { numericIdentifier } from '@/lib/numbering';
 import {
   Plus,
@@ -23,6 +24,8 @@ import {
 } from 'lucide-react';
 
 export default function RecordsPage() {
+  const { newEntityIdsFor, dismissNewEntity } = useNotifications();
+  const newSurveyIds = newEntityIdsFor('/records');
   const [records, setRecords] = useState<Survey[]>([]);
   const fetchRequestId = useRef(0);
   const profileNames = useProfileNames();
@@ -389,14 +392,20 @@ export default function RecordsPage() {
                       {group.items.map((record) => (
                         <tr
                           key={record.id}
-                          onClick={() => setSelectedRecord(record)}
-                          className="hover:bg-teal-500/5 transition-all cursor-pointer group"
+                          onClick={() => {
+                            dismissNewEntity(record.id);
+                            setSelectedRecord(record);
+                          }}
+                          className={`${newSurveyIds.has(record.id) ? 'bg-blue-50/80 ring-1 ring-inset ring-blue-200' : ''} hover:bg-teal-500/5 transition-all cursor-pointer group`}
                         >
                           <td className="px-6 py-4 font-black text-slate-400 group-hover:text-teal-600 transition-colors">
                             {record.survey_no || record.serial_no}
                           </td>
                           <td className="px-6 py-4 font-extrabold text-slate-800 text-sm">
-                            {record.owner_name}
+                            <span className="flex items-center gap-2">
+                              {record.owner_name}
+                              {newSurveyIds.has(record.id) && <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-white">New</span>}
+                            </span>
                           </td>
                           <td className="px-6 py-4 text-slate-500">
                             <span className="flex items-center gap-1.5">
@@ -467,12 +476,15 @@ export default function RecordsPage() {
                   {group.items.map((record) => (
                     <div
                       key={record.id}
-                      onClick={() => setSelectedRecord(record)}
-                      className="grid grid-cols-[52px_1fr_auto_40px] items-center gap-3 px-1 py-3.5 cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-50"
+                      onClick={() => {
+                        dismissNewEntity(record.id);
+                        setSelectedRecord(record);
+                      }}
+                      className={`grid grid-cols-[52px_1fr_auto_40px] items-center gap-3 px-1 py-3.5 cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-50 ${newSurveyIds.has(record.id) ? 'bg-blue-50/80 ring-1 ring-inset ring-blue-200' : ''}`}
                     >
                       <span className="truncate text-xs font-black text-slate-500">{numericIdentifier(record.survey_no || record.serial_no)}</span>
                       <div className="min-w-0">
-                        <h4 className="truncate text-xs font-extrabold text-slate-800">{record.owner_name}</h4>
+                        <h4 className="flex items-center gap-1.5 truncate text-xs font-extrabold text-slate-800">{record.owner_name}{newSurveyIds.has(record.id) && <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[7px] font-black uppercase text-white">New</span>}</h4>
                         <p className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-slate-500">
                           <Calendar className="h-3 w-3 shrink-0" />
                           <span>{record.created_at ? new Date(record.created_at).toLocaleDateString('so-SO') : '-'}</span>

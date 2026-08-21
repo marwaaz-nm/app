@@ -25,9 +25,17 @@ import {
   Smartphone,
   Download,
   ChevronRight,
+  Bell,
 } from 'lucide-react';
 
-type Tab = 'account' | 'organization' | 'options' | 'drive' | 'archive' | 'desktop';
+type Tab = 'account' | 'notifications' | 'organization' | 'options' | 'drive' | 'archive' | 'desktop';
+
+const NOTIFICATION_MENU_OPTIONS = [
+  { href: '/records', label: 'Survey Records' },
+  { href: '/references', label: 'References' },
+  { href: '/transfers', label: 'Land Transfers' },
+  { href: '/financials', label: 'Financials' },
+];
 
 const DESKTOP_INSTALLER_PARTS = 5;
 const DESKTOP_INSTALLER_SIZE = 100583387;
@@ -98,7 +106,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const t = searchParams ? (searchParams.get('tab') as Tab) : null;
-    if (t && ['account', 'organization', 'options', 'drive', 'archive', 'desktop'].includes(t)) {
+    if (t && ['account', 'notifications', 'organization', 'options', 'drive', 'archive', 'desktop'].includes(t)) {
       setTab(t);
     }
   }, [searchParams]);
@@ -109,6 +117,9 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationMenuPreferences, setNotificationMenuPreferences] = useState<Record<string, boolean>>({});
+  const [savingNotifications, setSavingNotifications] = useState(false);
 
   // Organization tab state
   const [orgNameSo, setOrgNameSo] = useState('');
@@ -154,7 +165,48 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setFullname(profile?.fullname || '');
+    setNotificationsEnabled(profile?.notifications_enabled !== false);
+    setNotificationMenuPreferences(profile?.notification_menu_preferences || {});
   }, [profile]);
+
+  const allowedNotificationMenus = NOTIFICATION_MENU_OPTIONS.filter((menu) =>
+    profile?.role === 'Admin' || profile?.role === 'SuperAdmin'
+      ? true
+      : (profile?.permitted_menus || []).includes(menu.href),
+  );
+
+  const handleSaveNotifications = async () => {
+    if (!profile) return;
+    setSavingNotifications(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          notifications_enabled: notificationsEnabled,
+          notification_menu_preferences: notificationMenuPreferences,
+        })
+        .eq('id', profile.id);
+      if (error) throw error;
+
+      const disabledMenus = allowedNotificationMenus
+        .filter((menu) => !notificationsEnabled || notificationMenuPreferences[menu.href] === false)
+        .map((menu) => menu.href);
+      if (disabledMenus.length > 0) {
+        await supabase
+          .from('app_notifications')
+          .update({ read_at: new Date().toISOString() })
+          .eq('recipient_id', profile.id)
+          .is('read_at', null)
+          .in('menu_path', disabledMenus);
+      }
+      await refetchProfile();
+      showAlert('Guul', 'Notification settings-ka waa la kaydiyey.', 'success');
+    } catch (err: unknown) {
+      showAlert('Cillad', err instanceof Error ? err.message : 'Notification settings-ka lama kaydin.', 'error');
+    } finally {
+      setSavingNotifications(false);
+    }
+  };
 
   useEffect(() => {
     setOrgNameSo(settings.org_name_so);
@@ -408,6 +460,7 @@ export default function SettingsPage() {
     hidden?: boolean;
   }[] = [
     { id: 'account', label: 'Xisaabta (Account)', sublabel: 'Profile & Password', icon: UserCircle },
+    { id: 'notifications', label: 'Notifications', sublabel: 'Fariimaha menu-yada', icon: Bell },
     { id: 'organization', label: 'Nootaayo (Notary)', sublabel: 'Org info & Logo', icon: Building2, adminOnly: true },
     { id: 'options', label: 'Liisaska (Options)', sublabel: 'Numbering & Format', icon: ListChecks, adminOnly: true },
     { id: 'drive', label: 'Drive Connections', sublabel: 'Google Drive sync', icon: Cloud, adminOnly: true, hidden: !canManageDriveConnections },
@@ -509,6 +562,37 @@ export default function SettingsPage() {
                   {savingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Bedel Password
                 </button>
               </div>
+            </div>
+          )}
+
+          {tab === 'notifications' && (
+            <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-5 shadow-sm">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-black text-slate-800"><Bell className="h-4 w-4 text-teal-600" /> Notification Settings</h3>
+                <p className="mt-1 text-xs font-semibold text-slate-500">Waxaad maamuli kartaa oo keliya fariimaha menu-yada laguu fasaxay.</p>
+              </div>
+              <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <span><span className="block text-sm font-black text-slate-800">Dhammaan notifications</span><span className="mt-1 block text-xs text-slate-500">Hal mar wada shid ama wada dami.</span></span>
+                <input type="checkbox" checked={notificationsEnabled} onChange={(e) => setNotificationsEnabled(e.target.checked)} className="h-5 w-5 accent-teal-600" />
+              </label>
+              <div className="space-y-2">
+                {allowedNotificationMenus.map((menu) => (
+                  <label key={menu.href} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4">
+                    <span><span className="block text-sm font-bold text-slate-800">{menu.label}</span><span className="mt-0.5 block text-[10px] font-semibold text-slate-400">{menu.href}</span></span>
+                    <input
+                      type="checkbox"
+                      disabled={!notificationsEnabled}
+                      checked={notificationsEnabled && notificationMenuPreferences[menu.href] !== false}
+                      onChange={(e) => setNotificationMenuPreferences((current) => ({ ...current, [menu.href]: e.target.checked }))}
+                      className="h-5 w-5 accent-teal-600 disabled:opacity-40"
+                    />
+                  </label>
+                ))}
+                {allowedNotificationMenus.length === 0 && <p className="rounded-2xl bg-slate-50 p-5 text-center text-xs font-semibold text-slate-500">Ma lihid menu notification taageera oo laguu fasaxay.</p>}
+              </div>
+              <button onClick={handleSaveNotifications} disabled={savingNotifications} className="flex items-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:bg-slate-200 disabled:text-slate-400 px-5 py-2.5 text-xs font-bold text-white shadow-md cursor-pointer transition-all">
+                {savingNotifications ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Keydi Notifications
+              </button>
             </div>
           )}
 

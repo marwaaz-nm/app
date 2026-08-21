@@ -12,6 +12,8 @@ CREATE TABLE public.profiles (
     fullname VARCHAR(255) NOT NULL,
     role VARCHAR(50) DEFAULT 'User' CHECK (role IN ('Admin', 'User')),
     permitted_menus TEXT[] DEFAULT NULL,
+    notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    notification_menu_preferences JSONB NOT NULL DEFAULT '{}'::JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

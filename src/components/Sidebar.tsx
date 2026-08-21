@@ -151,7 +151,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { profile, logout } = useAuth();
   const { settings } = useSettings();
-  const { unreadCountFor } = useNotifications();
+  const { unreadCountFor, markMenuRead } = useNotifications();
   const isAdmin = profile?.role === "Admin" || profile?.role === "SuperAdmin";
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -251,6 +251,7 @@ export default function Sidebar() {
                         <Link
                           key={item.href}
                           href={item.href}
+                          onClick={() => void markMenuRead(item.href)}
                           aria-current={active ? "page" : undefined}
                           className={`group relative flex min-h-11 items-center gap-2.5 rounded-xl px-2.5 py-2 transition-all duration-200 ${
                             active
@@ -346,6 +347,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => void markMenuRead(item.href)}
               aria-current={active ? "page" : undefined}
               className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl transition-colors ${
                 active ? "text-teal-700" : "text-slate-400 hover:text-slate-600"
@@ -448,7 +450,10 @@ export default function Sidebar() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    onClick={() => setMoreOpen(false)}
+                    onClick={() => {
+                      void markMenuRead(item.href);
+                      setMoreOpen(false);
+                    }}
                     aria-current={active ? "page" : undefined}
                     className={`relative flex flex-col items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 transition-colors ${
                       active
