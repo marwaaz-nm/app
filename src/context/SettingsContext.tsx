@@ -101,6 +101,14 @@ export interface SurveyPdfDesignSettings {
       }
     >;
   };
+  mapDetailsStyle?: {
+    fill: string;
+    borderColor: string;
+    borderWidth: number;
+    textColor: string;
+    fontSize: number;
+    cells: Record<string, { fill?: string; color?: string; fontSize?: number }>;
+  };
   deletedBlocks?: string[];
 }
 
@@ -177,6 +185,14 @@ const DEFAULT_SETTINGS: AppSettings = {
       fontSize: 12,
       borderColor: "#334155",
       borderWidth: 1,
+      cells: {},
+    },
+    mapDetailsStyle: {
+      fill: "#f8fafc",
+      borderColor: "#e2e8f0",
+      borderWidth: 1,
+      textColor: "#1e293b",
+      fontSize: 12,
       cells: {},
     },
     deletedBlocks: [],

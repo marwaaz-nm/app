@@ -60,6 +60,7 @@ type Design = SurveyPdfDesignSettings & {
   mapSize: { width: number; height: number };
   textStyles: NonNullable<SurveyPdfDesignSettings["textStyles"]>;
   tableStyle: NonNullable<SurveyPdfDesignSettings["tableStyle"]>;
+  mapDetailsStyle: NonNullable<SurveyPdfDesignSettings["mapDetailsStyle"]>;
   deletedBlocks: string[];
 };
 
@@ -106,6 +107,14 @@ const defaultDesign: Design = {
     borderWidth: 1,
     cells: {},
   },
+  mapDetailsStyle: {
+    fill: "#f8fafc",
+    borderColor: "#e2e8f0",
+    borderWidth: 1,
+    textColor: "#1e293b",
+    fontSize: 12,
+    cells: {},
+  },
   deletedBlocks: [],
 };
 const sampleSurvey: Survey = {
@@ -149,6 +158,14 @@ function mergeDesign(saved: SurveyPdfDesignSettings): Design {
       ...defaultDesign.tableStyle,
       ...saved.tableStyle,
       cells: { ...defaultDesign.tableStyle.cells, ...saved.tableStyle?.cells },
+    },
+    mapDetailsStyle: {
+      ...defaultDesign.mapDetailsStyle,
+      ...saved.mapDetailsStyle,
+      cells: {
+        ...defaultDesign.mapDetailsStyle.cells,
+        ...saved.mapDetailsStyle?.cells,
+      },
     },
     deletedBlocks: saved.deletedBlocks || [],
   };
@@ -471,6 +488,7 @@ export default function SurveyDesignerPage() {
   const [selectedText, setSelectedText] = useState("title"),
     [selectedWord, setSelectedWord] = useState("0"),
     [selectedCell, setSelectedCell] = useState("h0"),
+    [selectedMapDetailCell, setSelectedMapDetailCell] = useState("owner"),
     [selectedElement, setSelectedElement] = useState<BlockId>("title");
   const page1Ref = useRef<HTMLDivElement>(null),
     page2Ref = useRef<HTMLDivElement>(null);
@@ -521,11 +539,26 @@ export default function SurveyDesignerPage() {
         .getElementById("context-editor")
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
     };
+    const onMapDetailCellSelect = (event: Event) => {
+      setSelectedMapDetailCell((event as CustomEvent<string>).detail);
+      setSelectedElement("mapDetails");
+      document
+        .getElementById("context-editor")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
     window.addEventListener("pdf-block-select", onBlockSelect);
     window.addEventListener("pdf-cell-select", onCellSelect);
+    window.addEventListener(
+      "pdf-map-detail-cell-select",
+      onMapDetailCellSelect
+    );
     return () => {
       window.removeEventListener("pdf-block-select", onBlockSelect);
       window.removeEventListener("pdf-cell-select", onCellSelect);
+      window.removeEventListener(
+        "pdf-map-detail-cell-select",
+        onMapDetailCellSelect
+      );
     };
   }, []);
   const update = <K extends keyof Design>(key: K, value: Design[K]) =>
@@ -585,6 +618,24 @@ export default function SurveyDesignerPage() {
         cells: {
           ...d.tableStyle.cells,
           [selectedCell]: { ...d.tableStyle.cells[selectedCell], ...patch },
+        },
+      },
+    }));
+  const setMapDetailCellStyle = (patch: {
+    fill?: string;
+    color?: string;
+    fontSize?: number;
+  }) =>
+    setDesign((d) => ({
+      ...d,
+      mapDetailsStyle: {
+        ...d.mapDetailsStyle,
+        cells: {
+          ...d.mapDetailsStyle.cells,
+          [selectedMapDetailCell]: {
+            ...d.mapDetailsStyle.cells[selectedMapDetailCell],
+            ...patch,
+          },
         },
       },
     }));
@@ -1136,6 +1187,104 @@ export default function SurveyDesignerPage() {
             </div>
             <div
               className={`${
+                selectedElement === "mapDetails" ? "block" : "hidden"
+              } space-y-3 border-t pt-4`}
+            >
+              <p className="text-[10px] font-black">MAP DETAILS STYLE</p>
+              <p className="text-[9px] font-bold text-slate-500">BLOCK DHAN</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Color
+                  label="Block fill"
+                  value={design.mapDetailsStyle.fill}
+                  onChange={(v) =>
+                    update("mapDetailsStyle", {
+                      ...design.mapDetailsStyle,
+                      fill: v,
+                    })
+                  }
+                />
+                <Color
+                  label="Border color"
+                  value={design.mapDetailsStyle.borderColor}
+                  onChange={(v) =>
+                    update("mapDetailsStyle", {
+                      ...design.mapDetailsStyle,
+                      borderColor: v,
+                    })
+                  }
+                />
+                <BorderBox
+                  label="Border size"
+                  value={design.mapDetailsStyle.borderWidth}
+                  onChange={(v) =>
+                    update("mapDetailsStyle", {
+                      ...design.mapDetailsStyle,
+                      borderWidth: v,
+                    })
+                  }
+                />
+                <Color
+                  label="Font color"
+                  value={design.mapDetailsStyle.textColor}
+                  onChange={(v) =>
+                    update("mapDetailsStyle", {
+                      ...design.mapDetailsStyle,
+                      textColor: v,
+                    })
+                  }
+                />
+              </div>
+              <NumberBox
+                label="Font size"
+                value={design.mapDetailsStyle.fontSize}
+                onChange={(v) =>
+                  update("mapDetailsStyle", {
+                    ...design.mapDetailsStyle,
+                    fontSize: v,
+                  })
+                }
+              />
+              <p className="text-[9px] font-bold text-slate-500">
+                CELL GAAR AH
+              </p>
+              <select
+                value={selectedMapDetailCell}
+                onChange={(e) => setSelectedMapDetailCell(e.target.value)}
+                className="w-full rounded-lg border p-2 text-xs"
+              >
+                <option value="owner">Milkiilaha</option>
+                <option value="gps">GPS</option>
+                <option value="area">Baaxadda</option>
+              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <Color
+                  label="Cell fill"
+                  value={
+                    design.mapDetailsStyle.cells[selectedMapDetailCell]?.fill ||
+                    design.mapDetailsStyle.fill
+                  }
+                  onChange={(v) => setMapDetailCellStyle({ fill: v })}
+                />
+                <Color
+                  label="Text color"
+                  value={
+                    design.mapDetailsStyle.cells[selectedMapDetailCell]
+                      ?.color || design.mapDetailsStyle.textColor
+                  }
+                  onChange={(v) => setMapDetailCellStyle({ color: v })}
+                />
+              </div>
+              <NumberBox
+                label="Cell font size"
+                value={
+                  design.mapDetailsStyle.cells[selectedMapDetailCell]
+                    ?.fontSize || design.mapDetailsStyle.fontSize
+                }
+                onChange={(v) => setMapDetailCellStyle({ fontSize: v })}
+              />
+            </div>
+            <div
+              className={`${
                 selectedElement === "map" ? "block" : "hidden"
               } space-y-3 border-t pt-4`}
             >
@@ -1635,7 +1784,33 @@ function PageOne({
     </>
   );
 }
-function PageTwo({ design, survey, editable, move, field }: PageProps) {
+function PageTwo({ design, survey, editable, move }: PageProps) {
+  const detailCell = (key: string, label: string, value?: string | null) => {
+    const cell = design.mapDetailsStyle.cells[key] || {};
+    return (
+      <button
+        type="button"
+        onClick={(event) => {
+          if (!editable) return;
+          event.stopPropagation();
+          window.dispatchEvent(
+            new CustomEvent("pdf-map-detail-cell-select", { detail: key })
+          );
+        }}
+        className="border-b border-slate-200 px-2 py-1.5 text-left"
+        style={{
+          backgroundColor: cell.fill || "transparent",
+          color: cell.color || design.mapDetailsStyle.textColor,
+          fontSize: cell.fontSize || design.mapDetailsStyle.fontSize,
+        }}
+      >
+        <span className="block text-[8px] font-bold uppercase tracking-wider opacity-60">
+          {label}
+        </span>
+        <span className="font-semibold">{value || "—"}</span>
+      </button>
+    );
+  };
   return (
     <>
       <Draggable
@@ -1701,10 +1876,18 @@ function PageTwo({ design, survey, editable, move, field }: PageProps) {
         onMove={move}
         className="w-[86%]"
       >
-        <div className="grid grid-cols-3 gap-3 rounded-xl border bg-slate-50 p-4">
-          {field("Milkiilaha", survey.owner_name)}
-          {field("GPS", survey.gps_location)}
-          {field("Baaxadda", survey.sketch_area)}
+        <div
+          className="grid grid-cols-3 gap-3 rounded-xl p-4"
+          style={{
+            backgroundColor: design.mapDetailsStyle.fill,
+            borderColor: design.mapDetailsStyle.borderColor,
+            borderWidth: design.mapDetailsStyle.borderWidth,
+            borderStyle: "solid",
+          }}
+        >
+          {detailCell("owner", "Milkiilaha", survey.owner_name)}
+          {detailCell("gps", "GPS", survey.gps_location)}
+          {detailCell("area", "Baaxadda", survey.sketch_area)}
         </div>
       </Draggable>
     </>
