@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
@@ -92,7 +93,15 @@ export default function SettingsPage() {
   const isAdmin = profile?.role === 'Admin';
   const canManageDriveConnections = profile?.username === 'samanor';
 
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>('account');
+
+  useEffect(() => {
+    const t = searchParams ? (searchParams.get('tab') as Tab) : null;
+    if (t && ['account', 'organization', 'options', 'drive', 'archive', 'desktop'].includes(t)) {
+      setTab(t);
+    }
+  }, [searchParams]);
 
   // Account tab state
   const [fullname, setFullname] = useState('');
@@ -409,7 +418,7 @@ export default function SettingsPage() {
   const visibleTabs = tabs.filter((t) => (!t.adminOnly || isAdmin) && !t.hidden);
 
   return (
-    <div className="p-4 md:p-8 mx-auto space-y-6 text-slate-800 w-full max-w-6xl">
+    <div className="p-4 md:p-8 mx-auto space-y-6 text-slate-800 w-full max-w-4xl">
       {/* Top Settings Header */}
       <div className="flex items-center gap-3.5 bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200/80 shadow-sm w-full">
         <div className="bg-teal-50 text-teal-600 p-3 rounded-2xl border border-teal-100/80 shrink-0">
@@ -423,89 +432,9 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* 2-Column Layout: Sub-Sidebar on Left, Main Content on Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Sub-Sidebar Navigation Column */}
-        <aside className="lg:col-span-4 xl:col-span-3.5 space-y-2">
-          {/* Mobile Horizontal Pill Bar */}
-          <div className="flex gap-2 overflow-x-auto pb-1 lg:hidden">
-            {visibleTabs.map((t) => {
-              const Icon = t.icon;
-              const active = tab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setTab(t.id)}
-                  className={`flex items-center gap-2 shrink-0 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer ${
-                    active ? 'bg-teal-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" /> {t.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Desktop Vertical Sub-Sidebar */}
-          <div className="hidden lg:block bg-white border border-slate-200/80 rounded-3xl p-3 shadow-sm sticky top-6">
-            <p className="px-3 pt-2 pb-2.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
-              Settings Menu
-            </p>
-            <nav className="space-y-1.5" aria-label="Settings sub-sidebar">
-              {visibleTabs.map((t) => {
-                const Icon = t.icon;
-                const active = tab === t.id;
-
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setTab(t.id)}
-                    className={`group relative flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition-all duration-200 cursor-pointer ${
-                      active
-                        ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/20'
-                        : 'text-slate-700 hover:bg-slate-50 hover:text-slate-950'
-                    }`}
-                  >
-                    <span
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
-                        active
-                          ? 'bg-white/20 text-white'
-                          : 'bg-slate-100 text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700'
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" strokeWidth={active ? 2.4 : 2} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-extrabold tracking-[-0.01em]">
-                        {t.label}
-                      </span>
-                      <span
-                        className={`block truncate text-[10px] font-medium transition-colors ${
-                          active ? 'text-white/80' : 'text-slate-400 group-hover:text-slate-500'
-                        }`}
-                      >
-                        {t.sublabel}
-                      </span>
-                    </div>
-                    <ChevronRight
-                      className={`h-4 w-4 shrink-0 transition-all ${
-                        active
-                          ? 'translate-x-0 text-white/80 opacity-100'
-                          : '-translate-x-1 text-slate-300 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'
-                      }`}
-                    />
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-        </aside>
-
-        {/* Active Content Column */}
-        <main className="lg:col-span-8 xl:col-span-8.5 space-y-4">
-          {tab === 'account' && (
+      {/* Active Tab Content Workspace */}
+      <div className="space-y-4">
+        {tab === 'account' && (
             <div className="space-y-4">
               <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-4 shadow-sm">
                 <h3 className="text-sm font-black text-slate-800">Magaca Buuxa (Full Name)</h3>
@@ -787,7 +716,6 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
-        </main>
       </div>
     </div>
   );
