@@ -60,6 +60,7 @@ type Design = SurveyPdfDesignSettings & {
   mapSize: { width: number; height: number };
   textStyles: NonNullable<SurveyPdfDesignSettings["textStyles"]>;
   tableStyle: NonNullable<SurveyPdfDesignSettings["tableStyle"]>;
+  sketchLabelStyle: NonNullable<SurveyPdfDesignSettings["sketchLabelStyle"]>;
   mapDetailsStyle: NonNullable<SurveyPdfDesignSettings["mapDetailsStyle"]>;
   deletedBlocks: string[];
 };
@@ -103,9 +104,19 @@ const defaultDesign: Design = {
     bodyFill: "#ffffff",
     bodyText: "#1e293b",
     fontSize: 12,
+    bold: false,
+    italic: false,
+    underline: false,
     borderColor: "#334155",
     borderWidth: 1,
     cells: {},
+  },
+  sketchLabelStyle: {
+    color: "#0f172a",
+    fontSize: 11,
+    bold: true,
+    italic: false,
+    underline: false,
   },
   mapDetailsStyle: {
     fill: "#f8fafc",
@@ -113,6 +124,9 @@ const defaultDesign: Design = {
     borderWidth: 1,
     textColor: "#1e293b",
     fontSize: 12,
+    bold: false,
+    italic: false,
+    underline: false,
     cells: {},
   },
   deletedBlocks: [],
@@ -158,6 +172,10 @@ function mergeDesign(saved: SurveyPdfDesignSettings): Design {
       ...defaultDesign.tableStyle,
       ...saved.tableStyle,
       cells: { ...defaultDesign.tableStyle.cells, ...saved.tableStyle?.cells },
+    },
+    sketchLabelStyle: {
+      ...defaultDesign.sketchLabelStyle,
+      ...saved.sketchLabelStyle,
     },
     mapDetailsStyle: {
       ...defaultDesign.mapDetailsStyle,
@@ -347,10 +365,12 @@ function PlotSketch({
   survey,
   accent,
   height,
+  labelStyle,
 }: {
   survey: Survey;
   accent: string;
   height: number;
+  labelStyle: Design["sketchLabelStyle"];
 }) {
   const shape =
     coords(survey.polygon_boundary).length >= 3
@@ -408,8 +428,11 @@ function PlotSketch({
             <text
               x={Number(x) + 8}
               y={Number(y) - 7}
-              fontSize="11"
-              fontWeight="700"
+              fill={labelStyle.color}
+              fontSize={labelStyle.fontSize}
+              fontWeight={labelStyle.bold ? "700" : "400"}
+              fontStyle={labelStyle.italic ? "italic" : "normal"}
+              textDecoration={labelStyle.underline ? "underline" : "none"}
             >
               P{i + 1}
             </text>
@@ -610,6 +633,9 @@ export default function SurveyDesignerPage() {
     fontSize?: number;
     borderColor?: string;
     borderWidth?: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
   }) =>
     setDesign((d) => ({
       ...d,
@@ -625,6 +651,9 @@ export default function SurveyDesignerPage() {
     fill?: string;
     color?: string;
     fontSize?: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
   }) =>
     setDesign((d) => ({
       ...d,
@@ -801,8 +830,8 @@ export default function SurveyDesignerPage() {
             {message}
           </div>
         )}
-        <main className="grid gap-4 xl:grid-cols-[330px_minmax(0,1fr)]">
-          <aside className="max-h-[calc(100vh-7rem)] space-y-5 overflow-y-auto rounded-2xl border bg-white p-4 shadow-sm xl:sticky xl:top-4">
+        <main className="grid gap-4 xl:h-[calc(100vh-8rem)] xl:grid-cols-[330px_minmax(0,1fr)] xl:overflow-hidden">
+          <aside className="max-h-[calc(100vh-8rem)] space-y-5 overflow-y-auto overscroll-contain rounded-2xl border bg-white p-4 shadow-sm xl:h-full">
             <div>
               <p className="text-sm font-black">Design Settings</p>
               <p className="mt-1 text-[10px] text-slate-500">
@@ -1087,7 +1116,40 @@ export default function SurveyDesignerPage() {
                     })
                   }
                 />
+                <Color
+                  label="Header text"
+                  value={design.tableStyle.headerText}
+                  onChange={(v) =>
+                    update("tableStyle", {
+                      ...design.tableStyle,
+                      headerText: v,
+                    })
+                  }
+                />
+                <Color
+                  label="Body text"
+                  value={design.tableStyle.bodyText}
+                  onChange={(v) =>
+                    update("tableStyle", {
+                      ...design.tableStyle,
+                      bodyText: v,
+                    })
+                  }
+                />
               </div>
+              <NumberBox
+                label="Table font size"
+                value={design.tableStyle.fontSize}
+                onChange={(v) =>
+                  update("tableStyle", { ...design.tableStyle, fontSize: v })
+                }
+              />
+              <StyleButtons
+                value={design.tableStyle}
+                onChange={(patch) =>
+                  update("tableStyle", { ...design.tableStyle, ...patch })
+                }
+              />
               <p className="text-[9px] font-bold text-slate-500">
                 CELL GAAR AH
               </p>
@@ -1137,6 +1199,10 @@ export default function SurveyDesignerPage() {
                 }
                 onChange={(v) => setCellStyle({ fontSize: v })}
               />
+              <StyleButtons
+                value={design.tableStyle.cells[selectedCell] || {}}
+                onChange={setCellStyle}
+              />
               <div className="grid grid-cols-2 gap-2">
                 <Color
                   label="Cell border"
@@ -1172,6 +1238,40 @@ export default function SurveyDesignerPage() {
                 suffix="%"
                 onChange={(v) =>
                   update("sketchSize", { ...design.sketchSize, width: v })
+                }
+              />
+              <p className="pt-2 text-[9px] font-bold text-slate-500">
+                POINT LABELS (P1, P2...)
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Color
+                  label="Font color"
+                  value={design.sketchLabelStyle.color}
+                  onChange={(v) =>
+                    update("sketchLabelStyle", {
+                      ...design.sketchLabelStyle,
+                      color: v,
+                    })
+                  }
+                />
+                <NumberBox
+                  label="Font size"
+                  value={design.sketchLabelStyle.fontSize}
+                  onChange={(v) =>
+                    update("sketchLabelStyle", {
+                      ...design.sketchLabelStyle,
+                      fontSize: v,
+                    })
+                  }
+                />
+              </div>
+              <StyleButtons
+                value={design.sketchLabelStyle}
+                onChange={(patch) =>
+                  update("sketchLabelStyle", {
+                    ...design.sketchLabelStyle,
+                    ...patch,
+                  })
                 }
               />
               <Range
@@ -1244,6 +1344,15 @@ export default function SurveyDesignerPage() {
                   })
                 }
               />
+              <StyleButtons
+                value={design.mapDetailsStyle}
+                onChange={(patch) =>
+                  update("mapDetailsStyle", {
+                    ...design.mapDetailsStyle,
+                    ...patch,
+                  })
+                }
+              />
               <p className="text-[9px] font-bold text-slate-500">
                 CELL GAAR AH
               </p>
@@ -1281,6 +1390,12 @@ export default function SurveyDesignerPage() {
                     ?.fontSize || design.mapDetailsStyle.fontSize
                 }
                 onChange={(v) => setMapDetailCellStyle({ fontSize: v })}
+              />
+              <StyleButtons
+                value={
+                  design.mapDetailsStyle.cells[selectedMapDetailCell] || {}
+                }
+                onChange={setMapDetailCellStyle}
               />
             </div>
             <div
@@ -1327,7 +1442,7 @@ export default function SurveyDesignerPage() {
               Soo celi Default
             </button>
           </aside>
-          <section className="min-w-0 space-y-5 overflow-auto rounded-2xl border bg-slate-200/70 p-3 md:p-6">
+          <section className="min-w-0 space-y-5 overflow-auto overscroll-contain rounded-2xl border bg-slate-200/70 p-3 md:p-6 xl:h-full">
             {[1, 2].map((n) => (
               <div key={n} className="mx-auto w-[794px]">
                 <p className="mb-2 text-center text-[10px] font-black uppercase tracking-[.18em] text-slate-500">
@@ -1543,6 +1658,10 @@ function cellStyle(design: Design, key: string, header = false) {
     borderColor: custom.borderColor || design.tableStyle.borderColor,
     borderWidth: custom.borderWidth || design.tableStyle.borderWidth,
     borderStyle: "solid",
+    fontWeight: custom.bold ?? design.tableStyle.bold ? 700 : 400,
+    fontStyle: custom.italic ?? design.tableStyle.italic ? "italic" : "normal",
+    textDecoration:
+      custom.underline ?? design.tableStyle.underline ? "underline" : "none",
   };
 }
 function selectCell(event: ReactMouseEvent, key: string) {
@@ -1749,6 +1868,7 @@ function PageOne({
               survey={survey}
               accent={design.accent}
               height={design.sketchSize.height}
+              labelStyle={design.sketchLabelStyle}
             />
           </div>
         </Draggable>
@@ -1802,6 +1922,13 @@ function PageTwo({ design, survey, editable, move }: PageProps) {
           backgroundColor: cell.fill || "transparent",
           color: cell.color || design.mapDetailsStyle.textColor,
           fontSize: cell.fontSize || design.mapDetailsStyle.fontSize,
+          fontWeight: cell.bold ?? design.mapDetailsStyle.bold ? 700 : 400,
+          fontStyle:
+            cell.italic ?? design.mapDetailsStyle.italic ? "italic" : "normal",
+          textDecoration:
+            cell.underline ?? design.mapDetailsStyle.underline
+              ? "underline"
+              : "none",
         }}
       >
         <span className="block text-[8px] font-bold uppercase tracking-wider opacity-60">

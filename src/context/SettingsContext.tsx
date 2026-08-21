@@ -88,6 +88,9 @@ export interface SurveyPdfDesignSettings {
     bodyFill: string;
     bodyText: string;
     fontSize: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
     borderColor?: string;
     borderWidth?: number;
     cells: Record<
@@ -98,8 +101,18 @@ export interface SurveyPdfDesignSettings {
         fontSize?: number;
         borderColor?: string;
         borderWidth?: number;
+        bold?: boolean;
+        italic?: boolean;
+        underline?: boolean;
       }
     >;
+  };
+  sketchLabelStyle?: {
+    color: string;
+    fontSize: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
   };
   mapDetailsStyle?: {
     fill: string;
@@ -107,7 +120,20 @@ export interface SurveyPdfDesignSettings {
     borderWidth: number;
     textColor: string;
     fontSize: number;
-    cells: Record<string, { fill?: string; color?: string; fontSize?: number }>;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    cells: Record<
+      string,
+      {
+        fill?: string;
+        color?: string;
+        fontSize?: number;
+        bold?: boolean;
+        italic?: boolean;
+        underline?: boolean;
+      }
+    >;
   };
   deletedBlocks?: string[];
 }
@@ -183,9 +209,19 @@ const DEFAULT_SETTINGS: AppSettings = {
       bodyFill: "#ffffff",
       bodyText: "#1e293b",
       fontSize: 12,
+      bold: false,
+      italic: false,
+      underline: false,
       borderColor: "#334155",
       borderWidth: 1,
       cells: {},
+    },
+    sketchLabelStyle: {
+      color: "#0f172a",
+      fontSize: 11,
+      bold: true,
+      italic: false,
+      underline: false,
     },
     mapDetailsStyle: {
       fill: "#f8fafc",
@@ -193,6 +229,9 @@ const DEFAULT_SETTINGS: AppSettings = {
       borderWidth: 1,
       textColor: "#1e293b",
       fontSize: 12,
+      bold: false,
+      italic: false,
+      underline: false,
       cells: {},
     },
     deletedBlocks: [],
