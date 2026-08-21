@@ -756,6 +756,31 @@ export default function SurveyDesignerPage() {
           imageTimeout: 15000,
           logging: false,
           backgroundColor: "#fff",
+          ignoreElements: (element) =>
+            element.classList.contains("pdf-drag-handle"),
+          onclone: (clonedDocument) => {
+            // PDF output is the saved A4 design, never the editor's active theme.
+            // Removing the theme attribute prevents the global dark-mode utility
+            // overrides from repainting bg-white/text-slate classes in the clone.
+            clonedDocument.documentElement.removeAttribute("data-theme");
+            clonedDocument.documentElement.style.colorScheme = "light";
+            clonedDocument
+              .querySelectorAll<HTMLElement>(".survey-pdf-page")
+              .forEach((pdfPage) => {
+                pdfPage.style.backgroundColor = "#ffffff";
+                pdfPage.style.boxShadow = "none";
+                pdfPage.style.outline = "none";
+              });
+            clonedDocument
+              .querySelectorAll<HTMLElement>(".pdf-drag-handle")
+              .forEach((handle) => handle.remove());
+            clonedDocument
+              .querySelectorAll<HTMLElement>("[data-pdf-block]")
+              .forEach((block) => {
+                block.style.outline = "none";
+                block.style.outlineOffset = "0";
+              });
+          },
         });
         if (index) pdf.addPage("a4", "portrait");
         pdf.addImage(
