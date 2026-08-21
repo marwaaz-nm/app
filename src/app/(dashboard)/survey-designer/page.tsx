@@ -454,8 +454,11 @@ function SurveyMap({
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!ref.current) return;
+    const container = ref.current;
+    let disposed = false;
+    let animationFrame = 0;
     const gps = coords(survey.gps_location)[0] || [3.115662, 43.649544];
-    const map = L.map(ref.current, {
+    const map = L.map(container, {
       center: gps,
       zoom: 18,
       zoomControl: false,
@@ -483,11 +486,23 @@ function SurveyMap({
       fillColor: accent,
       fillOpacity: 1,
     }).addTo(map);
-    setTimeout(() => map.invalidateSize(), 100);
+    const safelyInvalidateSize = () => {
+      if (disposed || !container.isConnected || ref.current !== container)
+        return;
+      map.invalidateSize({ pan: false, animate: false });
+    };
+    map.whenReady(() => {
+      animationFrame = window.requestAnimationFrame(safelyInvalidateSize);
+    });
+    const resizeObserver = new ResizeObserver(safelyInvalidateSize);
+    resizeObserver.observe(container);
     return () => {
+      disposed = true;
+      window.cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
       map.remove();
     };
-  }, [survey, accent]);
+  }, [survey, accent, height]);
   return (
     <div
       ref={ref}
@@ -700,6 +715,7 @@ export default function SurveyDesignerPage() {
   const download = async () => {
     if (!page1Ref.current || !page2Ref.current) return;
     setExporting(true);
+    setMessage("");
     const selectedNodes = Array.from(
       document.querySelectorAll<HTMLElement>("[data-pdf-block]")
     );
@@ -708,6 +724,17 @@ export default function SurveyDesignerPage() {
       element.style.outlineOffset = "";
     });
     try {
+      await document.fonts.ready;
+      await Promise.all(
+        Array.from(
+          document.querySelectorAll<HTMLImageElement>(".survey-pdf-page img")
+        ).map((image) =>
+          image.complete ? Promise.resolve() : image.decode().catch(() => {})
+        )
+      );
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      );
       const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
         import("html2canvas"),
         import("jspdf"),
@@ -724,6 +751,9 @@ export default function SurveyDesignerPage() {
         const canvas = await html2canvas(page, {
           scale: 2,
           useCORS: true,
+          allowTaint: false,
+          imageTimeout: 15000,
+          logging: false,
           backgroundColor: "#fff",
         });
         if (index) pdf.addPage("a4", "portrait");
@@ -742,6 +772,14 @@ export default function SurveyDesignerPage() {
         `Survey_${
           survey.survey_no || survey.serial_no
         }_${survey.owner_name.replace(/\W+/g, "_")}.pdf`
+      );
+      setMessage("PDF-ga waa la diyaariyey oo download-ku wuu bilaabmay.");
+    } catch (error) {
+      console.error("[Survey PDF] Export failed:", error);
+      setMessage(
+        error instanceof Error
+          ? `PDF-ga lama samayn: ${error.message}`
+          : "PDF-ga lama samayn. Fadlan mar kale isku day."
       );
     } finally {
       selectedNodes
