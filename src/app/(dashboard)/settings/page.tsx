@@ -480,10 +480,10 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl p-4 text-slate-800 md:p-6 lg:p-8">
+    <div className="mx-auto w-full max-w-7xl overflow-x-hidden p-3 text-slate-800 sm:p-4 md:p-6 lg:p-8">
       <div className="grid items-start gap-5 md:grid-cols-[240px_minmax(0,1fr)] lg:gap-7">
         <aside className="md:sticky md:top-4">
-          <div className="flex gap-2 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white p-2 shadow-sm no-scrollbar md:flex-col md:overflow-visible md:rounded-3xl md:p-3">
+          <div className="grid w-full min-w-0 grid-cols-2 gap-2 rounded-2xl border border-slate-200/80 bg-white p-2 shadow-sm md:flex md:flex-col md:overflow-visible md:rounded-3xl md:p-3">
             <div className="hidden border-b border-slate-100 px-3 pb-3 pt-2 md:block">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Settings Menu</p>
               <p className="mt-1 text-xs font-semibold text-slate-500">Dooro qaybta aad rabto.</p>
@@ -496,7 +496,7 @@ export default function SettingsPage() {
                   key={t.id}
                   type="button"
                   onClick={() => selectTab(t.id)}
-                  className={`group flex min-w-[175px] shrink-0 items-center gap-3 rounded-xl px-3 py-3 text-left transition-all md:min-w-0 ${
+                  className={`group flex w-full min-w-0 items-center gap-2 rounded-xl px-2 py-3 text-left transition-all sm:gap-3 sm:px-3 ${
                     active
                       ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/20'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
@@ -506,8 +506,8 @@ export default function SettingsPage() {
                     <Icon className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-black">{t.label}</span>
-                    <span className={`mt-0.5 block truncate text-[9px] font-semibold ${active ? 'text-white/70' : 'text-slate-400'}`}>{t.sublabel}</span>
+                    <span className="block break-words text-[11px] font-black sm:text-xs">{t.label}</span>
+                    <span className={`mt-0.5 hidden break-words text-[9px] font-semibold min-[390px]:block ${active ? 'text-white/70' : 'text-slate-400'}`}>{t.sublabel}</span>
                   </span>
                   <ChevronRight className={`hidden h-4 w-4 md:block ${active ? 'text-white/70' : 'text-slate-300'}`} />
                 </button>
@@ -521,7 +521,7 @@ export default function SettingsPage() {
             <div className="bg-teal-50 text-teal-600 p-3 rounded-2xl border border-teal-100/80 shrink-0">
               <SettingsIcon className="h-6 w-6" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="text-base md:text-xl font-black text-slate-900 leading-tight">Settings</h2>
               <p className="hidden sm:block text-[11px] md:text-xs text-slate-500 font-semibold mt-0.5">
                 Maamulka xisaabtaada, nootaayada, iyo liisaska system-ka.
@@ -529,7 +529,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
         {tab === 'account' && (
             <div className="space-y-4">
               <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-4 shadow-sm">
@@ -579,19 +579,19 @@ export default function SettingsPage() {
           )}
 
           {tab === 'notifications' && (
-            <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-5 shadow-sm">
-              <div>
+            <div className="min-w-0 space-y-5 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
+              <div className="min-w-0">
                 <h3 className="flex items-center gap-2 text-sm font-black text-slate-800"><Bell className="h-4 w-4 text-teal-600" /> Notification Settings</h3>
-                <p className="mt-1 text-xs font-semibold text-slate-500">Waxaad maamuli kartaa oo keliya fariimaha menu-yada laguu fasaxay.</p>
+                <p className="mt-1 break-words text-xs font-semibold text-slate-500">Waxaad maamuli kartaa oo keliya fariimaha menu-yada laguu fasaxay.</p>
               </div>
               <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <span><span className="block text-sm font-black text-slate-800">Dhammaan notifications</span><span className="mt-1 block text-xs text-slate-500">Hal mar wada shid ama wada dami.</span></span>
+                <span className="min-w-0 flex-1"><span className="block break-words text-sm font-black text-slate-800">Dhammaan notifications</span><span className="mt-1 block break-words text-xs text-slate-500">Hal mar wada shid ama wada dami.</span></span>
                 <input type="checkbox" checked={notificationsEnabled} onChange={(e) => setNotificationsEnabled(e.target.checked)} className="h-5 w-5 accent-teal-600" />
               </label>
               <div className="space-y-2">
                 {allowedNotificationMenus.map((menu) => (
                   <label key={menu.href} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4">
-                    <span><span className="block text-sm font-bold text-slate-800">{menu.label}</span><span className="mt-0.5 block text-[10px] font-semibold text-slate-400">{menu.href}</span></span>
+                    <span className="min-w-0 flex-1"><span className="block break-words text-sm font-bold text-slate-800">{menu.label}</span><span className="mt-0.5 block break-all text-[10px] font-semibold text-slate-400">{menu.href}</span></span>
                     <input
                       type="checkbox"
                       disabled={!notificationsEnabled}
