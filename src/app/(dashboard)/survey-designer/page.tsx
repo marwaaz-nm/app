@@ -523,6 +523,7 @@ export default function SurveyDesignerPage() {
   const [saving, setSaving] = useState(false),
     [exporting, setExporting] = useState(false),
     [message, setMessage] = useState("");
+  const automaticDownloadStarted = useRef(false);
   const [selectedText, setSelectedText] = useState("title"),
     [selectedWord, setSelectedWord] = useState("0"),
     [selectedCell, setSelectedCell] = useState("h0"),
@@ -712,7 +713,7 @@ export default function SurveyDesignerPage() {
       setSaving(false);
     }
   };
-  const download = async () => {
+  const download = async (closeWhenFinished = false) => {
     if (!page1Ref.current || !page2Ref.current) return;
     setExporting(true);
     setMessage("");
@@ -774,6 +775,9 @@ export default function SurveyDesignerPage() {
         }_${survey.owner_name.replace(/\W+/g, "_")}.pdf`
       );
       setMessage("PDF-ga waa la diyaariyey oo download-ku wuu bilaabmay.");
+      if (closeWhenFinished) {
+        window.setTimeout(() => window.close(), 800);
+      }
     } catch (error) {
       console.error("[Survey PDF] Export failed:", error);
       setMessage(
@@ -791,6 +795,21 @@ export default function SurveyDesignerPage() {
       setExporting(false);
     }
   };
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("autodownload") !== "1") return;
+    const requestedSurveyId = Number(params.get("survey"));
+    if (
+      automaticDownloadStarted.current ||
+      (requestedSurveyId && Number(survey.id) !== requestedSurveyId)
+    )
+      return;
+    automaticDownloadStarted.current = true;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("automatic-pdf-download")?.click();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [survey.id]);
   const sectionTitle = (text: string, key: string) => (
     <h2
       className="mb-2 rounded-md px-3 py-2 font-black uppercase tracking-wider text-white"
@@ -844,7 +863,8 @@ export default function SurveyDesignerPage() {
               Kaydi Template-ka
             </button>
             <button
-              onClick={download}
+              type="button"
+              onClick={() => void download()}
               disabled={exporting}
               className="flex h-10 items-center gap-2 rounded-xl bg-teal-600 px-4 text-xs font-bold text-white"
             >
@@ -854,6 +874,14 @@ export default function SurveyDesignerPage() {
                 <Download className="h-4 w-4" />
               )}{" "}
               Test PDF
+            </button>
+            <button
+              id="automatic-pdf-download"
+              type="button"
+              className="hidden"
+              onClick={() => void download(true)}
+            >
+              Automatic PDF download
             </button>
           </div>
         </header>

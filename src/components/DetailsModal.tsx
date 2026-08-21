@@ -666,7 +666,13 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
     // Survey PDF Studio. Opening the selected record there prevents legacy one-off
     // layouts from drifting away from the saved design.
     if (settings.survey_pdf_design) {
-      router.push(`/survey-designer?survey=${record.id}`);
+      const downloadUrl = `/survey-designer?survey=${record.id}&autodownload=1`;
+      const downloadWindow = window.open(downloadUrl, "_blank");
+      if (downloadWindow) {
+        downloadWindow.opener = null;
+      } else {
+        router.push(downloadUrl);
+      }
       return;
     }
     if (!record) return;
