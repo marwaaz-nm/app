@@ -2,13 +2,6 @@
 @import "leaflet/dist/leaflet.css";
 @import "leaflet-draw/dist/leaflet.draw.css";
 
-@media print {
-  body * { visibility: hidden !important; }
-  .survey-pdf-preview, .survey-pdf-preview * { visibility: visible !important; }
-  .survey-pdf-preview { position: absolute !important; inset: 0 auto auto 0 !important; width: 210mm !important; min-height: 297mm !important; box-shadow: none !important; }
-  @page { size: A4; margin: 0; }
-}
-
 :root {
   --background: #f6f8fc;
   --foreground: #172033;

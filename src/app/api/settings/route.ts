@@ -31,7 +31,7 @@ const verifyAdmin = async (req: NextRequest) => {
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile || !['Admin', 'SuperAdmin'].includes(profile.role)) {
+    if (profileError || !profile || profile.role !== 'Admin') {
       return { authenticated: false, userId: user.id, error: 'Forbidden: Admin access required' };
     }
 
@@ -58,13 +58,8 @@ export async function GET(req: NextRequest) {
       .single();
 
     if (error || !data) return NextResponse.json({ error: 'Settings not found' }, { status: 404 });
-    const { data: pdfSettings } = await supabaseAdmin
-      .from('app_settings')
-      .select('survey_pdf_design')
-      .eq('id', 1)
-      .maybeSingle();
     return NextResponse.json(
-      { settings: { ...data, ...(pdfSettings || {}) } },
+      { settings: data },
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' } },
     );
   } catch (err) {
@@ -88,8 +83,7 @@ export async function PUT(req: NextRequest) {
       'ref_number_prefix', 'ref_number_next_seq', 'ref_number_format', 'ref_number_digits',
       'survey_number_prefix', 'survey_number_next_seq', 'survey_number_format', 'survey_number_digits',
       'receipt_number_prefix', 'receipt_number_next_seq', 'receipt_number_format', 'receipt_number_digits',
-      'expense_number_prefix', 'expense_number_next_seq', 'expense_number_format', 'expense_number_digits',
-      'survey_pdf_design'
+      'expense_number_prefix', 'expense_number_next_seq', 'expense_number_format', 'expense_number_digits'
     ];
     const updatePayload: Record<string, unknown> = {};
     for (const key of allowedKeys) {

@@ -85,10 +85,7 @@ export default function Sidebar() {
       ? isAdmin
       : isAdmin ||
         item.alwaysVisible ||
-        ((Array.isArray(profile?.permitted_menus)
-          ? profile.permitted_menus.includes(item.href) ||
-            (item.href === '/survey-designer' && profile.permitted_menus.includes('/records'))
-          : false) &&
+        ((Array.isArray(profile?.permitted_menus) ? profile.permitted_menus.includes(item.href) : false) &&
           (item.href !== '/reports' || profile?.permitted_actions?.includes('report.view')));
 
   const permittedGroups = navigationGroups

@@ -1,5 +1,5 @@
 /* Marwaazpn offline worker: app shell cache, per-session data cache, and survey sync queue. */
-const VERSION = 'marwaazpn-offline-v6';
+const VERSION = 'marwaazpn-offline-v5';
 const SHELL_CACHE = `${VERSION}-shell`;
 const DATA_CACHE_PREFIX = `${VERSION}-data-`;
 const DB_NAME = 'marwaazpn-offline';
@@ -43,10 +43,9 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(cacheWithNetworkRefresh(request));
       return;
     }
-    // Do not proxy cross-origin Supabase REST calls through the service worker.
-    // A failed background refresh is surfaced by Chromium as a CORS error even when
-    // this worker successfully returns cached data, producing one alarming console
-    // error per table. Supabase already handles auth/session refresh and CORS itself.
+    if (url.hostname.endsWith('.supabase.co') && url.pathname.includes('/rest/v1/')) {
+      event.respondWith(cacheWithNetworkRefresh(request));
+    }
     return;
   }
 

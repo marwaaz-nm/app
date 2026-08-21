@@ -53,19 +53,7 @@ export async function GET() {
       throw error;
     }
 
-    // The PDF-template migration can trail an app deployment. Fetch this optional
-    // column separately so a missing column never takes branding/settings—and thus
-    // the whole client app—offline with a 500 response.
-    const { data: pdfSettings } = await supabaseAdmin
-      .from('app_settings')
-      .select('survey_pdf_design')
-      .eq('id', 1)
-      .maybeSingle();
-
-    return NextResponse.json(
-      { settings: { ...data, ...(pdfSettings || {}) } },
-      { headers: NO_STORE_HEADERS },
-    );
+    return NextResponse.json({ settings: data }, { headers: NO_STORE_HEADERS });
   } catch (err) {
     console.error('Error fetching public settings:', err);
     return NextResponse.json({ error: 'Server error' }, { status: 500, headers: NO_STORE_HEADERS });
