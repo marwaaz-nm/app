@@ -934,8 +934,8 @@ export default function ReferencesPage() {
         </div>
       )}
       {selectedRef && (
-        <div className="fixed inset-0 z-[1300] flex items-start justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-4xl bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[1300] flex items-end justify-center overflow-y-auto bg-slate-950/60 p-0 backdrop-blur-sm sm:items-start sm:p-4">
+          <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-4xl flex-col overflow-y-auto rounded-t-3xl rounded-b-none border border-slate-200 bg-white shadow-xl animate-in fade-in zoom-in-95 duration-200 sm:my-8 sm:max-h-none sm:overflow-hidden sm:rounded-3xl">
             {/* Header */}
             <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6 bg-slate-50 border-b border-slate-200">
               <div className="flex items-center gap-3 min-w-0">
@@ -971,20 +971,20 @@ export default function ReferencesPage() {
             </div>
 
             {/* Body */}
-            <div className="p-6 grid grid-cols-1 md:grid-cols-12 gap-8">
+            <div className="grid min-w-0 grid-cols-1 gap-5 p-4 sm:gap-8 sm:p-6 md:grid-cols-12">
               {/* Left Side */}
-              <div className="md:col-span-7 space-y-6">
+              <div className="min-w-0 space-y-5 sm:space-y-6 md:col-span-7">
                 <div>
                   <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-1">REFERENCE ID</span>
                   <h2 className="text-sm font-extrabold text-teal-650 bg-teal-50 border border-teal-100/50 px-3 py-1.5 rounded-xl shadow-xs inline-block mt-1">{selectedRef.ref_number}</h2>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 border border-slate-100 rounded-2xl bg-slate-50/50">
+                <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:gap-4">
+                  <div className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
                     <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-1">SUBJECT (Ujeedo)</span>
                     <div className="text-sm font-extrabold text-slate-800">{selectedRef.subject}</div>
                   </div>
-                  <div className="p-4 border border-slate-100 rounded-2xl bg-slate-50/50">
+                  <div className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
                     <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-1">DATE ISSUED</span>
                     <div className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
                       <Calendar className="h-4 w-4 text-slate-400" />
@@ -1113,7 +1113,7 @@ export default function ReferencesPage() {
                 </div>
 
                 {/* Public QR Code + Verification Link */}
-                <div className="p-5 bg-slate-50/60 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-center gap-5">
+                <div className="flex min-w-0 flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:flex-row sm:gap-5 sm:p-5">
                   <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-2 flex flex-col items-center justify-center shadow-xs">
                     {qrDataUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
