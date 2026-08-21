@@ -11,13 +11,18 @@ import {
 } from "react";
 import {
   ArrowLeft,
+  Bold,
   Download,
   FileText,
   GripVertical,
+  Italic,
   Loader2,
   Map,
   Move,
+  RotateCcw,
   Save,
+  Trash2,
+  Underline,
 } from "lucide-react";
 import L from "leaflet";
 import { supabase } from "@/lib/supabase";
@@ -39,7 +44,8 @@ type BlockId =
   | "signatures"
   | "mapTitle"
   | "map"
-  | "mapDetails";
+  | "mapDetails"
+  | "footer";
 type Design = SurveyPdfDesignSettings & {
   fontSizes: {
     title: number;
@@ -53,6 +59,7 @@ type Design = SurveyPdfDesignSettings & {
   mapSize: { width: number; height: number };
   textStyles: NonNullable<SurveyPdfDesignSettings["textStyles"]>;
   tableStyle: NonNullable<SurveyPdfDesignSettings["tableStyle"]>;
+  deletedBlocks: string[];
 };
 
 const defaultPositions: Record<BlockId, Point> = {
@@ -66,6 +73,7 @@ const defaultPositions: Record<BlockId, Point> = {
   mapTitle: { x: 7, y: 5 },
   map: { x: 7, y: 14 },
   mapDetails: { x: 7, y: 80 },
+  footer: { x: 7, y: 96 },
 };
 const defaultDesign: Design = {
   title: "LAND SURVEY REPORT",
@@ -93,8 +101,11 @@ const defaultDesign: Design = {
     bodyFill: "#ffffff",
     bodyText: "#1e293b",
     fontSize: 12,
+    borderColor: "#334155",
+    borderWidth: 1,
     cells: {},
   },
+  deletedBlocks: [],
 };
 const sampleSurvey: Survey = {
   id: 0,
@@ -138,6 +149,7 @@ function mergeDesign(saved: SurveyPdfDesignSettings): Design {
       ...saved.tableStyle,
       cells: { ...defaultDesign.tableStyle.cells, ...saved.tableStyle?.cells },
     },
+    deletedBlocks: saved.deletedBlocks || [],
   };
 }
 
@@ -153,6 +165,19 @@ const textChoices = [
   ["mapSubtitle", "Map subtitle"],
   ["footer", "Footer"],
 ] as const;
+const blockChoices: [BlockId, string][] = [
+  ["header", "Header & Logo"],
+  ["title", "Main title"],
+  ["summary", "General information"],
+  ["boundaries", "Boundaries table"],
+  ["sketch", "Site sketch"],
+  ["notes", "Extra notes"],
+  ["signatures", "Signatures"],
+  ["mapTitle", "Map page title"],
+  ["map", "Satellite map"],
+  ["mapDetails", "Map details"],
+  ["footer", "Footer"],
+];
 const textValue = (
   key: string,
   design: Design,
@@ -185,14 +210,26 @@ function StyledText({
   return (
     <span
       className={className}
-      style={{ color: style.color, fontSize: style.fontSize }}
+      style={{
+        color: style.color,
+        fontSize: style.fontSize,
+        fontWeight: style.bold ? 700 : undefined,
+        fontStyle: style.italic ? "italic" : undefined,
+        textDecoration: style.underline ? "underline" : undefined,
+      }}
     >
       {text.split(/(\s+)/).map((word, index) => {
         const custom = style.words?.[String(index)];
         return (
           <span
             key={index}
-            style={{ color: custom?.color, fontSize: custom?.fontSize }}
+            style={{
+              color: custom?.color,
+              fontSize: custom?.fontSize,
+              fontWeight: custom?.bold ? 700 : undefined,
+              fontStyle: custom?.italic ? "italic" : undefined,
+              textDecoration: custom?.underline ? "underline" : undefined,
+            }}
           >
             {word}
           </span>
@@ -222,6 +259,7 @@ function Draggable({
   children: ReactNode;
   className?: string;
 }) {
+  if (design.deletedBlocks.includes(id)) return null;
   const point = design.positions[id];
   const start = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (!editable) return;
@@ -412,7 +450,8 @@ export default function SurveyDesignerPage() {
     [message, setMessage] = useState("");
   const [selectedText, setSelectedText] = useState("title"),
     [selectedWord, setSelectedWord] = useState("0"),
-    [selectedCell, setSelectedCell] = useState("h0");
+    [selectedCell, setSelectedCell] = useState("h0"),
+    [selectedElement, setSelectedElement] = useState<BlockId>("title");
   const page1Ref = useRef<HTMLDivElement>(null),
     page2Ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -440,7 +479,13 @@ export default function SurveyDesignerPage() {
     setDesign((d) => ({ ...d, positions: { ...d.positions, [id]: p } }));
   const fontSize = (key: keyof Design["fontSizes"], value: number) =>
     setDesign((d) => ({ ...d, fontSizes: { ...d.fontSizes, [key]: value } }));
-  const setTextStyle = (patch: { color?: string; fontSize?: number }) =>
+  const setTextStyle = (patch: {
+    color?: string;
+    fontSize?: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+  }) =>
     setDesign((d) => ({
       ...d,
       textStyles: {
@@ -448,7 +493,13 @@ export default function SurveyDesignerPage() {
         [selectedText]: { ...d.textStyles[selectedText], ...patch },
       },
     }));
-  const setWordStyle = (patch: { color?: string; fontSize?: number }) =>
+  const setWordStyle = (patch: {
+    color?: string;
+    fontSize?: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+  }) =>
     setDesign((d) => {
       const base = d.textStyles[selectedText] || {};
       return {
@@ -469,6 +520,8 @@ export default function SurveyDesignerPage() {
     fill?: string;
     color?: string;
     fontSize?: number;
+    borderColor?: string;
+    borderWidth?: number;
   }) =>
     setDesign((d) => ({
       ...d,
@@ -707,6 +760,52 @@ export default function SurveyDesignerPage() {
               ))}
             </div>
             <div className="space-y-3 border-t pt-4">
+              <p className="text-[10px] font-black">DELETE / RESTORE ELEMENT</p>
+              <select
+                value={selectedElement}
+                onChange={(e) => setSelectedElement(e.target.value as BlockId)}
+                className="w-full rounded-lg border p-2 text-xs"
+              >
+                {blockChoices.map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              {design.deletedBlocks.includes(selectedElement) ? (
+                <button
+                  onClick={() =>
+                    update(
+                      "deletedBlocks",
+                      design.deletedBlocks.filter(
+                        (id) => id !== selectedElement
+                      )
+                    )
+                  }
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-50 py-2 text-xs font-bold text-emerald-700"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Soo celi element-ka
+                </button>
+              ) : (
+                <button
+                  onClick={() =>
+                    update("deletedBlocks", [
+                      ...design.deletedBlocks,
+                      selectedElement,
+                    ])
+                  }
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-rose-50 py-2 text-xs font-bold text-rose-700"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Delete element-ka
+                </button>
+              )}
+              {design.deletedBlocks.length > 0 && (
+                <p className="text-[9px] text-slate-500">
+                  Deleted: {design.deletedBlocks.join(", ")}
+                </p>
+              )}
+            </div>
+            <div className="space-y-3 border-t pt-4">
               <p className="text-[10px] font-black">QORAAL & ERAY EDITOR</p>
               <select
                 value={selectedText}
@@ -737,6 +836,10 @@ export default function SurveyDesignerPage() {
                   onChange={(v) => setTextStyle({ fontSize: v })}
                 />
               </div>
+              <StyleButtons
+                value={design.textStyles[selectedText] || {}}
+                onChange={setTextStyle}
+              />
               <p className="text-[9px] font-bold text-slate-500">
                 ERAY GAAR AH DOORO
               </p>
@@ -782,9 +885,58 @@ export default function SurveyDesignerPage() {
                   onChange={(v) => setWordStyle({ fontSize: v })}
                 />
               </div>
+              <StyleButtons
+                value={
+                  design.textStyles[selectedText]?.words?.[selectedWord] || {}
+                }
+                onChange={setWordStyle}
+              />
             </div>
             <div className="space-y-3 border-t pt-4">
               <p className="text-[10px] font-black">TABLE CELL STYLE</p>
+              <p className="text-[9px] font-bold text-slate-500">TABLE DHAN</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Color
+                  label="Header fill"
+                  value={design.tableStyle.headerFill}
+                  onChange={(v) =>
+                    update("tableStyle", {
+                      ...design.tableStyle,
+                      headerFill: v,
+                    })
+                  }
+                />
+                <Color
+                  label="Body fill"
+                  value={design.tableStyle.bodyFill}
+                  onChange={(v) =>
+                    update("tableStyle", { ...design.tableStyle, bodyFill: v })
+                  }
+                />
+                <Color
+                  label="Border color"
+                  value={design.tableStyle.borderColor || "#334155"}
+                  onChange={(v) =>
+                    update("tableStyle", {
+                      ...design.tableStyle,
+                      borderColor: v,
+                    })
+                  }
+                />
+                <BorderBox
+                  label="Border size"
+                  value={design.tableStyle.borderWidth || 1}
+                  onChange={(v) =>
+                    update("tableStyle", {
+                      ...design.tableStyle,
+                      borderWidth: v,
+                    })
+                  }
+                />
+              </div>
+              <p className="text-[9px] font-bold text-slate-500">
+                CELL GAAR AH
+              </p>
               <select
                 value={selectedCell}
                 onChange={(e) => setSelectedCell(e.target.value)}
@@ -831,6 +983,26 @@ export default function SurveyDesignerPage() {
                 }
                 onChange={(v) => setCellStyle({ fontSize: v })}
               />
+              <div className="grid grid-cols-2 gap-2">
+                <Color
+                  label="Cell border"
+                  value={
+                    design.tableStyle.cells[selectedCell]?.borderColor ||
+                    design.tableStyle.borderColor ||
+                    "#334155"
+                  }
+                  onChange={(v) => setCellStyle({ borderColor: v })}
+                />
+                <BorderBox
+                  label="Border size"
+                  value={
+                    design.tableStyle.cells[selectedCell]?.borderWidth ||
+                    design.tableStyle.borderWidth ||
+                    1
+                  }
+                  onChange={(v) => setCellStyle({ borderWidth: v })}
+                />
+              </div>
             </div>
             <div className="space-y-3 border-t pt-4">
               <p className="text-[10px] font-black">SKETCH RESIZE</p>
@@ -924,19 +1096,20 @@ export default function SurveyDesignerPage() {
                       field={field}
                     />
                   )}{" "}
-                  {design.showFooter && (
-                    <footer
-                      className="absolute bottom-5 left-[7%] flex w-[86%] justify-between border-t pt-2 text-slate-400"
-                      style={{ fontSize: design.fontSizes.footer }}
-                    >
-                      <StyledText
-                        text={`Generated by ${settings.org_name_en}`}
-                        styleKey="footer"
-                        design={design}
-                      />
-                      <span>Bogga {n} / 2</span>
-                    </footer>
-                  )}
+                  {design.showFooter &&
+                    !design.deletedBlocks.includes("footer") && (
+                      <footer
+                        className="absolute bottom-5 left-[7%] flex w-[86%] justify-between border-t pt-2 text-slate-400"
+                        style={{ fontSize: design.fontSizes.footer }}
+                      >
+                        <StyledText
+                          text={`Generated by ${settings.org_name_en}`}
+                          styleKey="footer"
+                          design={design}
+                        />
+                        <span>Bogga {n} / 2</span>
+                      </footer>
+                    )}
                 </div>
               </div>
             ))}
@@ -1026,6 +1199,76 @@ function NumberBox({
     </label>
   );
 }
+function StyleButtons({
+  value,
+  onChange,
+}: {
+  value: { bold?: boolean; italic?: boolean; underline?: boolean };
+  onChange: (patch: {
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+  }) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-1">
+      <button
+        type="button"
+        title="Bold"
+        onClick={() => onChange({ bold: !value.bold })}
+        className={`flex h-9 items-center justify-center rounded border ${
+          value.bold ? "bg-slate-900 text-white" : "bg-white"
+        }`}
+      >
+        <Bold className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        title="Italic"
+        onClick={() => onChange({ italic: !value.italic })}
+        className={`flex h-9 items-center justify-center rounded border ${
+          value.italic ? "bg-slate-900 text-white" : "bg-white"
+        }`}
+      >
+        <Italic className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        title="Underline"
+        onClick={() => onChange({ underline: !value.underline })}
+        className={`flex h-9 items-center justify-center rounded border ${
+          value.underline ? "bg-slate-900 text-white" : "bg-white"
+        }`}
+      >
+        <Underline className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+function BorderBox({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="block text-[9px] font-bold">
+      {label}
+      <input
+        type="number"
+        min="0"
+        max="10"
+        step="0.5"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="mt-1 h-9 w-full rounded border px-2 text-xs"
+      />
+    </label>
+  );
+}
 function cellStyle(design: Design, key: string, header = false) {
   const custom = design.tableStyle.cells[key] || {};
   return {
@@ -1036,6 +1279,9 @@ function cellStyle(design: Design, key: string, header = false) {
       custom.color ||
       (header ? design.tableStyle.headerText : design.tableStyle.bodyText),
     fontSize: custom.fontSize || design.tableStyle.fontSize,
+    borderColor: custom.borderColor || design.tableStyle.borderColor,
+    borderWidth: custom.borderWidth || design.tableStyle.borderWidth,
+    borderStyle: "solid",
   };
 }
 type PageProps = {

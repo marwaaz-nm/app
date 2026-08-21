@@ -67,7 +67,19 @@ export interface SurveyPdfDesignSettings {
     {
       color?: string;
       fontSize?: number;
-      words?: Record<string, { color?: string; fontSize?: number }>;
+      bold?: boolean;
+      italic?: boolean;
+      underline?: boolean;
+      words?: Record<
+        string,
+        {
+          color?: string;
+          fontSize?: number;
+          bold?: boolean;
+          italic?: boolean;
+          underline?: boolean;
+        }
+      >;
     }
   >;
   tableStyle?: {
@@ -76,8 +88,20 @@ export interface SurveyPdfDesignSettings {
     bodyFill: string;
     bodyText: string;
     fontSize: number;
-    cells: Record<string, { fill?: string; color?: string; fontSize?: number }>;
+    borderColor?: string;
+    borderWidth?: number;
+    cells: Record<
+      string,
+      {
+        fill?: string;
+        color?: string;
+        fontSize?: number;
+        borderColor?: string;
+        borderWidth?: number;
+      }
+    >;
   };
+  deletedBlocks?: string[];
 }
 
 // Used until /api/public/settings resolves (or if the app_settings migration
@@ -151,8 +175,11 @@ const DEFAULT_SETTINGS: AppSettings = {
       bodyFill: "#ffffff",
       bodyText: "#1e293b",
       fontSize: 12,
+      borderColor: "#334155",
+      borderWidth: 1,
       cells: {},
     },
+    deletedBlocks: [],
   },
 };
 
