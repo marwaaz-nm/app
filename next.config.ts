@@ -1,7 +1,18 @@
 import type { NextConfig } from "next";
 
+const desktopReleaseStorageUrl =
+  "https://wcywhsepnhiersupaxyq.supabase.co/storage/v1/object/public/desktop-releases";
+
 const nextConfig: NextConfig = {
   devIndicators: false,
+  async rewrites() {
+    return [
+      {
+        source: "/downloads/desktop-parts/:part",
+        destination: `${desktopReleaseStorageUrl}/Marwaazpn-App-Setup-v3.exe.part:part`,
+      },
+    ];
+  },
   async headers() {
     return [
       {
@@ -17,4 +28,5 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
 

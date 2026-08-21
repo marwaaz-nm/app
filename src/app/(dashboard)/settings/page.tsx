@@ -28,7 +28,7 @@ import {
 type Tab = 'account' | 'organization' | 'options' | 'drive' | 'archive' | 'desktop';
 
 const DESKTOP_INSTALLER_PARTS = 5;
-const DESKTOP_INSTALLER_SIZE = 188475239;
+const DESKTOP_INSTALLER_SIZE = 100583387;
 const DESKTOP_INSTALLER_PART_URL = '/downloads/desktop-parts';
 const DESKTOP_DOWNLOAD_CONCURRENCY = 2;
 const DESKTOP_DOWNLOAD_ATTEMPTS = 3;
@@ -660,14 +660,25 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <a
-            href="/downloads/Marwaazpn-App-Setup.exe"
-            download="Marwaazpn-App-Setup.exe"
-            className="inline-flex items-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 px-5 py-3 text-xs font-bold text-white shadow-md cursor-pointer transition-all"
+          <button
+            type="button"
+            onClick={handleDesktopDownload}
+            disabled={downloadingDesktop}
+            className="inline-flex items-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:bg-slate-300 px-5 py-3 text-xs font-bold text-white shadow-md cursor-pointer disabled:cursor-wait transition-all"
           >
-            <Download className="h-4 w-4" />
-            Soo Deji (Windows .exe)
-          </a>
+            {downloadingDesktop ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {downloadingDesktop
+              ? `Soo dejinaya (${desktopDownloadProgress}/${DESKTOP_INSTALLER_PARTS})`
+              : 'Soo Deji (Windows .exe)'}
+          </button>
+
+          {downloadingDesktop && (
+            <p className="text-xs font-bold text-teal-700" aria-live="polite">
+              {desktopDownloadEta === null
+                ? 'Waqtiga haray waa la xisaabinayaa…'
+                : `Qiyaastii ${desktopDownloadEta} seconds ayaa haray`}
+            </p>
+          )}
 
           <p className="text-[11px] text-slate-400 font-medium">
             Installer-kan wuxuu u shaqeeyaa Windows 10/11. Kadib install-ka, app-ka wuxuu ku xirnaan doonaa internet-ka isla xogta browser-ka aad isticmaasho.
