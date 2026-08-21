@@ -483,7 +483,7 @@ export default function SettingsPage() {
     <div className="mx-auto w-full max-w-7xl overflow-x-hidden p-3 text-slate-800 sm:p-4 md:p-6 lg:p-8">
       <div className="grid items-start gap-5 md:grid-cols-[240px_minmax(0,1fr)] lg:gap-7">
         <aside className="md:sticky md:top-4">
-          <div className="grid w-full min-w-0 grid-cols-2 gap-2 rounded-2xl border border-slate-200/80 bg-white p-2 shadow-sm md:flex md:flex-col md:overflow-visible md:rounded-3xl md:p-3">
+          <div className="grid w-full min-w-0 grid-cols-7 gap-1 rounded-2xl border border-slate-200/80 bg-white p-2 shadow-sm md:flex md:flex-col md:gap-2 md:overflow-visible md:rounded-3xl md:p-3">
             <div className="hidden border-b border-slate-100 px-3 pb-3 pt-2 md:block">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Settings Menu</p>
               <p className="mt-1 text-xs font-semibold text-slate-500">Dooro qaybta aad rabto.</p>
@@ -496,18 +496,18 @@ export default function SettingsPage() {
                   key={t.id}
                   type="button"
                   onClick={() => selectTab(t.id)}
-                  className={`group flex w-full min-w-0 items-center gap-2 rounded-xl px-2 py-3 text-left transition-all sm:gap-3 sm:px-3 ${
+                  className={`group flex w-full min-w-0 items-center justify-center rounded-xl px-1 py-2 text-left transition-all md:justify-start md:gap-3 md:px-3 md:py-3 ${
                     active
                       ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/20'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
                   }`}
                 >
-                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700'}`}>
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg md:h-9 md:w-9 md:rounded-xl ${active ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700'}`}>
                     <Icon className="h-4 w-4" />
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block break-words text-[11px] font-black sm:text-xs">{t.label}</span>
-                    <span className={`mt-0.5 hidden break-words text-[9px] font-semibold min-[390px]:block ${active ? 'text-white/70' : 'text-slate-400'}`}>{t.sublabel}</span>
+                  <span className="hidden min-w-0 flex-1 md:block">
+                    <span className="block break-words text-xs font-black">{t.label}</span>
+                    <span className={`mt-0.5 block break-words text-[9px] font-semibold ${active ? 'text-white/70' : 'text-slate-400'}`}>{t.sublabel}</span>
                   </span>
                   <ChevronRight className={`hidden h-4 w-4 md:block ${active ? 'text-white/70' : 'text-slate-300'}`} />
                 </button>

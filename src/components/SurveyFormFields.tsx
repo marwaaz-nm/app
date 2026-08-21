@@ -33,8 +33,74 @@ interface SurveyFormFieldsProps {
 // parcel and correcting one later look and behave identically instead of drifting into
 // two different designs over time.
 export default function SurveyFormFields({ draft, onChange, landTypes }: SurveyFormFieldsProps) {
+  const [compassHeading, setCompassHeading] = React.useState<number | null>(null);
+  const [compassActive, setCompassActive] = React.useState(false);
+  const [compassError, setCompassError] = React.useState<string | null>(null);
   const set = (patch: SurveyDraft) => onChange(patch);
   const str = (value: unknown) => (value == null ? '' : String(value));
+
+  React.useEffect(() => {
+    if (!compassActive) return;
+
+    const handleOrientation = (event: DeviceOrientationEvent) => {
+      const iosHeading = (event as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading;
+      const heading = typeof iosHeading === 'number'
+        ? iosHeading
+        : typeof event.alpha === 'number'
+          ? (360 - event.alpha + 360) % 360
+          : null;
+
+      if (heading !== null) {
+        setCompassHeading(Math.round(heading));
+        setCompassError(null);
+      }
+    };
+
+    window.addEventListener('deviceorientation', handleOrientation, true);
+    return () => window.removeEventListener('deviceorientation', handleOrientation, true);
+  }, [compassActive]);
+
+  const toggleCompass = async () => {
+    if (compassActive) {
+      setCompassActive(false);
+      return;
+    }
+
+    setCompassError(null);
+    if (typeof window === 'undefined' || !('DeviceOrientationEvent' in window)) {
+      setCompassError('Telefoonkan compass sensor ma taageerayo.');
+      return;
+    }
+
+    try {
+      const orientationEvent = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+        requestPermission?: () => Promise<'granted' | 'denied'>;
+      };
+      if (typeof orientationEvent.requestPermission === 'function') {
+        const permission = await orientationEvent.requestPermission();
+        if (permission !== 'granted') {
+          setCompassError('Oggolaanshaha compass-ka waa la diiday.');
+          return;
+        }
+      }
+      setCompassActive(true);
+    } catch {
+      setCompassError('Compass-ka lama furi karin. Hubi rukhsadda browser-ka.');
+    }
+  };
+
+  const compassDirection = compassHeading === null
+    ? null
+    : [
+        ['Waqooyi', 'N'],
+        ['Waqooyi-Bari', 'NE'],
+        ['Bari', 'E'],
+        ['Koonfur-Bari', 'SE'],
+        ['Koonfur', 'S'],
+        ['Koonfur-Galbeed', 'SW'],
+        ['Galbeed', 'W'],
+        ['Waqooyi-Galbeed', 'NW'],
+      ][Math.round(compassHeading / 45) % 8];
 
   const boundaryDirections = [
     {
@@ -184,14 +250,28 @@ export default function SurveyFormFields({ draft, onChange, landTypes }: SurveyF
               </p>
             </div>
           </div>
-          <div className="hidden items-center gap-1 rounded-xl border border-blue-100 bg-white p-1.5 shadow-sm sm:flex">
-            {['N', 'E', 'S', 'W'].map((direction) => (
-              <span key={direction} className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-50 text-[9px] font-black text-slate-500">
-                {direction}
+          <div className="flex flex-wrap items-center gap-2">
+            {compassDirection && compassActive && (
+              <span className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-[10px] font-black text-teal-700">
+                {compassHeading}° · {compassDirection[0]} ({compassDirection[1]})
               </span>
-            ))}
+            )}
+            <button
+              type="button"
+              onClick={toggleCompass}
+              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black transition-colors ${compassActive ? 'border-rose-200 bg-rose-50 text-rose-600' : 'border-blue-200 bg-white text-teal-700 hover:bg-blue-50'}`}
+            >
+              <Compass className={`h-4 w-4 ${compassActive ? 'animate-pulse' : ''}`} />
+              {compassActive ? 'Jooji compass' : 'Ogow jihada'}
+            </button>
           </div>
         </div>
+
+        {compassError && (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-700 md:mx-6">
+            {compassError}
+          </p>
+        )}
 
         <div className="grid grid-cols-1 gap-3 p-0 pt-4 sm:p-0 md:grid-cols-2 md:gap-4 md:p-6">
           {boundaryDirections.map((direction) => {
