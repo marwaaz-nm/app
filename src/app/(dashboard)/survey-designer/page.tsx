@@ -179,6 +179,19 @@ const blockChoices: [BlockId, string][] = [
   ["mapDetails", "Map details"],
   ["footer", "Footer"],
 ];
+const textKeysByBlock: Record<BlockId, string[]> = {
+  header: ["orgSo", "orgEn"],
+  title: ["title", "subtitle"],
+  summary: ["section1"],
+  boundaries: ["section2"],
+  sketch: ["section3"],
+  notes: [],
+  signatures: [],
+  mapTitle: ["mapTitle", "mapSubtitle"],
+  map: [],
+  mapDetails: [],
+  footer: ["footer"],
+};
 const textValue = (
   key: string,
   design: Design,
@@ -481,19 +494,10 @@ export default function SurveyDesignerPage() {
       });
   }, []);
   useEffect(() => {
-    const textKeyByBlock: Partial<Record<BlockId, string>> = {
-      header: "orgSo",
-      title: "title",
-      summary: "section1",
-      boundaries: "section2",
-      sketch: "section3",
-      mapTitle: "mapTitle",
-      footer: "footer",
-    };
     const onBlockSelect = (event: Event) => {
       const block = (event as CustomEvent<BlockId>).detail;
       setSelectedElement(block);
-      const textKey = textKeyByBlock[block];
+      const textKey = textKeysByBlock[block][0];
       if (textKey) {
         setSelectedText(textKey);
         setSelectedWord("0");
@@ -755,7 +759,11 @@ export default function SurveyDesignerPage() {
                 Handle-ka madow ku dhaqaaji block kasta.
               </p>
             </div>
-            <label className="block text-[10px] font-bold text-slate-500">
+            <label
+              className={`${
+                selectedElement === "title" ? "block" : "hidden"
+              } text-[10px] font-bold text-slate-500`}
+            >
               CINWAANKA
               <input
                 value={design.title}
@@ -763,7 +771,11 @@ export default function SurveyDesignerPage() {
                 className="mt-1 w-full rounded-lg border p-2 text-xs"
               />
             </label>
-            <label className="block text-[10px] font-bold text-slate-500">
+            <label
+              className={`${
+                selectedElement === "title" ? "block" : "hidden"
+              } text-[10px] font-bold text-slate-500`}
+            >
               CINWAAN-HOOSE
               <input
                 value={design.subtitle}
@@ -771,7 +783,11 @@ export default function SurveyDesignerPage() {
                 className="mt-1 w-full rounded-lg border p-2 text-xs"
               />
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div
+              className={`${
+                textKeysByBlock[selectedElement].length ? "grid" : "hidden"
+              } grid-cols-2 gap-2`}
+            >
               <label className="text-[10px] font-bold">
                 MIDAB
                 <input
@@ -796,7 +812,7 @@ export default function SurveyDesignerPage() {
                 </select>
               </label>
             </div>
-            <div className="space-y-3 border-t pt-4">
+            <div className="hidden">
               <p className="text-[10px] font-black">FONT SIZES</p>
               {(
                 [
@@ -839,7 +855,7 @@ export default function SurveyDesignerPage() {
               <select
                 value={selectedElement}
                 onChange={(e) => setSelectedElement(e.target.value as BlockId)}
-                className="w-full rounded-lg border p-2 text-xs"
+                className="hidden"
               >
                 {blockChoices.map(([key, label]) => (
                   <option key={key} value={key}>
@@ -880,7 +896,11 @@ export default function SurveyDesignerPage() {
                 </p>
               )}
             </div>
-            <div className="space-y-3 border-t pt-4">
+            <div
+              className={`${
+                textKeysByBlock[selectedElement].length ? "block" : "hidden"
+              } space-y-3 border-t pt-4`}
+            >
               <p className="text-[10px] font-black">QORAAL & ERAY EDITOR</p>
               <select
                 value={selectedText}
@@ -890,11 +910,15 @@ export default function SurveyDesignerPage() {
                 }}
                 className="w-full rounded-lg border p-2 text-xs"
               >
-                {textChoices.map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
+                {textChoices
+                  .filter(([key]) =>
+                    textKeysByBlock[selectedElement].includes(key)
+                  )
+                  .map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
               </select>
               <div className="grid grid-cols-2 gap-2">
                 <Color
@@ -967,7 +991,11 @@ export default function SurveyDesignerPage() {
                 onChange={setWordStyle}
               />
             </div>
-            <div className="space-y-3 border-t pt-4">
+            <div
+              className={`${
+                selectedElement === "boundaries" ? "block" : "hidden"
+              } space-y-3 border-t pt-4`}
+            >
               <p className="text-[10px] font-black">TABLE CELL STYLE</p>
               <p className="text-[9px] font-bold text-slate-500">TABLE DHAN</p>
               <div className="grid grid-cols-2 gap-2">
@@ -1079,7 +1107,11 @@ export default function SurveyDesignerPage() {
                 />
               </div>
             </div>
-            <div className="space-y-3 border-t pt-4">
+            <div
+              className={`${
+                selectedElement === "sketch" ? "block" : "hidden"
+              } space-y-3 border-t pt-4`}
+            >
               <p className="text-[10px] font-black">SKETCH RESIZE</p>
               <Range
                 label="Ballac"
@@ -1102,7 +1134,11 @@ export default function SurveyDesignerPage() {
                 }
               />
             </div>
-            <div className="space-y-3 border-t pt-4">
+            <div
+              className={`${
+                selectedElement === "map" ? "block" : "hidden"
+              } space-y-3 border-t pt-4`}
+            >
               <p className="text-[10px] font-black">PAGE 2 MAP RESIZE</p>
               <Range
                 label="Ballac"
@@ -1125,7 +1161,11 @@ export default function SurveyDesignerPage() {
                 }
               />
             </div>
-            <label className="block text-[10px] font-bold">
+            <label
+              className={`${
+                selectedElement === "notes" ? "block" : "hidden"
+              } text-[10px] font-bold`}
+            >
               QORAAL DHEERAAD AH
               <textarea
                 value={design.notes}
@@ -1134,10 +1174,7 @@ export default function SurveyDesignerPage() {
                 className="mt-1 w-full rounded-lg border p-2 text-xs"
               />
             </label>
-            <button
-              onClick={() => setDesign(defaultDesign)}
-              className="w-full rounded-xl border py-2.5 text-xs font-bold"
-            >
+            <button onClick={() => setDesign(defaultDesign)} className="hidden">
               Soo celi Default
             </button>
           </aside>
