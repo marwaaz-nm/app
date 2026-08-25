@@ -39,20 +39,6 @@ import {
 
 export function getPaymentInfo(r: Reference) {
   const receipts = r.receipts || [];
-  if (!receipts.length) {
-    return {
-      status: 'Unpaid' as const,
-      isPaid: false,
-      hasCredit: false,
-      paidAmount: 0,
-      creditAmount: 0,
-      totalAmount: 0,
-      badgeText: 'Unpaid',
-      badgeClass: 'bg-slate-100 text-slate-500 border-slate-200',
-      receipt: null
-    };
-  }
-
   const paidAmount = receipts
     .filter((x) => x.status === 'Paid')
     .reduce((sum, x) => sum + parseFloat(x.amount?.toString() || '0'), 0);
@@ -60,34 +46,16 @@ export function getPaymentInfo(r: Reference) {
     .filter((x) => x.status === 'Credit')
     .reduce((sum, x) => sum + parseFloat(x.amount?.toString() || '0'), 0);
 
-  const hasCredit = creditAmount > 0;
-  const isPaid = !hasCredit && paidAmount > 0;
-  const activeReceipt = receipts.find((x) => x.status === 'Credit') || receipts[0];
+  const isPaid = creditAmount === 0 && paidAmount > 0;
+  const activeReceipt = receipts.find((x) => x.status === 'Paid') || receipts[0] || null;
 
   if (isPaid) {
     return {
       status: 'Paid' as const,
       isPaid: true,
-      hasCredit: false,
       paidAmount,
-      creditAmount,
-      totalAmount: paidAmount,
-      badgeText: 'Paid',
-      badgeClass: 'bg-emerald-50 text-emerald-600 border-emerald-200/90',
-      receipt: activeReceipt
-    };
-  }
-
-  if (hasCredit) {
-    return {
-      status: 'Credit' as const,
-      isPaid: false,
-      hasCredit: true,
-      paidAmount,
-      creditAmount,
-      totalAmount: paidAmount + creditAmount,
-      badgeText: `Deyn: $${creditAmount.toFixed(0)}`,
-      badgeClass: 'bg-amber-50 text-amber-700 border-amber-200/90',
+      badgeText: 'PAID',
+      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200/90 font-extrabold',
       receipt: activeReceipt
     };
   }
@@ -95,12 +63,9 @@ export function getPaymentInfo(r: Reference) {
   return {
     status: 'Unpaid' as const,
     isPaid: false,
-    hasCredit: false,
-    paidAmount: 0,
-    creditAmount: 0,
-    totalAmount: 0,
-    badgeText: 'Unpaid',
-    badgeClass: 'bg-slate-100 text-slate-500 border-slate-200',
+    paidAmount,
+    badgeText: 'UNPAID',
+    badgeClass: 'bg-slate-100 text-slate-500 border-slate-200 font-extrabold',
     receipt: activeReceipt
   };
 }
@@ -200,10 +165,9 @@ export default function ReferencesPage() {
 
   // Search/Filter states
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [paymentFilter, setPaymentFilter] = useState<'' | 'Paid' | 'Credit' | 'Unpaid'>('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Paid' | 'Unpaid'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'ref_az'>('newest');
-  const [groupBy, setGroupBy] = useState<'none' | 'date' | 'status' | 'payment'>('none');
+  const [groupBy, setGroupBy] = useState<'none' | 'date' | 'status'>('none');
   const [groupAggregate, setGroupAggregate] = useState<'none' | 'count'>('count');
 
   // Form states
@@ -421,19 +385,15 @@ export default function ReferencesPage() {
       );
     }
 
-    if (statusFilter) {
-      result = result.filter(r => r.status === statusFilter);
-    }
-
-    if (paymentFilter) {
+    if (statusFilter !== 'all') {
       result = result.filter(r => {
         const pInfo = getPaymentInfo(r);
-        return pInfo.status === paymentFilter;
+        return pInfo.status === statusFilter;
       });
     }
 
     setFilteredRecords(result);
-  }, [searchQuery, statusFilter, paymentFilter, references]);
+  }, [searchQuery, statusFilter, references]);
 
   const sortedReferences = useMemo(() => {
     const sorted = [...filteredReferences];
@@ -449,15 +409,12 @@ export default function ReferencesPage() {
     if (groupBy === 'none') return null;
     return groupItems(sortedReferences, (r) => {
       if (groupBy === 'date') return dateGroupKey(r.issue_date).key;
-      if (groupBy === 'payment') return getPaymentInfo(r).status;
-      return r.status;
+      return getPaymentInfo(r).status;
     }).map((group) => {
       const baseLabel =
         groupBy === 'date'
           ? dateGroupKey(group.items[0].issue_date).label
-          : groupBy === 'payment'
-          ? `Payment: ${getPaymentInfo(group.items[0]).status}`
-          : group.items[0].status;
+          : `Status: ${getPaymentInfo(group.items[0]).status.toUpperCase()}`;
       const label = groupAggregate === 'count' ? `${baseLabel} · ${group.items.length}` : baseLabel;
       return { ...group, label };
     });
@@ -856,23 +813,11 @@ export default function ReferencesPage() {
             <div className="flex flex-wrap gap-2">
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
+                onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0 font-medium"
               >
-                <option value="">Status (All)...</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Completed">Completed</option>
-                <option value="Picked Up">Picked Up</option>
-              </select>
-
-              <select
-                value={paymentFilter}
-                onChange={(e) => setPaymentFilter(e.target.value as typeof paymentFilter)}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
-              >
-                <option value="">Payment (All)...</option>
+                <option value="all">Status: All</option>
                 <option value="Paid">Paid</option>
-                <option value="Credit">Credit (Deyn)</option>
                 <option value="Unpaid">Unpaid</option>
               </select>
 
@@ -896,8 +841,7 @@ export default function ReferencesPage() {
               >
                 <option value="none">No group</option>
                 <option value="date">Group: Date</option>
-                <option value="status">Group: Workflow Status</option>
-                <option value="payment">Group: Payment Status</option>
+                <option value="status">Group: Status (Paid / Unpaid)</option>
               </select>
 
               {groupBy !== 'none' && (
@@ -931,7 +875,6 @@ export default function ReferencesPage() {
                       <th className="px-6 py-4">Ujeedo</th>
                       <th className="px-6 py-4">Faahfaahin</th>
                       <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4">Payment</th>
                       <th className="px-6 py-4">Record Creator</th>
                     </tr>
                   </thead>
@@ -940,7 +883,7 @@ export default function ReferencesPage() {
                       <React.Fragment key={group.key}>
                         {groupBy !== 'none' && (
                           <tr>
-                            <td colSpan={6} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                            <td colSpan={5} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                               {group.label}
                             </td>
                           </tr>
@@ -954,14 +897,7 @@ export default function ReferencesPage() {
                               className="hover:bg-slate-50/80 transition-all cursor-pointer group"
                             >
                               <td className="px-6 py-4 font-black text-teal-600 group-hover:text-teal-700">
-                                <div className="flex items-center gap-2">
-                                  <span>{r.ref_number}</span>
-                                  {pInfo.isPaid && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-700 tracking-tight">
-                                      PAID
-                                    </span>
-                                  )}
-                                </div>
+                                {r.ref_number}
                               </td>
                               <td className="px-6 py-4">
                                 <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-700 text-xs font-extrabold">
@@ -977,13 +913,8 @@ export default function ReferencesPage() {
                                 </p>
                               </td>
                               <td className="px-6 py-4">
-                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 border rounded-full text-xs font-extrabold tracking-wide uppercase ${getStatusBadgeClass(r.status)}`}>
-                                  {r.status}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4">
-                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 border rounded-full text-xs font-extrabold tracking-wide uppercase ${pInfo.badgeClass}`}>
-                                  {pInfo.isPaid ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : pInfo.hasCredit ? <AlertCircle className="h-3.5 w-3.5 text-amber-600" /> : null}
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 border rounded-full text-xs uppercase tracking-wide ${pInfo.badgeClass}`}>
+                                  {pInfo.isPaid ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : null}
                                   {pInfo.badgeText}
                                 </span>
                               </td>
@@ -1004,7 +935,7 @@ export default function ReferencesPage() {
                 <div className="grid grid-cols-[92px_minmax(0,1fr)_auto_16px] items-center gap-2 border-b border-slate-200 px-1 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
                   <span>Ref No.</span>
                   <span>Title</span>
-                  <span>Status / Payment</span>
+                  <span>Status</span>
                   <span />
                 </div>
                 {(groupedReferences ?? [{ key: 'all', label: '', items: sortedReferences }]).map((group) => (
@@ -1023,16 +954,9 @@ export default function ReferencesPage() {
                             onClick={() => setSelectedRef(r)}
                             className="grid grid-cols-[92px_minmax(0,1fr)_auto_16px] items-center gap-2 px-1 py-3.5 cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-50"
                           >
-                            <div className="flex flex-col gap-1 min-w-0">
-                              <span className="break-words text-[10px] font-black leading-tight text-teal-600">
-                                {r.ref_number.includes('/') ? r.ref_number.split('/').slice(1).join('/') : r.ref_number}
-                              </span>
-                              {pInfo.isPaid && (
-                                <span className="inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-700">
-                                  PAID
-                                </span>
-                              )}
-                            </div>
+                            <span className="break-words text-[10px] font-black leading-tight text-teal-600">
+                              {r.ref_number.includes('/') ? r.ref_number.split('/').slice(1).join('/') : r.ref_number}
+                            </span>
                             <div className="min-w-0">
                               <h4 className="truncate text-xs font-extrabold text-slate-800">{r.subject}</h4>
                               {r.details && (
@@ -1051,15 +975,10 @@ export default function ReferencesPage() {
                                 </p>
                               )}
                             </div>
-                            <div className="flex flex-col items-end gap-1">
-                              <span className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full border text-[10px] font-extrabold uppercase ${getStatusBadgeClass(r.status)}`}>
-                                {r.status}
-                              </span>
-                              <span className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full border text-[9px] font-extrabold uppercase ${pInfo.badgeClass}`}>
-                                {pInfo.isPaid ? <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600" /> : null}
-                                {pInfo.badgeText}
-                              </span>
-                            </div>
+                            <span className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full border text-[10px] uppercase ${pInfo.badgeClass}`}>
+                              {pInfo.isPaid ? <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600" /> : null}
+                              {pInfo.badgeText}
+                            </span>
                             <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
                           </div>
                         );
@@ -1117,11 +1036,10 @@ export default function ReferencesPage() {
                   <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-1">REFERENCE ID</span>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="text-sm font-extrabold text-teal-650 bg-teal-50 border border-teal-100/50 px-3 py-1.5 rounded-xl shadow-xs inline-block mt-1">{selectedRef.ref_number}</h2>
-                    {getPaymentInfo(selectedRef).isPaid && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200 mt-1 shadow-2xs">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> PAID
-                      </span>
-                    )}
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs uppercase tracking-wide mt-1 shadow-2xs ${getPaymentInfo(selectedRef).badgeClass}`}>
+                      {getPaymentInfo(selectedRef).isPaid ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : null}
+                      {getPaymentInfo(selectedRef).badgeText}
+                    </span>
                   </div>
                 </div>
 
@@ -1146,10 +1064,10 @@ export default function ReferencesPage() {
                     <div className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/60 space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                          Xaaladda Lacagta (Payment Status)
+                          Lacagta (Payment)
                         </span>
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 border rounded-full text-xs font-extrabold tracking-wide uppercase ${pInfo.badgeClass}`}>
-                          {pInfo.isPaid ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : pInfo.hasCredit ? <AlertCircle className="h-3.5 w-3.5 text-amber-600" /> : null}
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 border rounded-full text-xs uppercase tracking-wide ${pInfo.badgeClass}`}>
+                          {pInfo.isPaid ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : null}
                           {pInfo.badgeText}
                         </span>
                       </div>
@@ -1175,14 +1093,8 @@ export default function ReferencesPage() {
                           </div>
                         </div>
                       )}
-                      {pInfo.hasCredit && (
-                        <div className="bg-amber-50 border border-amber-200/80 p-3 rounded-xl text-xs text-amber-800">
-                          <p className="font-bold">Deyn dhiman: <span className="text-amber-950 font-black">${pInfo.creditAmount.toFixed(2)}</span></p>
-                          {pInfo.paidAmount > 0 && <p className="text-[11px] text-amber-700 mt-0.5">Bixiyey hordhac: ${pInfo.paidAmount.toFixed(2)}</p>}
-                        </div>
-                      )}
-                      {pInfo.status === 'Unpaid' && (
-                        <p className="text-xs text-slate-500 font-medium">Weli laguma darin rasiid lacag bixin ah tixraacan (Unpaid).</p>
+                      {!pInfo.isPaid && (
+                        <p className="text-xs text-slate-500 font-medium">Tixraacan weli lama bixin lacagtiisa (UNPAID).</p>
                       )}
                     </div>
                   );
