@@ -1057,49 +1057,6 @@ export default function ReferencesPage() {
                   </div>
                 </div>
 
-                {/* Payment Information Card */}
-                {(() => {
-                  const pInfo = getPaymentInfo(selectedRef);
-                  return (
-                    <div className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/60 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                          Lacagta (Payment)
-                        </span>
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 border rounded-full text-xs uppercase tracking-wide ${pInfo.badgeClass}`}>
-                          {pInfo.isPaid ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : null}
-                          {pInfo.badgeText}
-                        </span>
-                      </div>
-                      {pInfo.isPaid && pInfo.receipt && (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
-                          <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
-                            <span className="block text-[9px] text-slate-400 font-bold uppercase">Receipt No</span>
-                            <span className="font-mono font-black text-slate-800 truncate block">{pInfo.receipt.receipt_no}</span>
-                          </div>
-                          <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
-                            <span className="block text-[9px] text-slate-400 font-bold uppercase">Paid Amount</span>
-                            <span className="font-black text-emerald-600">${pInfo.paidAmount.toFixed(2)}</span>
-                          </div>
-                          <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
-                            <span className="block text-[9px] text-slate-400 font-bold uppercase">Payment Date</span>
-                            <span className="font-bold text-slate-700 truncate block">
-                              {pInfo.receipt.payment_date ? new Date(pInfo.receipt.payment_date).toLocaleDateString('so-SO') : '-'}
-                            </span>
-                          </div>
-                          <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
-                            <span className="block text-[9px] text-slate-400 font-bold uppercase">Paid Via</span>
-                            <span className="font-bold text-slate-700 truncate block">{pInfo.receipt.payment_mode || 'Cash'}</span>
-                          </div>
-                        </div>
-                      )}
-                      {!pInfo.isPaid && (
-                        <p className="text-xs text-slate-500 font-medium">Tixraacan weli lama bixin lacagtiisa (UNPAID).</p>
-                      )}
-                    </div>
-                  );
-                })()}
-
                 {/* Survey Connection Panel */}
                 {selectedRef.surveys && (
                   <div className="space-y-3">
