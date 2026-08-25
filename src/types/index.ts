@@ -116,6 +116,16 @@ export interface Reference {
     boundary_g_val?: string;
     boundary_g_neighbor?: string;
   } | null;
+  receipts?: {
+    id: number;
+    reference_id: number;
+    receipt_no: string;
+    amount: number;
+    status: "Paid" | "Credit";
+    payment_mode: "EVC Plus" | "eDahab" | "Jeeb" | "Cash";
+    payment_date: string;
+    details?: string;
+  }[] | null;
 }
 
 export interface Receipt {
