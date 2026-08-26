@@ -24,7 +24,7 @@ interface MapExplorerProps {
 type LabelMode = 'name' | 'icon' | 'off';
 type MapType = 'satellite' | 'street';
 
-import { ALL_NEIGHBORHOODS, ALL_BRANCHES } from '@/lib/boundaryDetection';
+import { ALL_NEIGHBORHOODS, ALL_BRANCHES, detectBoundaryFromCoordinates } from '@/lib/boundaryDetection';
 
 const XAAFADA_OPTIONS = ALL_NEIGHBORHOODS;
 const LAANTA_OPTIONS = ALL_BRANCHES;
@@ -35,6 +35,7 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const polygonLayersRef = useRef<L.Polygon[]>([]);
   const tooltipLayersRef = useRef<L.Tooltip[]>([]);
+  const pinnedMarkerRef = useRef<L.Marker | null>(null);
 
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,12 +44,74 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
   const [mapType, setMapType] = useState<MapType>('satellite');
   const [panelOpen, setPanelOpen] = useState(false);
 
+  // GPS search & click-pin detection state (matching Image 4)
+  const [gpsInput, setGpsInput] = useState('');
+  const [detectedInfo, setDetectedInfo] = useState<{
+    neighborhood: string;
+    branch: string;
+    lat: number;
+    lng: number;
+  } | null>(null);
+
   // Search & filter state
   const [search, setSearch] = useState('');
   const [filterXaafada, setFilterXaafada] = useState('');
   const [filterLaanta, setFilterLaanta] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Handle pinning location and detecting boundary
+  const handlePinLocation = (lat: number, lng: number, shouldFly = false) => {
+    setGpsInput(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    const detected = detectBoundaryFromCoordinates(lat, lng);
+    if (detected) {
+      setDetectedInfo({
+        neighborhood: detected.rawXaafad || `Xaafadda ${detected.neighborhood}`,
+        branch: detected.rawLaan || detected.branch,
+        lat,
+        lng,
+      });
+    } else {
+      setDetectedInfo({
+        neighborhood: 'Lama aqoonsan',
+        branch: 'Ka baxsan xuduudaha',
+        lat,
+        lng,
+      });
+    }
+
+    const map = mapRef.current;
+    if (map) {
+      const customPinIcon = L.divIcon({
+        className: 'explorer-pinned-marker',
+        html: `<div style="position:relative;width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
+          <span style="position:absolute;width:26px;height:26px;border-radius:999px;background:rgba(37,99,235,0.25);animation:ping 1.6s cubic-bezier(0,0,0.2,1) infinite;"></span>
+          <span style="position:relative;width:14px;height:14px;border-radius:999px;background:#2563eb;border:3px solid white;box-shadow:0 4px 10px rgba(0,0,0,0.35);"></span>
+        </div>`,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+      });
+
+      if (pinnedMarkerRef.current) {
+        pinnedMarkerRef.current.setLatLng([lat, lng]);
+      } else {
+        pinnedMarkerRef.current = L.marker([lat, lng], { icon: customPinIcon, zIndexOffset: 2500 }).addTo(map);
+      }
+
+      if (shouldFly) {
+        map.flyTo([lat, lng], 18, { duration: 1.2 });
+      }
+    }
+  };
+
+  const handleGpsSubmit = () => {
+    if (!gpsInput.trim()) return;
+    const parts = gpsInput.split(/[,\s]+/).map(Number).filter((n) => !isNaN(n));
+    if (parts.length >= 2) {
+      const [lat, lng] = parts;
+      handlePinLocation(lat, lng, true);
+    }
+  };
 
   // Fetch surveys on mount
   useEffect(() => {
@@ -84,6 +147,11 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
     });
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    // Add click listener to pin location anywhere on map
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      handlePinLocation(e.latlng.lat, e.latlng.lng, false);
+    });
 
     mapRef.current = map;
 
@@ -406,6 +474,56 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
 
   return (
     <div className="relative w-full h-full flex flex-col text-slate-800">
+      {/* Top Left: GPS Search bar & Neighborhood/Branch Info Card (Matching Image 4) */}
+      <div className="pointer-events-none absolute left-3 top-3 md:left-6 md:top-6 z-[1000] flex flex-wrap items-center gap-2.5 max-w-[calc(100vw-75px)] md:max-w-2xl">
+        {/* Search GPS Pill */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleGpsSubmit();
+          }}
+          className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-slate-200/90 bg-white/95 p-1.5 pl-3.5 shadow-xl shadow-slate-900/10 backdrop-blur-md transition-all hover:border-slate-300"
+        >
+          <Search className="h-4 w-4 text-slate-400 shrink-0" />
+          <input
+            type="text"
+            value={gpsInput}
+            onChange={(e) => setGpsInput(e.target.value)}
+            placeholder="3.121501, 43.65987"
+            className="w-36 sm:w-52 bg-transparent text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none placeholder:text-slate-400 font-mono"
+          />
+          <button
+            type="submit"
+            className="flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs px-3.5 py-1.5 shadow-md shadow-blue-600/20 transition-all active:scale-95 cursor-pointer"
+          >
+            GO
+          </button>
+        </form>
+
+        {/* Neighborhood & Branch Display Card (Matching Image 4) */}
+        {detectedInfo && (
+          <div className="pointer-events-auto animate-in fade-in slide-in-from-left-2 duration-200 flex items-center gap-4 rounded-2xl border border-blue-200/90 bg-blue-50/40 md:bg-white/95 px-4 py-2 shadow-xl shadow-slate-900/10 backdrop-blur-md">
+            <div>
+              <span className="block text-[8.5px] font-black uppercase tracking-[0.14em] text-slate-400">
+                NEIGHBORHOOD
+              </span>
+              <span className="block text-xs sm:text-sm font-black text-blue-600 tracking-tight">
+                {detectedInfo.neighborhood}
+              </span>
+            </div>
+            <div className="h-7 w-px bg-slate-200/90 shrink-0" />
+            <div>
+              <span className="block text-[8.5px] font-black uppercase tracking-[0.14em] text-slate-400">
+                BRANCH
+              </span>
+              <span className="block text-xs sm:text-sm font-black text-blue-600 tracking-tight">
+                {detectedInfo.branch}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Desktop: compact pill + dropdown card */}
       <div className="pointer-events-none absolute right-4 top-4 md:right-6 md:top-6 z-[1000] hidden md:flex flex-col items-end gap-2 max-w-[92vw]">
         <button

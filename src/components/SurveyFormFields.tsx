@@ -218,42 +218,6 @@ export default function SurveyFormFields({ draft, onChange, landTypes }: SurveyF
             />
           </div>
 
-          {autoDetected && (
-            <div className="md:col-span-12">
-              <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-50/90 via-emerald-50/70 to-blue-50/80 p-3.5 px-4 text-xs shadow-[0_2px_10px_rgba(20,184,166,0.08)]">
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white shadow-sm">
-                    <Sparkles className="h-3.5 w-3.5" />
-                  </span>
-                  <div>
-                    <div className="flex items-center gap-1.5 font-black text-teal-900">
-                      <span>Goobta la gartay:</span>
-                      <span className="text-teal-700 underline decoration-teal-300 underline-offset-2">
-                        {autoDetected.neighborhood} · {autoDetected.branch}
-                      </span>
-                    </div>
-                    <p className="text-[10px] font-medium text-teal-650">
-                      {autoDetected.confidence === 'polygon_centroid'
-                        ? 'Waxaa si toos ah looga soo saaray soohdinta aad maabka ku sawirtay.'
-                        : 'Waxaa si toos ah looga aqoonsaday GPS-ka maabka (boundaries.json).'}
-                    </p>
-                  </div>
-                </div>
-
-                {(draft.neighborhood !== autoDetected.neighborhood || draft.branch !== autoDetected.branch) && (
-                  <button
-                    type="button"
-                    onClick={applyDetectedBoundary}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-teal-300 bg-white px-3 py-1.5 text-[11px] font-black text-teal-800 shadow-sm transition-all hover:bg-teal-50 hover:border-teal-400 active:scale-95 cursor-pointer"
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                    <span>Dabaq ({autoDetected.neighborhood})</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
           <div className="md:col-span-4">
             <div className="flex items-center justify-between mb-2">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">

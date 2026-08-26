@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { Compass, Fullscreen, Navigation, Loader2, MapPin, MousePointer2, PencilRuler, ZoomIn, Layers } from 'lucide-react';
+import { Compass, Fullscreen, Navigation, Loader2, MapPin, MousePointer2, PencilRuler, ZoomIn } from 'lucide-react';
 import L from 'leaflet';
 import { useModal } from '@/context/ModalContext';
 import {
@@ -13,7 +13,6 @@ import {
   type CompassDirection,
   type DirectionPositions,
 } from '@/lib/geoDirection';
-import { getBoundariesGeoJSON } from '@/lib/boundaryDetection';
 
 // Assign L to window so leaflet-draw can find it on the client
 if (typeof window !== 'undefined') {
@@ -153,48 +152,12 @@ export default function MiniMap({
   // so the heavy satellite map doesn't take up space before it's needed. Once revealed,
   // it stays mounted even if the coordinates field is cleared afterwards.
   const [mapUnlocked, setMapUnlocked] = useState(false);
-  const [showBoundaries, setShowBoundaries] = useState(false);
-  const boundaryLayerRef = useRef<L.GeoJSON | null>(null);
 
   const isDrawingRef = useRef(false);
 
   useEffect(() => {
     if ((gpsValue.trim() || polygonValue.trim()) && !mapUnlocked) setMapUnlocked(true);
   }, [gpsValue, polygonValue, mapUnlocked]);
-
-  // Handle neighborhood and branch boundaries layer display
-  useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
-
-    if (showBoundaries) {
-      if (!boundaryLayerRef.current) {
-        const geoData = getBoundariesGeoJSON();
-        boundaryLayerRef.current = L.geoJSON(geoData as any, {
-          style: (feature) => ({
-            color: feature?.properties?.fillColor || '#2563eb',
-            weight: 2,
-            opacity: 0.85,
-            fillColor: feature?.properties?.fillColor || '#2563eb',
-            fillOpacity: 0.14,
-            dashArray: '5, 5',
-          }),
-          onEachFeature: (feature, layer) => {
-            const props = feature.properties || {};
-            layer.bindTooltip(
-              `<div style="font-weight:800;font-size:11px;color:#0f172a;line-height:1.2;">${props.rawXaafad || props.xaafad}<br/><span style="font-size:9px;color:#2563eb;font-weight:700;">${props.rawLaan || props.laan}</span></div>`,
-              { sticky: true, opacity: 0.95 }
-            );
-          },
-        });
-      }
-      boundaryLayerRef.current.addTo(map);
-    } else {
-      if (boundaryLayerRef.current && map.hasLayer(boundaryLayerRef.current)) {
-        map.removeLayer(boundaryLayerRef.current);
-      }
-    }
-  }, [showBoundaries]);
 
   // Initialize Drawing Map (declared before the marker-sync effect below so that,
   // once mapUnlocked flips true and the container mounts, the map exists in the same
@@ -1050,20 +1013,6 @@ export default function MiniMap({
 
             {/* Map controls */}
             <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowBoundaries(!showBoundaries)}
-                className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[10px] font-black shadow-md backdrop-blur-md transition-all cursor-pointer ${
-                  showBoundaries
-                    ? 'border-teal-400 bg-teal-600 text-white shadow-teal-600/20 hover:bg-teal-500'
-                    : 'border-slate-200 bg-white/95 text-slate-700 hover:bg-slate-50'
-                }`}
-                title={showBoundaries ? 'Qari xuduudaha xaafadaha' : 'Muuji xuduudaha xaafadaha'}
-              >
-                <Layers className="h-3.5 w-3.5" />
-                <span>{showBoundaries ? 'Xuduudaha: Daaran' : 'Xuduudaha'}</span>
-              </button>
-
               <button
                 type="button"
                 onClick={toggleFullScreen}
