@@ -1,10 +1,16 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Compass, Ruler, User, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, MapPinned, Loader2 } from 'lucide-react';
+import { Compass, Ruler, User, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, MapPinned, Loader2, Sparkles, CheckCircle2, RotateCcw } from 'lucide-react';
 import type { Survey } from '@/types';
 import type { BoundaryInfo } from '@/lib/geoDirection';
+import {
+  detectBoundaryFromSurveyLocation,
+  ALL_NEIGHBORHOODS,
+  ALL_BRANCHES,
+  type BoundaryDetectionResult,
+} from '@/lib/boundaryDetection';
 
 const MiniMap = dynamic(() => import('@/components/MiniMap'), {
   ssr: false,
@@ -17,9 +23,6 @@ const MiniMap = dynamic(() => import('@/components/MiniMap'), {
     </div>
   ),
 });
-
-const NEIGHBORHOODS = ['Waaberi', 'Towfiiq', 'Horseed', 'Cadaada', 'Berdaale', 'Isha', 'Howlwadaag', 'Salaamay'];
-const BRANCHES = ['Laanta 1aad', 'Laanta 2aad', 'Laanta 3aad'];
 
 export type SurveyDraft = Partial<Survey>;
 
@@ -36,8 +39,72 @@ export default function SurveyFormFields({ draft, onChange, landTypes }: SurveyF
   const [compassHeading, setCompassHeading] = React.useState<number | null>(null);
   const [compassActive, setCompassActive] = React.useState(false);
   const [compassError, setCompassError] = React.useState<string | null>(null);
+  const [autoDetected, setAutoDetected] = useState<BoundaryDetectionResult | null>(null);
+  const [lastAutoBoundaryId, setLastAutoBoundaryId] = useState<string>('');
+
   const set = (patch: SurveyDraft) => onChange(patch);
   const str = (value: unknown) => (value == null ? '' : String(value));
+
+  // Automatically detect neighborhood (xaafadda) and branch (laanta) from boundaries.json
+  // whenever coordinates or polygon boundaries are set/updated.
+  useEffect(() => {
+    const result = detectBoundaryFromSurveyLocation(draft.gps_location, draft.polygon_boundary);
+
+    if (result) {
+      setAutoDetected(result);
+
+      // Auto-fill if empty or if this is a newly detected boundary area
+      if (
+        (!draft.neighborhood && !draft.branch) ||
+        (lastAutoBoundaryId && lastAutoBoundaryId !== result.boundaryId)
+      ) {
+        set({
+          neighborhood: result.neighborhood,
+          branch: result.branch,
+        });
+        setLastAutoBoundaryId(result.boundaryId);
+      } else if (!lastAutoBoundaryId) {
+        // Initial detection on empty fields
+        if (!draft.neighborhood) {
+          set({ neighborhood: result.neighborhood });
+        }
+        if (!draft.branch) {
+          set({ branch: result.branch });
+        }
+        setLastAutoBoundaryId(result.boundaryId);
+      }
+    } else {
+      setAutoDetected(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.gps_location, draft.polygon_boundary]);
+
+  const applyDetectedBoundary = () => {
+    if (!autoDetected) return;
+    set({
+      neighborhood: autoDetected.neighborhood,
+      branch: autoDetected.branch,
+    });
+    setLastAutoBoundaryId(autoDetected.boundaryId);
+  };
+
+  // Compile full neighborhood list ensuring existing draft value is present
+  const availableNeighborhoods = React.useMemo(() => {
+    const list = Array.from(ALL_NEIGHBORHOODS) as string[];
+    if (draft.neighborhood && !list.includes(draft.neighborhood)) {
+      list.push(draft.neighborhood);
+    }
+    return list;
+  }, [draft.neighborhood]);
+
+  // Compile full branch list ensuring existing draft value is present
+  const availableBranches = React.useMemo(() => {
+    const list = Array.from(ALL_BRANCHES) as string[];
+    if (draft.branch && !list.includes(draft.branch)) {
+      list.push(draft.branch);
+    }
+    return list;
+  }, [draft.branch]);
 
   React.useEffect(() => {
     if (!compassActive) return;
@@ -151,10 +218,53 @@ export default function SurveyFormFields({ draft, onChange, landTypes }: SurveyF
             />
           </div>
 
+          {autoDetected && (
+            <div className="md:col-span-12">
+              <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-50/90 via-emerald-50/70 to-blue-50/80 p-3.5 px-4 text-xs shadow-[0_2px_10px_rgba(20,184,166,0.08)]">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white shadow-sm">
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-1.5 font-black text-teal-900">
+                      <span>Goobta la gartay:</span>
+                      <span className="text-teal-700 underline decoration-teal-300 underline-offset-2">
+                        {autoDetected.neighborhood} · {autoDetected.branch}
+                      </span>
+                    </div>
+                    <p className="text-[10px] font-medium text-teal-650">
+                      {autoDetected.confidence === 'polygon_centroid'
+                        ? 'Waxaa si toos ah looga soo saaray soohdinta aad maabka ku sawirtay.'
+                        : 'Waxaa si toos ah looga aqoonsaday GPS-ka maabka (boundaries.json).'}
+                    </p>
+                  </div>
+                </div>
+
+                {(draft.neighborhood !== autoDetected.neighborhood || draft.branch !== autoDetected.branch) && (
+                  <button
+                    type="button"
+                    onClick={applyDetectedBoundary}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-teal-300 bg-white px-3 py-1.5 text-[11px] font-black text-teal-800 shadow-sm transition-all hover:bg-teal-50 hover:border-teal-400 active:scale-95 cursor-pointer"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    <span>Dabaq ({autoDetected.neighborhood})</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="md:col-span-4">
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-              Xaafadda (Neighborhood)
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                Xaafadda (Neighborhood)
+              </label>
+              {autoDetected && draft.neighborhood === autoDetected.neighborhood && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-600">
+                  <CheckCircle2 className="h-3 w-3" /> Auto
+                </span>
+              )}
+            </div>
             <select
               required
               value={str(draft.neighborhood)}
@@ -162,14 +272,21 @@ export default function SurveyFormFields({ draft, onChange, landTypes }: SurveyF
               className="w-full rounded-2xl bg-slate-50/60 border border-slate-200/80 px-5 py-3.5 text-sm text-slate-900 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all cursor-pointer shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
             >
               <option value="">Dooro...</option>
-              {NEIGHBORHOODS.map((n) => <option key={n} value={n}>{n}</option>)}
+              {availableNeighborhoods.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
 
           <div className="md:col-span-4">
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-              Laanta (Branch)
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                Laanta (Branch)
+              </label>
+              {autoDetected && draft.branch === autoDetected.branch && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-600">
+                  <CheckCircle2 className="h-3 w-3" /> Auto
+                </span>
+              )}
+            </div>
             <select
               required
               value={str(draft.branch)}
@@ -177,7 +294,7 @@ export default function SurveyFormFields({ draft, onChange, landTypes }: SurveyF
               className="w-full rounded-2xl bg-slate-50/60 border border-slate-200/80 px-5 py-3.5 text-sm text-slate-900 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all cursor-pointer shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
             >
               <option value="">Dooro...</option>
-              {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
+              {availableBranches.map((b) => <option key={b} value={b}>{b}</option>)}
             </select>
           </div>
 

@@ -22,6 +22,7 @@ import {
   Sliders,
   Settings2,
 } from 'lucide-react';
+import { ALL_NEIGHBORHOODS, ALL_BRANCHES } from '@/lib/boundaryDetection';
 
 export default function RecordsPage() {
   const { newEntityIdsFor, dismissNewEntity } = useNotifications();
@@ -219,14 +220,9 @@ export default function RecordsPage() {
               className="bg-slate-50/60 border border-slate-200/80 rounded-xl md:rounded-2xl px-3 md:px-4 py-2.5 md:py-3.5 text-xs text-slate-700 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all cursor-pointer shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
             >
               <option value="">Xaafad (All)...</option>
-              <option value="Waaberi">Waaberi</option>
-              <option value="Towfiiq">Towfiiq</option>
-              <option value="Horseed">Horseed</option>
-              <option value="Cadaada">Cadaada</option>
-              <option value="Berdaale">Berdaale</option>
-              <option value="Isha">Isha</option>
-              <option value="Howlwadaag">Howlwadaag</option>
-              <option value="Salaamay">Salaamay</option>
+              {ALL_NEIGHBORHOODS.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
             </select>
 
             {/* Branch Filter */}
@@ -236,9 +232,9 @@ export default function RecordsPage() {
               className="bg-slate-50/60 border border-slate-200/80 rounded-xl md:rounded-2xl px-3 md:px-4 py-2.5 md:py-3.5 text-xs text-slate-700 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all cursor-pointer shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]"
             >
               <option value="">Laan (All)...</option>
-              <option value="Laanta 1aad">Laanta 1aad</option>
-              <option value="Laanta 2aad">Laanta 2aad</option>
-              <option value="Laanta 3aad">Laanta 3aad</option>
+              {ALL_BRANCHES.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
             </select>
 
             {/* Toggle Advanced Filters */}

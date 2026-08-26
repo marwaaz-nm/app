@@ -24,18 +24,10 @@ interface MapExplorerProps {
 type LabelMode = 'name' | 'icon' | 'off';
 type MapType = 'satellite' | 'street';
 
-const XAAFADA_OPTIONS = [
-  'Waaberi',
-  'Towfiiq',
-  'Horseed',
-  'Cadaada',
-  'Berdaale',
-  'Isha',
-  'Howlwadaag',
-  'Salaamay',
-];
+import { ALL_NEIGHBORHOODS, ALL_BRANCHES } from '@/lib/boundaryDetection';
 
-const LAANTA_OPTIONS = ['Laanta 1aad', 'Laanta 2aad', 'Laanta 3aad'];
+const XAAFADA_OPTIONS = ALL_NEIGHBORHOODS;
+const LAANTA_OPTIONS = ALL_BRANCHES;
 
 export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);

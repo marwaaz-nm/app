@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError, requireViewer } from '@/lib/server-auth';
+import { detectBoundaryFromSurveyLocation } from '@/lib/boundaryDetection';
 
 const requiredText = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 
@@ -8,10 +9,20 @@ export async function POST(req: NextRequest) {
     const viewer = await requireViewer(req, 'survey.create');
     const body = await req.json();
     const ownerName = requiredText(body.owner_name);
-    const neighborhood = requiredText(body.neighborhood);
-    const branch = requiredText(body.branch);
+    let neighborhood = requiredText(body.neighborhood);
+    let branch = requiredText(body.branch);
     const landType = requiredText(body.land_type);
     const polygonBoundary = requiredText(body.polygon_boundary);
+    const gpsLocation = requiredText(body.gps_location);
+
+    // Auto-detect neighborhood and branch from boundaries.json if not provided
+    if (!neighborhood || !branch) {
+      const detected = detectBoundaryFromSurveyLocation(gpsLocation, polygonBoundary);
+      if (detected) {
+        if (!neighborhood) neighborhood = detected.neighborhood;
+        if (!branch) branch = detected.branch;
+      }
+    }
 
     if (!ownerName || !neighborhood || !branch || !landType) {
       return NextResponse.json({ error: 'Owner, neighborhood, branch and land type are required.' }, { status: 400 });
