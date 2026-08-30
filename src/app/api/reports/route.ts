@@ -28,17 +28,40 @@ export async function GET(req: NextRequest) {
     const viewer = await requireViewer(req, 'report.view');
     const format = req.nextUrl.searchParams.get('format');
 
-    // 1. CSV Format: Query only surveys with required CSV columns
+    // 1. CSV Format: Query both DB surveys and sheet surveys
     if (format === 'csv') {
-      const { data: surveys, error } = await viewer.admin
-        .from('surveys')
-        .select('serial_no, survey_no, owner_name, neighborhood, branch, land_type, gps_location, status, sketch_area, created_at')
-        .order('created_at', { ascending: false })
-        .limit(10000);
+      const [{ data: surveys, error }, sheetSurveys] = await Promise.all([
+        viewer.admin
+          .from('surveys')
+          .select('serial_no, survey_no, owner_name, neighborhood, branch, land_type, gps_location, status, sketch_area, created_at')
+          .order('created_at', { ascending: false })
+          .limit(10000),
+        getGoogleSheetSurveys().catch(() => []),
+      ]);
       if (error) throw error;
 
+      const dbSurveys = surveys || [];
+      const existingDbSerials = new Set(dbSurveys.map((s) => s.serial_no));
+      const allSurveys = [
+        ...dbSurveys,
+        ...sheetSurveys
+          .filter((s) => !existingDbSerials.has(s.serial_no))
+          .map((s) => ({
+            serial_no: s.serial_no,
+            survey_no: s.survey_no,
+            owner_name: s.owner_name,
+            neighborhood: s.neighborhood,
+            branch: s.branch,
+            land_type: s.land_type,
+            gps_location: s.gps_location,
+            status: s.status || 'Approved',
+            sketch_area: s.sketch_area,
+            created_at: s.created_at,
+          })),
+      ];
+
       const headers = ['Serial', 'Survey No', 'Owner', 'Neighborhood', 'Branch', 'Land Type', 'GPS', 'Status', 'Area m2', 'Created'];
-      const rows = (surveys || []).map((survey) => [
+      const rows = allSurveys.map((survey) => [
         survey.serial_no,
         survey.survey_no,
         survey.owner_name,
@@ -57,32 +80,82 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 2. GeoJSON Format: Query only surveys with parcel geometry and metadata
+    // 2. GeoJSON Format: Query surveys with parcel geometry and metadata
     if (format === 'geojson') {
-      const { data: surveys, error } = await viewer.admin
-        .from('surveys')
-        .select('id, serial_no, survey_no, owner_name, neighborhood, branch, land_type, status, sketch_area, polygon_boundary')
-        .order('created_at', { ascending: false })
-        .limit(10000);
+      const [{ data: surveys, error }, sheetSurveys] = await Promise.all([
+        viewer.admin
+          .from('surveys')
+          .select('id, serial_no, survey_no, owner_name, neighborhood, branch, land_type, status, sketch_area, polygon_boundary, gps_location')
+          .order('created_at', { ascending: false })
+          .limit(10000),
+        getGoogleSheetSurveys().catch(() => []),
+      ]);
       if (error) throw error;
+
+      const dbSurveys = surveys || [];
+      const existingDbSerials = new Set(dbSurveys.map((s) => s.serial_no));
+      const allSurveys = [
+        ...dbSurveys,
+        ...sheetSurveys
+          .filter((s) => !existingDbSerials.has(s.serial_no))
+          .map((s) => ({
+            id: s.id,
+            serial_no: s.serial_no,
+            survey_no: s.survey_no,
+            owner_name: s.owner_name,
+            neighborhood: s.neighborhood,
+            branch: s.branch,
+            land_type: s.land_type,
+            status: s.status || 'Approved',
+            sketch_area: s.sketch_area,
+            polygon_boundary: s.polygon_boundary,
+            gps_location: s.gps_location,
+          })),
+      ];
 
       const collection = {
         type: 'FeatureCollection',
-        features: (surveys || []).map((survey) => ({
-          type: 'Feature',
-          geometry: { type: 'Polygon', coordinates: [polygonCoordinates(survey.polygon_boundary)] },
-          properties: {
-            id: survey.id,
-            serial_no: survey.serial_no,
-            survey_no: survey.survey_no,
-            owner_name: survey.owner_name,
-            neighborhood: survey.neighborhood,
-            branch: survey.branch,
-            land_type: survey.land_type,
-            status: survey.status,
-            area_m2: survey.sketch_area,
-          },
-        })).filter((feature) => feature.geometry.coordinates[0].length >= 4),
+        features: allSurveys.map((survey) => {
+          const polyCoords = polygonCoordinates(survey.polygon_boundary);
+          if (polyCoords.length >= 4) {
+            return {
+              type: 'Feature',
+              geometry: { type: 'Polygon', coordinates: [polyCoords] },
+              properties: {
+                id: survey.id,
+                serial_no: survey.serial_no,
+                survey_no: survey.survey_no,
+                owner_name: survey.owner_name,
+                neighborhood: survey.neighborhood,
+                branch: survey.branch,
+                land_type: survey.land_type,
+                status: survey.status,
+                area_m2: survey.sketch_area,
+              },
+            };
+          }
+          if (survey.gps_location) {
+            const [lat, lng] = survey.gps_location.split(',').map(Number);
+            if (Number.isFinite(lat) && Number.isFinite(lng)) {
+              return {
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [lng, lat] },
+                properties: {
+                  id: survey.id,
+                  serial_no: survey.serial_no,
+                  survey_no: survey.survey_no,
+                  owner_name: survey.owner_name,
+                  neighborhood: survey.neighborhood,
+                  branch: survey.branch,
+                  land_type: survey.land_type,
+                  status: survey.status,
+                  area_m2: survey.sketch_area,
+                },
+              };
+            }
+          }
+          return null;
+        }).filter(Boolean),
       };
       return download(
         JSON.stringify(collection, null, 2),

@@ -113,40 +113,54 @@ export default function DashboardPage() {
           : canViewSurveys
             ? supabase.from('surveys').select('id, serial_no, owner_name, neighborhood, land_type, created_at').order('created_at', { ascending: false }).then((legacy) => ({ ...legacy, schemaMissing: true }))
             : Promise.resolve({ data: [], error: null, schemaMissing: false });
-        const [surveyResult, referenceResult, transferResult, receiptResult, expenseResult, teamResult] =
-          await Promise.all([
-            surveyRequest,
-            canViewReferences
-              ? supabase
-                  .from('references')
-                  .select('id, ref_number, subject, status, created_at')
-                  .order('created_at', { ascending: false })
-              : emptyResult,
-            canViewTransfers
-              ? supabase
-                  .from('transfers')
-                  .select('id, serial_no, seller_name, buyer_name, price, transfer_date, created_at')
-                  .order('created_at', { ascending: false })
-              : emptyResult,
-            canViewFinancials
-              ? supabase
-                  .from('receipts')
-                  .select('id, receipt_no, amount, status, payment_date, created_at')
-                  .order('created_at', { ascending: false })
-              : emptyResult,
-            canViewFinancials
-              ? supabase
-                  .from('expenses')
-                  .select('id, description, total, expense_date, created_at')
-                  .order('created_at', { ascending: false })
-              : emptyResult,
-            isAdmin
-              ? supabase
-                  .from('profiles')
-                  .select('id, fullname, role, created_at')
-                  .order('created_at', { ascending: false })
-              : emptyResult,
-          ]);
+        const [
+          surveyResult,
+          referenceResult,
+          transferResult,
+          receiptResult,
+          expenseResult,
+          teamResult,
+          sheetSurveysRes,
+          sheetRefsRes,
+        ] = await Promise.all([
+          surveyRequest,
+          canViewReferences
+            ? supabase
+                .from('references')
+                .select('id, ref_number, subject, status, created_at')
+                .order('created_at', { ascending: false })
+            : emptyResult,
+          canViewTransfers
+            ? supabase
+                .from('transfers')
+                .select('id, serial_no, seller_name, buyer_name, price, transfer_date, created_at')
+                .order('created_at', { ascending: false })
+            : emptyResult,
+          canViewFinancials
+            ? supabase
+                .from('receipts')
+                .select('id, receipt_no, amount, status, payment_date, created_at')
+                .order('created_at', { ascending: false })
+            : emptyResult,
+          canViewFinancials
+            ? supabase
+                .from('expenses')
+                .select('id, description, total, expense_date, created_at')
+                .order('created_at', { ascending: false })
+            : emptyResult,
+          isAdmin
+            ? supabase
+                .from('profiles')
+                .select('id, fullname, role, created_at')
+                .order('created_at', { ascending: false })
+            : emptyResult,
+          canViewSurveys
+            ? fetch('/api/surveys/sheet').then((r) => r.json()).catch(() => ({ surveys: [] }))
+            : Promise.resolve({ surveys: [] }),
+          canViewReferences
+            ? fetch('/api/references/sheet').then((r) => r.json()).catch(() => ({ references: [] }))
+            : Promise.resolve({ references: [] }),
+        ]);
 
         const requestError = [
           surveyResult.error,
@@ -160,8 +174,24 @@ export default function DashboardPage() {
         if (requestError) throw requestError;
         if (cancelled) return;
 
-        setSurveys((surveyResult.data ?? []) as SurveyRow[]);
-        setReferences((referenceResult.data ?? []) as ReferenceRow[]);
+        const dbSurveys = (surveyResult.data ?? []) as SurveyRow[];
+        const sheetSurveys = ((sheetSurveysRes as any)?.surveys ?? []) as SurveyRow[];
+        const existingDbSurveyIds = new Set(dbSurveys.map((s) => String(s.id)));
+        const mergedSurveys = [
+          ...dbSurveys,
+          ...sheetSurveys.filter((s) => !existingDbSurveyIds.has(String(s.id))),
+        ];
+
+        const dbRefs = (referenceResult.data ?? []) as ReferenceRow[];
+        const sheetRefs = ((sheetRefsRes as any)?.references ?? []) as ReferenceRow[];
+        const existingRefIds = new Set(dbRefs.map((r) => String(r.id)));
+        const mergedRefs = [
+          ...dbRefs,
+          ...sheetRefs.filter((r) => !existingRefIds.has(String(r.id))),
+        ];
+
+        setSurveys(mergedSurveys);
+        setReferences(mergedRefs);
         setTransfers((transferResult.data ?? []) as TransferRow[]);
         setReceipts((receiptResult.data ?? []) as ReceiptRow[]);
         setExpenses((expenseResult.data ?? []) as ExpenseRow[]);
