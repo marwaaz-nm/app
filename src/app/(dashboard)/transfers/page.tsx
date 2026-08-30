@@ -52,8 +52,7 @@ export default function TransfersPage() {
   useEffect(() => {
     setSearchAvailable(!showAddForm);
   }, [showAddForm, setSearchAvailable]);
-
-  const [sellers, setSellers] = useState<{ name: string; tel: string }[]>([{ name: '', tel: '' }]);
+  const [sellers, setSellers] = useState<{ name: string; tel: string }[]>([{ name: '', tel: '' }]);
   const [buyers, setBuyers] = useState<{ name: string; tel: string }[]>([{ name: '', tel: '' }]);
   const [selectedSurveyId, setSelectedSurveyId] = useState<string>('');
   const [price, setPrice] = useState('');
@@ -85,15 +84,35 @@ export default function TransfersPage() {
     }
   };
 
-  // Fetch surveys for dropdown selection
+  // Fetch surveys for dropdown selection (both DB and live sheet)
   const fetchSurveys = async () => {
     try {
-      const { data, error } = await supabase
-        .from('surveys')
-        .select('id, serial_no, survey_no, owner_name')
-        .order('serial_no', { ascending: false });
-      if (error) throw error;
-      setSurveys(data || []);
+      const [dbRes, sheetRes] = await Promise.all([
+        supabase
+          .from('surveys')
+          .select('id, serial_no, survey_no, owner_name')
+          .order('serial_no', { ascending: false }),
+        fetch('/api/surveys/sheet')
+          .then((res) => res.json())
+          .catch(() => ({ surveys: [] })),
+      ]);
+
+      if (dbRes.error) throw dbRes.error;
+      const dbRecords = (dbRes.data || []) as { id: number; serial_no: number; survey_no?: string | null; owner_name: string }[];
+      const sheetRecords = ((sheetRes?.surveys || []) as Survey[]).map((s) => ({
+        id: s.id,
+        serial_no: s.serial_no,
+        survey_no: s.survey_no,
+        owner_name: s.owner_name,
+      }));
+
+      const existingDbIds = new Set(dbRecords.map((r) => String(r.id)));
+      const allSurveys = [
+        ...dbRecords,
+        ...sheetRecords.filter((s) => !existingDbIds.has(String(s.id))),
+      ];
+
+      setSurveys(allSurveys);
     } catch (err) {
       console.error('Error fetching surveys:', err);
     }

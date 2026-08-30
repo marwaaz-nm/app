@@ -33,7 +33,7 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
-  const polygonLayersRef = useRef<L.Polygon[]>([]);
+  const polygonLayersRef = useRef<L.Layer[]>([]);
   const tooltipLayersRef = useRef<L.Tooltip[]>([]);
   const pinnedMarkerRef = useRef<L.Marker | null>(null);
 
@@ -113,17 +113,31 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
     }
   };
 
-  // Fetch surveys on mount
+  // Fetch surveys on mount (both DB and live sheet)
   useEffect(() => {
     const fetchSurveys = async () => {
       try {
-        const { data, error } = await supabase
-          .from('surveys')
-          .select('*')
-          .order('serial_no', { ascending: false });
+        const [dbRes, sheetRes] = await Promise.all([
+          supabase
+            .from('surveys')
+            .select('*')
+            .order('serial_no', { ascending: false }),
+          fetch('/api/surveys/sheet')
+            .then((res) => res.json())
+            .catch(() => ({ surveys: [] })),
+        ]);
 
-        if (error) throw error;
-        setSurveys(data || []);
+        if (dbRes.error) throw dbRes.error;
+        const dbRecords = (dbRes.data || []) as Survey[];
+        const sheetRecords = (sheetRes?.surveys || []) as Survey[];
+
+        const existingDbIds = new Set(dbRecords.map((r) => String(r.id)));
+        const allSurveys = [
+          ...dbRecords,
+          ...sheetRecords.filter((s) => !existingDbIds.has(String(s.id))),
+        ];
+
+        setSurveys(allSurveys);
       } catch (err) {
         console.error('Error fetching surveys for map:', err);
       } finally {
@@ -247,82 +261,140 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
 
   const activeFilterCount = [filterXaafada, filterLaanta, startDate, endDate].filter(Boolean).length;
 
-  // Draw Polygons when filtered surveys, map, or label mode changes
+  const mapLayerGroupRef = useRef<L.LayerGroup | null>(null);
+
+  // Draw Polygons and Parcel Markers with high-performance LayerGroup and lazy popups
   useEffect(() => {
     const map = mapRef.current;
     if (!map || loading) return;
 
-    polygonLayersRef.current.forEach((layer) => map.removeLayer(layer));
+    if (!mapLayerGroupRef.current) {
+      mapLayerGroupRef.current = L.layerGroup().addTo(map);
+    }
+    mapLayerGroupRef.current.clearLayers();
     polygonLayersRef.current = [];
     tooltipLayersRef.current = [];
 
     if (filteredSurveys.length === 0) return;
 
-    const bounds: L.LatLngBounds[] = [];
+    let minLat = 90;
+    let maxLat = -90;
+    let minLng = 180;
+    let maxLng = -180;
+    let hasValidBounds = false;
 
-    filteredSurveys.forEach((survey) => {
-      const coords = parsePolygonCoords(survey.polygon_boundary);
-      if (coords.length < 3) return;
-
-      const polygon = L.polygon(coords, {
-        color: '#FFD700',
-        fillColor: '#FFFF00',
-        fillOpacity: 0.35,
-        weight: 3,
-      }).addTo(map);
-
-      polygonLayersRef.current.push(polygon);
-      bounds.push(polygon.getBounds());
-
-      if (labelMode !== 'off') {
-        const label = L.tooltip({
-          permanent: true,
-          direction: 'center',
-          className: labelMode === 'name' ? 'map-owner-label' : 'map-owner-icon',
-        })
-          .setContent(
-            labelMode === 'name'
-              ? survey.owner_name
-              : '<span class="inline-flex" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45))"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 2C7.58 2 4 5.58 4 10c0 5.25 6.72 11.34 7.02 11.6a1 1 0 0 0 1.96 0C13.28 21.34 20 15.25 20 10c0-4.42-3.58-8-8-8z" fill="#2563eb"/><circle cx="12" cy="10" r="3" fill="#ffffff"/></svg></span>'
-          )
-          .setLatLng(polygon.getBounds().getCenter());
-
-        polygon.bindTooltip(label);
-        tooltipLayersRef.current.push(label);
-      }
-
+    const createPopupContent = (survey: Survey) => {
       const popupContent = document.createElement('div');
-      popupContent.className = 'p-2 text-slate-900 font-sans min-w-[200px]';
+      popupContent.className = 'p-2 text-slate-900 font-sans min-w-[210px]';
       popupContent.innerHTML = `
-        <h6 class="font-extrabold text-sm border-b pb-1.5 mb-1.5 text-slate-800">${survey.owner_name}</h6>
+        <h6 class="font-extrabold text-sm border-b pb-1.5 mb-1.5 text-slate-800 flex items-center justify-between">
+          <span>${survey.owner_name}</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-teal-50 text-teal-700 font-black">#${survey.serial_no}</span>
+        </h6>
         <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs mb-3 text-slate-600">
-          <div><span class="font-semibold">S/N:</span> ${survey.survey_no || survey.serial_no}</div>
-          <div><span class="font-semibold">Xaafadda:</span> ${survey.neighborhood}</div>
-          <div><span class="font-semibold">Nooca:</span> ${survey.land_type}</div>
-          <div class="truncate"><span class="font-semibold">GPS:</span> ${survey.gps_location || 'N/A'}</div>
+          <div><span class="font-semibold text-slate-400">S/N:</span> ${survey.serial_no}</div>
+          <div><span class="font-semibold text-slate-400">Xaafadda:</span> ${survey.neighborhood}</div>
+          <div><span class="font-semibold text-slate-400">Laanta:</span> ${survey.branch || '-'}</div>
+          <div><span class="font-semibold text-slate-400">Nooca:</span> ${survey.land_type || '-'}</div>
+          <div class="col-span-2 truncate"><span class="font-semibold text-slate-400">GPS:</span> <code class="text-teal-700 font-bold">${survey.gps_location || 'N/A'}</code></div>
         </div>
-        <button id="view-details-btn-${survey.id}" class="w-full bg-teal-600 hover:bg-teal-600 text-white text-xs py-1.5 px-3 rounded-lg font-bold shadow-sm cursor-pointer transition-all">
+        <button id="view-details-btn-${survey.id}" class="w-full bg-teal-600 hover:bg-teal-700 text-white text-xs py-2 px-3 rounded-xl font-bold shadow-sm cursor-pointer transition-all flex items-center justify-center gap-1.5">
           Fiiri Faahfaahinta
         </button>
       `;
 
       popupContent.addEventListener('click', (e) => {
         const target = e.target as HTMLElement;
-        if (target && target.id === `view-details-btn-${survey.id}`) {
+        if (target && (target.id === `view-details-btn-${survey.id}` || target.closest(`#view-details-btn-${survey.id}`))) {
           onViewDetails(survey);
           map.closePopup();
         }
       });
 
-      polygon.bindPopup(popupContent);
-    });
+      return popupContent;
+    };
 
-    if (bounds.length > 0) {
-      const group = L.latLngBounds(bounds.map((b) => b.getNorthWest()));
-      bounds.forEach((b) => group.extend(b));
-      map.fitBounds(group, { padding: [50, 50] });
+    const layerGroup = mapLayerGroupRef.current;
+
+    for (let i = 0; i < filteredSurveys.length; i++) {
+      const survey = filteredSurveys[i];
+      const coords = parsePolygonCoords(survey.polygon_boundary);
+      const hasPolygon = coords.length >= 3;
+      const gpsParts = (survey.gps_location || '').split(',').map((p) => parseFloat(p.trim()));
+      const hasGps = gpsParts.length >= 2 && !isNaN(gpsParts[0]) && !isNaN(gpsParts[1]);
+
+      if (hasPolygon) {
+        coords.forEach(([lat, lng]) => {
+          if (lat < minLat) minLat = lat;
+          if (lat > maxLat) maxLat = lat;
+          if (lng < minLng) minLng = lng;
+          if (lng > maxLng) maxLng = lng;
+          hasValidBounds = true;
+        });
+
+        const polygon = L.polygon(coords, {
+          color: '#FFD700',
+          fillColor: '#FFFF00',
+          fillOpacity: 0.35,
+          weight: 3,
+        });
+
+        if (labelMode !== 'off') {
+          const label = L.tooltip({
+            permanent: true,
+            direction: 'center',
+            className: labelMode === 'name' ? 'map-owner-label' : 'map-owner-icon',
+          }).setContent(
+            labelMode === 'name'
+              ? survey.owner_name
+              : '<span class="inline-flex" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45))"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 2C7.58 2 4 5.58 4 10c0 5.25 6.72 11.34 7.02 11.6a1 1 0 0 0 1.96 0C13.28 21.34 20 15.25 20 10c0-4.42-3.58-8-8-8z" fill="#2563eb"/><circle cx="12" cy="10" r="3" fill="#ffffff"/></svg></span>'
+          );
+          polygon.bindTooltip(label);
+        }
+
+        polygon.bindPopup(() => createPopupContent(survey));
+        layerGroup.addLayer(polygon);
+        polygonLayersRef.current.push(polygon);
+      } else if (hasGps) {
+        const lat = gpsParts[0];
+        const lng = gpsParts[1];
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+        hasValidBounds = true;
+
+        const circle = L.circleMarker([lat, lng], {
+          radius: 7,
+          fillColor: '#0d9488',
+          color: '#ffffff',
+          weight: 2,
+          fillOpacity: 0.95,
+        });
+
+        if (labelMode !== 'off') {
+          circle.bindTooltip(
+            labelMode === 'name' ? survey.owner_name : `#${survey.serial_no}`,
+            { permanent: labelMode === 'name' && filteredSurveys.length <= 150, direction: 'top', offset: [0, -6] }
+          );
+        }
+
+        circle.bindPopup(() => createPopupContent(survey));
+        layerGroup.addLayer(circle);
+        polygonLayersRef.current.push(circle);
+      }
     }
-  }, [filteredSurveys, loading, onViewDetails, labelMode]);
+
+    if (hasValidBounds && (filterXaafada || filterLaanta || search.trim() !== '')) {
+      map.fitBounds(
+        [
+          [minLat, minLng],
+          [maxLat, maxLng],
+        ],
+        { padding: [50, 50], maxZoom: 18 }
+      );
+    }
+  }, [filteredSurveys, loading, onViewDetails, labelMode, filterXaafada, filterLaanta, search]);
 
   const labelModeMeta: Record<LabelMode, { icon: React.ReactNode; label: string }> = {
     name: { icon: <Eye className="h-3.5 w-3.5" />, label: 'Name' },

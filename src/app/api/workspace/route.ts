@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError, requireViewer, type RequestViewer } from '@/lib/server-auth';
+import { getGoogleSheetSurveys } from '@/lib/googleSheetSurveys';
+import { getGoogleSheetReferences } from '@/lib/googleSheetReferences';
 
 const hasMenu = (viewer: RequestViewer, path: string) =>
   viewer.role === 'Admin' || viewer.permittedMenus === null || viewer.permittedMenus.includes(path);
@@ -13,6 +15,7 @@ export async function GET(req: NextRequest) {
 
     if (query.length >= 2) {
       const pattern = `%${query}%`;
+      const qLower = query.toLowerCase();
       const searches: Array<PromiseLike<{ data: unknown[] | null; error: unknown }>> = [];
       if (hasMenu(viewer, '/records')) {
         searches.push(viewer.admin.from('surveys').select('id, serial_no, survey_no, owner_name, neighborhood, status').ilike('owner_name', pattern).limit(5));
@@ -27,11 +30,17 @@ export async function GET(req: NextRequest) {
         searches.push(viewer.admin.from('transfers').select('id, serial_no, seller_name, buyer_name, transfer_date').ilike('buyer_name', pattern).limit(5));
       }
 
-      const results = await Promise.all(searches);
+      const [results, sheetSurveys, sheetReferences] = await Promise.all([
+        Promise.all(searches),
+        hasMenu(viewer, '/records') ? getGoogleSheetSurveys().catch(() => []) : Promise.resolve([]),
+        hasMenu(viewer, '/references') ? getGoogleSheetReferences().catch(() => []) : Promise.resolve([]),
+      ]);
+
       const errors = results.map((result) => result.error).filter(Boolean);
       if (errors.length) throw errors[0];
       const seen = new Set<string>();
-      const items = results.flatMap((result) => (result.data || []) as Array<Record<string, unknown>>).map((row) => {
+
+      const dbItems = results.flatMap((result) => (result.data || []) as Array<Record<string, unknown>>).map((row) => {
         const type = 'owner_name' in row ? 'survey' : 'ref_number' in row ? 'reference' : 'transfer';
         const key = `${type}-${row.id}`;
         if (seen.has(key)) return null;
@@ -39,7 +48,54 @@ export async function GET(req: NextRequest) {
         if (type === 'survey') return { id: key, type, title: `Survey ${row.survey_no || row.serial_no} — ${row.owner_name}`, subtitle: `${row.neighborhood} · ${row.status || 'Draft'}`, href: '/records' };
         if (type === 'reference') return { id: key, type, title: String(row.ref_number), subtitle: `${row.subject} · ${row.status}`, href: '/references' };
         return { id: key, type, title: `Transfer ${row.serial_no}`, subtitle: `${row.seller_name} → ${row.buyer_name}`, href: '/transfers' };
-      }).filter(Boolean).slice(0, 10);
+      }).filter(Boolean);
+
+      const matchingSheetItems = sheetSurveys
+        .filter((s) =>
+          s.owner_name.toLowerCase().includes(qLower) ||
+          s.neighborhood.toLowerCase().includes(qLower) ||
+          String(s.serial_no).includes(qLower) ||
+          (s.survey_no && s.survey_no.toLowerCase().includes(qLower)) ||
+          (s.vicinity && s.vicinity.toLowerCase().includes(qLower))
+        )
+        .slice(0, 5)
+        .map((s) => {
+          const key = `survey-${s.id}`;
+          if (seen.has(key)) return null;
+          seen.add(key);
+          return {
+            id: key,
+            type: 'survey',
+            title: `Survey ${s.survey_no || s.serial_no} — ${s.owner_name}`,
+            subtitle: `${s.neighborhood} · ${s.status || 'Draft'}`,
+            href: '/records',
+          };
+        })
+        .filter(Boolean);
+
+      const matchingSheetRefs = sheetReferences
+        .filter((r) =>
+          r.ref_number.toLowerCase().includes(qLower) ||
+          r.subject.toLowerCase().includes(qLower) ||
+          (r.details && r.details.toLowerCase().includes(qLower)) ||
+          (r.surveys && r.surveys.owner_name.toLowerCase().includes(qLower))
+        )
+        .slice(0, 5)
+        .map((r) => {
+          const key = `reference-${r.id}`;
+          if (seen.has(key)) return null;
+          seen.add(key);
+          return {
+            id: key,
+            type: 'reference',
+            title: r.ref_number,
+            subtitle: `${r.subject} · ${r.status}`,
+            href: '/references',
+          };
+        })
+        .filter(Boolean);
+
+      const items = [...dbItems, ...matchingSheetItems, ...matchingSheetRefs].slice(0, 10);
       return NextResponse.json({ items });
     }
 

@@ -62,6 +62,8 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       .order('created_at', { ascending: false })
       .then(({ data, error }) => {
         if (cancelled) return;
+
+
         if (!error) setLinkedRefs((data as Reference[]) || []);
         setLinkedRefsLoading(false);
       });
@@ -98,24 +100,15 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
     }
   };
 
-  // Parse boundary text e.g. "W:25(Ahmed) | B:30(Mohamed) | K:25(Ali) | G:30(Hussein)"
-  const parseBoundaries = (rawSoohdin: string | undefined) => {
-    if (!rawSoohdin) return [];
-    const labelMap: Record<string, string> = { 'W': 'Waqooyi (North)', 'B': 'Bari (East)', 'K': 'Koonfur (South)', 'G': 'Galbeed (West)' };
-    const directions = rawSoohdin.split(' | ');
-    
-    return directions.map(dir => {
-      const parts = dir.split(':');
-      if (parts.length === 2) {
-        const jihadaCode = parts[0].trim();
-        const jihadaName = labelMap[jihadaCode] || jihadaCode;
-        const subParts = parts[1].split('(');
-        const cabirka = subParts[0] ? subParts[0].trim() + 'm' : '-';
-        const deriska = subParts[1] ? subParts[1].replace(')', '').trim() : '-';
-        return { jihadaName, cabirka, deriska };
-      }
-      return null;
-    }).filter(Boolean);
+  const formatBoundaryVal = (val?: string | null) => {
+    if (!val || val === 'undefined' || val === 'null' || !val.trim()) return '-';
+    const clean = val.trim().replace(/\s*m+$/i, '');
+    return clean ? `${clean}m` : '-';
+  };
+
+  const formatNeighbor = (neighbor?: string | null) => {
+    if (!neighbor || neighbor === 'undefined' || neighbor === 'null' || !neighbor.trim()) return '-';
+    return neighbor.trim();
   };
 
   // Helper to check if a point is inside the polygon (Ray-Casting algorithm)
@@ -292,7 +285,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
   // Initialize satellite and sketch maps inside the modal
   useEffect(() => {
-    if (!record || !record.polygon_boundary) return;
+    if (!record) return;
 
     let lastSatZoomTime = 0;
     const handleSatWheel = (e: WheelEvent) => {
@@ -330,144 +323,279 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       if (sketchMapRef.current) { sketchMapRef.current.remove(); sketchMapRef.current = null; }
 
       const coords = parsePolygonCoords(record.polygon_boundary);
-      if (coords.length < 3) return;
+      const hasPolygon = coords.length >= 3;
+      const gpsParts = (record.gps_location || '').split(',').map((p) => parseFloat(p.trim()));
+      const hasGps = gpsParts.length >= 2 && !isNaN(gpsParts[0]) && !isNaN(gpsParts[1]);
 
-      const polygon = L.polygon(coords);
-      const bounds = polygon.getBounds();
-      const latlngs = coords.map((c) => L.latLng(c));
+      if (!hasPolygon && !hasGps) return;
 
-      // Vertex-average center (not the bounding-box center) — this is what the
-      // direction bearing is measured from, matching the reference point the segment
-      // "main 4" selection below already reasons about.
-      const vertexCenter = latlngs.reduce(
-        (acc, c) => ({ lat: acc.lat + c.lat / latlngs.length, lng: acc.lng + c.lng / latlngs.length }),
-        { lat: 0, lng: 0 },
-      );
+      if (hasPolygon) {
+        const polygon = L.polygon(coords);
+        const bounds = polygon.getBounds();
+        const latlngs = coords.map((c) => L.latLng(c));
 
-      const boundaryInfo: BoundaryInfo = {
-        N: { val: record.boundary_w_val, neighbor: record.boundary_w_neighbor },
-        E: { val: record.boundary_b_val, neighbor: record.boundary_b_neighbor },
-        S: { val: record.boundary_k_val, neighbor: record.boundary_k_neighbor },
-        W: { val: record.boundary_g_val, neighbor: record.boundary_g_neighbor },
-      };
-      const manualPositions = parseDirectionPositions(record.boundary_label_positions);
-      const savedSketchParts = (record.sketch_dimensions || '').split('|').map((part) => part.trim());
-      const savedSketchDimensions = savedSketchParts.slice(1).map((part, index) =>
-        (index === 0 ? part.replace(/^Dim:\s*/i, '') : part).trim(),
-      ).filter(Boolean);
+        const vertexCenter = latlngs.reduce(
+          (acc, c) => ({ lat: acc.lat + c.lat / latlngs.length, lng: acc.lng + c.lng / latlngs.length }),
+          { lat: 0, lng: 0 },
+        );
 
-      // The 4 longest sides are treated as the plot's "main" boundaries — the ones that
-      // get a Waqooyi/Bari/Koonfur/Galbeed label — same selection both maps use.
-      const segmentDistances = latlngs.map((startPt, idx) => {
-        const endPt = latlngs[(idx + 1) % latlngs.length];
-        return { index: idx, dist: L.latLng(startPt).distanceTo(L.latLng(endPt)) };
-      });
-      const mainBoundaryIndices = new Set(
-        [...segmentDistances].sort((a, b) => b.dist - a.dist).slice(0, 4).map((s) => s.index),
-      );
+        const boundaryInfo: BoundaryInfo = {
+          N: { val: record.boundary_w_val, neighbor: record.boundary_w_neighbor },
+          E: { val: record.boundary_b_val, neighbor: record.boundary_b_neighbor },
+          S: { val: record.boundary_k_val, neighbor: record.boundary_k_neighbor },
+          W: { val: record.boundary_g_val, neighbor: record.boundary_g_neighbor },
+        };
+        const manualPositions = parseDirectionPositions(record.boundary_label_positions);
+        const savedSketchParts = (record.sketch_dimensions || '').split('|').map((part) => part.trim());
+        const savedSketchDimensions = savedSketchParts.slice(1).map((part, index) =>
+          (index === 0 ? part.replace(/^Dim:\s*/i, '') : part).trim(),
+        ).filter(Boolean);
 
-      // --- SATELLITE MAP INITIALIZATION ---
-      if (satelliteMapContainerRef.current) {
-        const satTile = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-          maxZoom: 20,
-          subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-          crossOrigin: true
+        const segmentDistances = latlngs.map((startPt, idx) => {
+          const endPt = latlngs[(idx + 1) % latlngs.length];
+          return { index: idx, dist: L.latLng(startPt).distanceTo(L.latLng(endPt)) };
         });
+        const mainBoundaryIndices = new Set(
+          [...segmentDistances].sort((a, b) => b.dist - a.dist).slice(0, 4).map((s) => s.index),
+        );
 
-        const satMap = L.map(satelliteMapContainerRef.current, {
-          attributionControl: false,
-          scrollWheelZoom: false, // Use our custom wheel handler instead
-          zoomControl: false,
-          dragging: true,
-          touchZoom: true,
-          preferCanvas: true,
-          zoomSnap: 0.5, // allows half-level zoom increments for finer framing control
-          // Both off so programmatic setZoom() (used during PDF export to grab
-          // a sharper capture) swaps straight to the new tiles at full opacity
-          // instead of showing a scaled snapshot of the old zoom level
-          // cross-fading into the new one — that in-between frame was what
-          // showed up as a washed-out ghost rectangle in the captured image.
-          zoomAnimation: false,
-          fadeAnimation: false,
-        });
+        // --- SATELLITE MAP INITIALIZATION ---
+        if (satelliteMapContainerRef.current) {
+          const satTile = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            crossOrigin: true
+          });
 
-        // Center on the polygon, but zoomed out slightly to show some surrounding houses/streets
-        const zoomLevel = satMap.getBoundsZoom(bounds) - 0.5;
-        satMap.setView(bounds.getCenter(), zoomLevel);
+          const satMap = L.map(satelliteMapContainerRef.current, {
+            attributionControl: false,
+            scrollWheelZoom: false,
+            zoomControl: false,
+            dragging: true,
+            touchZoom: true,
+            preferCanvas: true,
+            zoomSnap: 0.5,
+            zoomAnimation: false,
+            fadeAnimation: false,
+          });
 
-        satTile.addTo(satMap);
-        satTileLayerRef.current = satTile;
+          const zoomLevel = satMap.getBoundsZoom(bounds) - 0.5;
+          satMap.setView(bounds.getCenter(), zoomLevel);
 
-        L.polygon(coords, {
-          color: '#eab308',
-          weight: 2.5,
-          fillColor: '#eab308',
-          fillOpacity: 0.15
-        }).addTo(satMap);
+          satTile.addTo(satMap);
+          satTileLayerRef.current = satTile;
 
-        L.control.zoom({ position: 'bottomright' }).addTo(satMap);
+          L.polygon(coords, {
+            color: '#eab308',
+            weight: 2.5,
+            fillColor: '#eab308',
+            fillOpacity: 0.15
+          }).addTo(satMap);
 
-        // Leaflet owns gestures inside the canvas so mobile users can pan in every
-        // direction with one finger and pinch-zoom with two fingers.
-        satMap.getContainer().style.touchAction = 'none';
+          L.control.zoom({ position: 'bottomright' }).addTo(satMap);
+          satMap.getContainer().style.touchAction = 'none';
 
-        satelliteMapRef.current = satMap;
-        satelliteMapContainerRef.current.addEventListener('wheel', handleSatWheel, { passive: false });
-      }
-
-      // --- TECHNICAL SKETCH MAP INITIALIZATION ---
-      if (sketchMapContainerRef.current) {
-        const skMap = L.map(sketchMapContainerRef.current, {
-          zoomControl: false,
-          attributionControl: false,
-          dragging: true,
-          touchZoom: true,
-          scrollWheelZoom: false, // Use our custom wheel handler instead
-          preferCanvas: true,
-        });
-        skMap.getContainer().style.backgroundColor = '#ffffff';
-        // Match the satellite map's mobile pan and pinch behavior.
-        skMap.getContainer().style.touchAction = 'none';
-
-        L.polygon(coords, {
-          color: '#0f172a',
-          weight: 2.5,
-          fillColor: '#dbeafe',
-          fillOpacity: 0.42,
-        }).addTo(skMap);
-
-        const center = bounds.getCenter();
-
-        // Add dimensions to each line segment (all sides get a length; only the 4 main
-        // boundaries additionally get a Waqooyi/Bari/Koonfur/Galbeed direction label).
-        for (let i = 0; i < latlngs.length; i++) {
-          const start = latlngs[i];
-          const end = latlngs[(i + 1) % latlngs.length];
-          const midpoint = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
-          const direction = getDirectionFromCenter(vertexCenter.lat, vertexCenter.lng, midpoint.lat, midpoint.lng);
-          const savedBoundaryValue = mainBoundaryIndices.has(i) ? boundaryInfo[direction]?.val : undefined;
-          addSketchDimension(start, end, skMap, latlngs, savedSketchDimensions[i] || savedBoundaryValue);
+          satelliteMapRef.current = satMap;
+          satelliteMapContainerRef.current.addEventListener('wheel', handleSatWheel, { passive: false });
         }
-        addBoundaryDirectionLabels(skMap, latlngs, mainBoundaryIndices, vertexCenter, boundaryInfo, manualPositions);
 
-        // Add Center Area Label
-        const matchArea = record.sketch_dimensions?.match(/Area:\s*([^\s|]+)/i) || record.sketch_dimensions?.match(/Area\s*([^\s|]+)/i);
-        const areaValue = matchArea ? matchArea[1] + ' m²' : 'N/A';
+        // --- TECHNICAL SKETCH MAP INITIALIZATION ---
+        if (sketchMapContainerRef.current) {
+          const skMap = L.map(sketchMapContainerRef.current, {
+            zoomControl: false,
+            attributionControl: false,
+            dragging: true,
+            touchZoom: true,
+            scrollWheelZoom: false,
+            preferCanvas: true,
+          });
+          skMap.getContainer().style.backgroundColor = '#ffffff';
+          skMap.getContainer().style.touchAction = 'none';
 
-        L.marker(center, {
-          icon: L.divIcon({
-            className: 'sketch-area-label',
-            html: `<div class="editable-field sketch-area-input">Area: ${areaValue}</div>`,
-            iconSize: [140, 40],
-            iconAnchor: [70, 20]
-          })
-        }).addTo(skMap);
+          L.polygon(coords, {
+            color: '#0f172a',
+            weight: 2.5,
+            fillColor: '#dbeafe',
+            fillOpacity: 0.42,
+          }).addTo(skMap);
 
-        skMap.invalidateSize();
-        skMap.fitBounds(bounds, { animate: false, padding: [60, 60] });
-        L.control.zoom({ position: 'bottomright' }).addTo(skMap);
-        sketchMapRef.current = skMap;
-        sketchMapContainerRef.current.addEventListener('wheel', handleSkWheel, { passive: false });
+          const center = bounds.getCenter();
+
+          for (let i = 0; i < latlngs.length; i++) {
+            const start = latlngs[i];
+            const end = latlngs[(i + 1) % latlngs.length];
+            const midpoint = L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
+            const direction = getDirectionFromCenter(vertexCenter.lat, vertexCenter.lng, midpoint.lat, midpoint.lng);
+            const savedBoundaryValue = mainBoundaryIndices.has(i) ? boundaryInfo[direction]?.val : undefined;
+            addSketchDimension(start, end, skMap, latlngs, savedSketchDimensions[i] || savedBoundaryValue);
+          }
+          addBoundaryDirectionLabels(skMap, latlngs, mainBoundaryIndices, vertexCenter, boundaryInfo, manualPositions);
+
+          const matchArea = record.sketch_dimensions?.match(/Area:\s*([^\s|]+)/i) || record.sketch_dimensions?.match(/Area\s*([^\s|]+)/i);
+          const areaValue = matchArea ? matchArea[1] + ' m²' : 'N/A';
+
+          L.marker(center, {
+            icon: L.divIcon({
+              className: 'sketch-area-label',
+              html: `<div class="editable-field sketch-area-input">Area: ${areaValue}</div>`,
+              iconSize: [140, 40],
+              iconAnchor: [70, 20]
+            })
+          }).addTo(skMap);
+
+          skMap.invalidateSize();
+          skMap.fitBounds(bounds, { animate: false, padding: [60, 60] });
+          L.control.zoom({ position: 'bottomright' }).addTo(skMap);
+          sketchMapRef.current = skMap;
+          sketchMapContainerRef.current.addEventListener('wheel', handleSkWheel, { passive: false });
+        }
+      } else if (hasGps) {
+        const latLng: [number, number] = [gpsParts[0], gpsParts[1]];
+
+        // --- SATELLITE MAP (GPS Location Pin) ---
+        if (satelliteMapContainerRef.current) {
+          const satTile = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            crossOrigin: true
+          });
+
+          const satMap = L.map(satelliteMapContainerRef.current, {
+            attributionControl: false,
+            scrollWheelZoom: false,
+            zoomControl: false,
+            dragging: true,
+            touchZoom: true,
+            preferCanvas: true,
+            zoomSnap: 0.5,
+            zoomAnimation: false,
+            fadeAnimation: false,
+          });
+
+          satMap.setView(latLng, 18.5);
+          satTile.addTo(satMap);
+          satTileLayerRef.current = satTile;
+
+          const pinIcon = L.divIcon({
+            className: 'details-location-pin',
+            html: `
+              <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);filter:drop-shadow(0 4px 10px rgba(0,0,0,0.5));">
+                <div style="background:#0f766e;color:#ffffff;padding:4px 9px;border-radius:8px;font-size:11px;font-weight:900;white-space:nowrap;margin-bottom:4px;border:2px solid #ffffff;letter-spacing:0.3px;box-shadow:0 3px 8px rgba(0,0,0,0.4);">
+                  📍 #${record.serial_no} — ${record.owner_name}
+                </div>
+                <div style="width:34px;height:34px;border-radius:50%;background:#0d9488;border:3px solid #ffffff;display:flex;align-items:center;justify-content:center;color:#ffffff;box-shadow:0 4px 12px rgba(0,0,0,0.45);">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                </div>
+              </div>
+            `,
+            iconSize: [0, 0],
+            iconAnchor: [0, 0]
+          });
+
+          const marker = L.marker(latLng, { icon: pinIcon }).addTo(satMap);
+          marker.bindPopup(`
+            <div style="font-family:sans-serif;padding:3px;font-size:12px;">
+              <b style="font-size:13px;color:#0f172a;">${record.owner_name}</b><br/>
+              <span style="color:#0d9488;font-weight:bold;">S/N: ${record.serial_no}</span><br/>
+              <span style="color:#64748b;">${record.neighborhood} - ${record.branch || 'Laan'}</span><br/>
+              <code style="color:#0f766e;font-weight:bold;">${record.gps_location}</code>
+            </div>
+          `);
+
+          L.control.zoom({ position: 'bottomright' }).addTo(satMap);
+          satMap.getContainer().style.touchAction = 'none';
+          satelliteMapRef.current = satMap;
+          satelliteMapContainerRef.current.addEventListener('wheel', handleSatWheel, { passive: false });
+        }
+
+        // --- TECHNICAL SKETCH (Schematic Plan) ---
+        if (sketchMapContainerRef.current) {
+          const skMap = L.map(sketchMapContainerRef.current, {
+            zoomControl: false,
+            attributionControl: false,
+            dragging: true,
+            touchZoom: true,
+            scrollWheelZoom: false,
+            preferCanvas: true,
+          });
+          skMap.getContainer().style.backgroundColor = '#ffffff';
+          skMap.getContainer().style.touchAction = 'none';
+
+          const rectCoords: [number, number][] = [
+            [-0.0003, -0.0005],
+            [-0.0003, 0.0005],
+            [0.0003, 0.0005],
+            [0.0003, -0.0005],
+          ];
+
+          L.polygon(rectCoords, {
+            color: '#0f172a',
+            weight: 2.5,
+            fillColor: '#dbeafe',
+            fillOpacity: 0.42,
+          }).addTo(skMap);
+
+          // Center badge
+          L.marker([0, 0], {
+            icon: L.divIcon({
+              className: 'sketch-center-badge',
+              html: `
+                <div style="text-align:center;background:#ffffff;border:1.5px solid #cbd5e1;padding:6px 12px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.08);transform:translate(-50%,-50%);min-width:140px;">
+                  <div style="font-size:11px;font-weight:900;color:#0f172a;">${record.neighborhood} (${record.branch || '1aad'})</div>
+                  <div style="font-size:10px;font-weight:bold;color:#0d9488;">GPS: ${record.gps_location}</div>
+                  <div style="font-size:9px;color:#64748b;font-weight:bold;">${record.land_type || 'Dhul'}</div>
+                </div>
+              `,
+              iconSize: [0, 0],
+              iconAnchor: [0, 0]
+            })
+          }).addTo(skMap);
+
+          // North Boundary Label
+          L.marker([0.00038, 0], {
+            icon: L.divIcon({
+              className: 'boundary-north',
+              html: `<div style="text-align:center;font-size:10px;font-weight:800;color:#1e293b;transform:translate(-50%,-50%);white-space:nowrap;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid #e2e8f0;">Waqooyi: <b>${formatBoundaryVal(record.boundary_w_val)}</b> ${formatNeighbor(record.boundary_w_neighbor) !== '-' ? '· ' + formatNeighbor(record.boundary_w_neighbor) : ''}</div>`,
+              iconSize: [0, 0],
+              iconAnchor: [0, 0]
+            })
+          }).addTo(skMap);
+
+          // South Boundary Label
+          L.marker([-0.00038, 0], {
+            icon: L.divIcon({
+              className: 'boundary-south',
+              html: `<div style="text-align:center;font-size:10px;font-weight:800;color:#1e293b;transform:translate(-50%,-50%);white-space:nowrap;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid #e2e8f0;">Koonfur: <b>${formatBoundaryVal(record.boundary_k_val)}</b> ${formatNeighbor(record.boundary_k_neighbor) !== '-' ? '· ' + formatNeighbor(record.boundary_k_neighbor) : ''}</div>`,
+              iconSize: [0, 0],
+              iconAnchor: [0, 0]
+            })
+          }).addTo(skMap);
+
+          // East Boundary Label
+          L.marker([0, 0.00065], {
+            icon: L.divIcon({
+              className: 'boundary-east',
+              html: `<div style="text-align:center;font-size:10px;font-weight:800;color:#1e293b;transform:translate(-50%,-50%);white-space:nowrap;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid #e2e8f0;">Bari: <b>${formatBoundaryVal(record.boundary_b_val)}</b> ${formatNeighbor(record.boundary_b_neighbor) !== '-' ? '· ' + formatNeighbor(record.boundary_b_neighbor) : ''}</div>`,
+              iconSize: [0, 0],
+              iconAnchor: [0, 0]
+            })
+          }).addTo(skMap);
+
+          // West Boundary Label
+          L.marker([0, -0.00065], {
+            icon: L.divIcon({
+              className: 'boundary-west',
+              html: `<div style="text-align:center;font-size:10px;font-weight:800;color:#1e293b;transform:translate(-50%,-50%);white-space:nowrap;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid #e2e8f0;">Galbeed: <b>${formatBoundaryVal(record.boundary_g_val)}</b> ${formatNeighbor(record.boundary_g_neighbor) !== '-' ? '· ' + formatNeighbor(record.boundary_g_neighbor) : ''}</div>`,
+              iconSize: [0, 0],
+              iconAnchor: [0, 0]
+            })
+          }).addTo(skMap);
+
+          skMap.setView([0, 0], 18);
+          L.control.zoom({ position: 'bottomright' }).addTo(skMap);
+          sketchMapRef.current = skMap;
+          sketchMapContainerRef.current.addEventListener('wheel', handleSkWheel, { passive: false });
+        }
       }
     }, 450);
 
@@ -484,34 +612,52 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
   // Fullscreen Resize & Recenter Handlers
   useEffect(() => {
-    if (satelliteMapRef.current && record?.polygon_boundary) {
+    if (satelliteMapRef.current) {
       setTimeout(() => {
-        const coords = parsePolygonCoords(record.polygon_boundary);
+        const coords = parsePolygonCoords(record?.polygon_boundary);
         if (coords.length >= 3) {
           const bounds = L.polygon(coords).getBounds();
           satelliteMapRef.current?.invalidateSize().fitBounds(bounds, { padding: [20, 20] });
+        } else if (record?.gps_location) {
+          const p = record.gps_location.split(',').map((s) => parseFloat(s.trim()));
+          if (p.length >= 2 && !isNaN(p[0]) && !isNaN(p[1])) {
+            satelliteMapRef.current?.invalidateSize().setView([p[0], p[1]], 18.5);
+          }
         }
       }, 150);
     }
   }, [isSatFullscreen, record]);
 
   useEffect(() => {
-    if (sketchMapRef.current && record?.polygon_boundary) {
+    if (sketchMapRef.current) {
       setTimeout(() => {
-        const coords = parsePolygonCoords(record.polygon_boundary);
+        const coords = parsePolygonCoords(record?.polygon_boundary);
         if (coords.length >= 3) {
           const bounds = L.polygon(coords).getBounds();
           sketchMapRef.current?.invalidateSize().fitBounds(bounds, { padding: [20, 20] });
+        } else {
+          sketchMapRef.current?.invalidateSize().setView([0, 0], 18);
         }
       }, 150);
     }
   }, [isSketchFullscreen, record]);
 
   if (!mounted || !record) return null;
-  const boundaries = parseBoundaries(record.boundary_w_val ? 
-    `W:${record.boundary_w_val}(${record.boundary_w_neighbor}) | B:${record.boundary_b_val}(${record.boundary_b_neighbor}) | K:${record.boundary_k_val}(${record.boundary_k_neighbor}) | G:${record.boundary_g_val}(${record.boundary_g_neighbor})` 
-    : record.built_details
+
+  const hasDirectBoundaries = Boolean(
+    record.boundary_w_val || record.boundary_w_neighbor ||
+    record.boundary_b_val || record.boundary_b_neighbor ||
+    record.boundary_k_val || record.boundary_k_neighbor ||
+    record.boundary_g_val || record.boundary_g_neighbor
   );
+
+  const boundaries = hasDirectBoundaries ? [
+    { jihadaName: 'Waqooyi (North)', cabirka: formatBoundaryVal(record.boundary_w_val), deriska: formatNeighbor(record.boundary_w_neighbor) },
+    { jihadaName: 'Bari (East)', cabirka: formatBoundaryVal(record.boundary_b_val), deriska: formatNeighbor(record.boundary_b_neighbor) },
+    { jihadaName: 'Koonfur (South)', cabirka: formatBoundaryVal(record.boundary_k_val), deriska: formatNeighbor(record.boundary_k_neighbor) },
+    { jihadaName: 'Galbeed (West)', cabirka: formatBoundaryVal(record.boundary_g_val), deriska: formatNeighbor(record.boundary_g_neighbor) },
+  ] : [];
+
   const handlePrintPDF = async () => {
     if (!record) return;
 
@@ -725,6 +871,8 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             if (position) pdfSketchBounds.extend([position.lat, position.lng]);
           });
           sketchMap?.fitBounds(pdfSketchBounds, { animate: false, padding: [20, 20] });
+        } else {
+          sketchMap?.setView([0, 0], 17.5);
         }
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const restoreSketch = prepareMapForCapture(sketchContainer);
@@ -801,6 +949,8 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           sketchMap?.invalidateSize({ animate: false });
           if (pdfSketchCoords.length >= 3) {
             sketchMap?.fitBounds(L.polygon(pdfSketchCoords).getBounds(), { animate: false, padding: [60, 60] });
+          } else {
+            sketchMap?.setView([0, 0], 18);
           }
         }
       }
@@ -811,9 +961,9 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       const areaClean = record.sketch_area ? record.sketch_area.replace(' m²', '').replace('m²', '').trim() : 'N/A';
       const issueDate = record.created_at ? new Date(record.created_at).toLocaleDateString('en-GB') : '-';
 
-      const cleanVal = (val: string | undefined) => {
-        if (!val) return '-';
-        return val.replace('m', '').replace('M', '').trim();
+      const cleanVal = (val: string | undefined | null) => {
+        if (!val || val === 'undefined' || val === 'null' || !val.trim()) return '-';
+        return val.trim().replace(/\s*m+$/i, '') || '-';
       };
 
       const watermarkHTML = `
@@ -1023,7 +1173,11 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         ['Bari / East', cleanVal(record.boundary_b_val), record.boundary_b_neighbor || '-'],
         ['Galbeed / West', cleanVal(record.boundary_g_val), record.boundary_g_neighbor || '-'],
         ['Koonfur / South', cleanVal(record.boundary_k_val), record.boundary_k_neighbor || '-'],
-      ].map(([side, length, neighbour]) => `<tr><td style="font-weight:700;">${side}</td><td>${length}m</td><td>${neighbour}</td></tr>`).join('');
+      ].map(([side, length, neighbour]) => {
+        const cleanNeighbour = (!neighbour || neighbour === 'undefined' || neighbour === 'null') ? '-' : neighbour;
+        const displayLen = length === '-' ? '-' : `${length}m`;
+        return `<tr><td style="font-weight:700;">${side}</td><td>${displayLen}</td><td>${cleanNeighbour}</td></tr>`;
+      }).join('');
 
       printContainer.innerHTML = `
         <div class="survey-pdf-page" style="width:750px;height:1060px;padding:24px 42px 20px;box-sizing:border-box;display:flex;flex-direction:column;font:12px/1.15 Arial,sans-serif;background:#fff;color:#000;position:relative;overflow:hidden;">

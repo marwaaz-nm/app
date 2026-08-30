@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError, requireViewer } from '@/lib/server-auth';
+import { getGoogleSheetSurveys } from '@/lib/googleSheetSurveys';
+import { getGoogleSheetReferences } from '@/lib/googleSheetReferences';
 
 const csvCell = (value: unknown) => {
   const raw = String(value ?? '');
@@ -128,7 +130,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 4. Default Summary View: Fetch only lightweight projection columns and 8 recent surveys
-    const [recentSurveyResult, surveyStatusesResult, referenceResult, transferResult, receiptResult, expenseResult, schemaResult] = await Promise.all([
+    const [recentSurveyResult, surveyStatusesResult, referenceResult, transferResult, receiptResult, expenseResult, schemaResult, sheetSurveys, sheetReferences] = await Promise.all([
       viewer.admin.from('surveys').select('id, serial_no, survey_no, owner_name, neighborhood, status, sketch_area, created_at').order('created_at', { ascending: false }).limit(8),
       viewer.admin.from('surveys').select('status').limit(10000),
       viewer.admin.from('references').select('id, status').limit(10000),
@@ -136,6 +138,8 @@ export async function GET(req: NextRequest) {
       viewer.admin.from('receipts').select('amount, status').limit(10000),
       viewer.admin.from('expenses').select('total').limit(10000),
       viewer.admin.from('surveys').select('status').limit(1),
+      getGoogleSheetSurveys().catch(() => []),
+      getGoogleSheetReferences().catch(() => []),
     ]);
 
     const schemaReady = schemaResult.error?.code !== '42703';
@@ -148,19 +152,39 @@ export async function GET(req: NextRequest) {
     const receipts = receiptResult.data || [];
     const expenses = expenseResult.data || [];
 
+    const totalSurveyCount = surveyStatuses.length + sheetSurveys.length;
+    const totalReferenceCount = references.length + sheetReferences.length;
+
     const statusCounts = surveyStatuses.reduce<Record<string, number>>((counts, survey) => {
       const status = survey.status || 'Draft';
       counts[status] = (counts[status] || 0) + 1;
       return counts;
     }, {});
 
+    // Add sheet survey statuses (Approved)
+    statusCounts['Approved'] = (statusCounts['Approved'] || 0) + sheetSurveys.length;
+
     const sum = (rows: Array<Record<string, unknown>>, field: string) => rows.reduce((total, row) => total + (Number(row[field]) || 0), 0);
+
+    const mergedRecentSurveys = [
+      ...(recentSurveyResult.data || []),
+      ...sheetSurveys.slice(0, 8).map((s) => ({
+        id: s.id,
+        serial_no: s.serial_no,
+        survey_no: s.survey_no,
+        owner_name: s.owner_name,
+        neighborhood: s.neighborhood,
+        status: s.status || 'Approved',
+        sketch_area: s.sketch_area,
+        created_at: s.created_at,
+      })),
+    ].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()).slice(0, 8);
 
     return NextResponse.json({
       schemaReady,
       summary: {
-        surveys: surveyStatuses.length,
-        references: references.length,
+        surveys: totalSurveyCount,
+        references: totalReferenceCount,
         openReferences: references.filter((item) => item.status === 'In Progress').length,
         transfers: transfers.length,
         transferValue: sum(transfers, 'price'),
@@ -169,7 +193,7 @@ export async function GET(req: NextRequest) {
         expenses: sum(expenses, 'total'),
         statusCounts,
       },
-      recentSurveys: recentSurveyResult.data || [],
+      recentSurveys: mergedRecentSurveys,
     });
   } catch (error) {
     const resolved = apiError(error);

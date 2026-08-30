@@ -36,7 +36,7 @@ export function notifyDataChanged() {
   }
 }
 
-const THROTTLE_WINDOW_MS = 3000;
+const THROTTLE_WINDOW_MS = 30000; // 30 seconds for passive focus/tab switch events
 
 export function useDataAutoRefresh(refresh: () => void | Promise<void>, intervalMs = 300000) {
   const refreshRef = useRef(refresh);

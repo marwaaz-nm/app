@@ -80,7 +80,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // Column verification_token may not exist on remote DB yet
     }
 
-    // 3. Fallback: Numeric ID (legacy QR codes)
+    // 3. Fallback: Numeric ID or Ref Number (legacy QR codes)
     if (/^\d+$/.test(id)) {
       const refId = parseInt(id, 10);
       const { data: reference, error } = await supabaseAdmin
@@ -92,6 +92,33 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       if (!error && reference) {
         return NextResponse.json({ reference });
       }
+    }
+
+    // 4. Fallback: Check Google Sheet references
+    try {
+      const { getGoogleSheetReferences } = await import('@/lib/googleSheetReferences');
+      const sheetRefs = await getGoogleSheetReferences();
+      const targetNum = id.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const targetId = signedRefId || (parseInt(id, 10) || 0);
+
+      const match = sheetRefs.find((r) =>
+        r.id === targetId ||
+        r.ref_number.toLowerCase().replace(/[^a-zA-Z0-9]/g, '') === targetNum ||
+        (r.ref_number.match(/\d+/)?.[0] && id === r.ref_number.match(/\d+/)?.[0])
+      );
+
+      if (match) {
+        return NextResponse.json({
+          reference: {
+            ref_number: match.ref_number,
+            subject: match.subject,
+            issue_date: match.issue_date,
+            surveys: match.surveys || null,
+          }
+        });
+      }
+    } catch {
+      // Ignore sheet error
     }
 
     return NextResponse.json({ error: 'Reference not found' }, { status: 404 });

@@ -13,7 +13,7 @@ import { formatReferenceNumber } from '@/lib/numbering';
 import { generateVerificationToken } from '@/lib/verificationToken';
 import DetailsModal from '@/components/DetailsModal';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
-import { useDataAutoRefresh } from '@/lib/useDataAutoRefresh';
+import { useDataAutoRefresh, notifyDataChanged } from '@/lib/useDataAutoRefresh';
 import { useProfileNames, resolveCreatorName } from '@/lib/useProfileNames';
 import {
   Plus,
@@ -165,6 +165,7 @@ export default function ReferencesPage() {
 
   // Search/Filter states
   const [searchQuery, setSearchQuery] = useState('');
+  const [yearFilter, setYearFilter] = useState<string>('2026');
   const [statusFilter, setStatusFilter] = useState<'all' | 'Paid' | 'Unpaid'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'ref_az'>('newest');
   const [groupBy, setGroupBy] = useState<'none' | 'date' | 'status'>('none');
@@ -198,8 +199,25 @@ export default function ReferencesPage() {
     setLoadingSurvey(true);
 
     try {
+      if (surveyId >= 100000) {
+        const sheetRes = await fetch('/api/surveys/sheet').then((res) => res.json()).catch(() => ({ surveys: [] }));
+        const match = (sheetRes.surveys || []).find((s: Survey) => s.id === surveyId);
+        if (match) {
+          setViewingSurvey(match as Survey);
+          return;
+        }
+      }
+
       const { data, error } = await supabase.from('surveys').select('*').eq('id', surveyId).single();
-      if (error) throw error;
+      if (error) {
+        const sheetRes = await fetch('/api/surveys/sheet').then((res) => res.json()).catch(() => ({ surveys: [] }));
+        const match = (sheetRes.surveys || []).find((s: Survey) => s.id === surveyId);
+        if (match) {
+          setViewingSurvey(match as Survey);
+          return;
+        }
+        throw error;
+      }
       setViewingSurvey(data as Survey);
     } catch (err) {
       console.error('Error fetching survey details:', err);
@@ -303,48 +321,66 @@ export default function ReferencesPage() {
     }
   };
 
-  // Fetch all references with joined surveys
+  // Fetch all references with joined surveys (both DB and live sheet)
   const fetchReferences = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('references')
-        .select(`
-          *,
-          surveys (
-            id,
-            serial_no,
-            survey_no,
-            owner_name,
-            neighborhood,
-            branch,
-            land_type,
-            sketch_area,
-            boundary_w_val,
-            boundary_w_neighbor,
-            boundary_b_val,
-            boundary_b_neighbor,
-            boundary_k_val,
-            boundary_k_neighbor,
-            boundary_g_val,
-            boundary_g_neighbor
-          ),
-          receipts (
-            id,
-            reference_id,
-            receipt_no,
-            amount,
-            status,
-            payment_mode,
-            payment_date,
-            details
-          )
-        `)
-        .order('created_at', { ascending: false });
+      const [dbRes, sheetRes] = await Promise.all([
+        supabase
+          .from('references')
+          .select(`
+            *,
+            surveys (
+              id,
+              serial_no,
+              survey_no,
+              owner_name,
+              neighborhood,
+              branch,
+              land_type,
+              sketch_area,
+              boundary_w_val,
+              boundary_w_neighbor,
+              boundary_b_val,
+              boundary_b_neighbor,
+              boundary_k_val,
+              boundary_k_neighbor,
+              boundary_g_val,
+              boundary_g_neighbor
+            ),
+            receipts (
+              id,
+              reference_id,
+              receipt_no,
+              amount,
+              status,
+              payment_mode,
+              payment_date,
+              details
+            )
+          `)
+          .order('created_at', { ascending: false }),
+        fetch('/api/references/sheet')
+          .then((res) => res.json())
+          .catch(() => ({ references: [] })),
+      ]);
 
-      if (error) throw error;
-      setReferences(data || []);
-      setFilteredReferences(data || []);
+      if (dbRes.error) throw dbRes.error;
+      const dbRecords = (dbRes.data || []) as Reference[];
+      const sheetRecords = (sheetRes?.references || []) as Reference[];
+
+      const existingDbIds = new Set(dbRecords.map((r) => String(r.id)));
+      const existingRefNumbers = new Set(dbRecords.map((r) => r.ref_number?.toLowerCase()));
+
+      const allReferences = [
+        ...dbRecords,
+        ...sheetRecords.filter(
+          (s) => !existingDbIds.has(String(s.id)) && !existingRefNumbers.has(s.ref_number?.toLowerCase())
+        ),
+      ];
+
+      setReferences(allReferences);
+      setFilteredReferences(allReferences);
     } catch (err) {
       console.error('Error fetching references:', err);
     } finally {
@@ -352,15 +388,35 @@ export default function ReferencesPage() {
     }
   };
 
-  // Fetch surveys for dropdown selection
+  // Fetch surveys for dropdown selection (both DB and live sheet)
   const fetchSurveys = async () => {
     try {
-      const { data, error } = await supabase
-        .from('surveys')
-        .select('id, serial_no, survey_no, owner_name')
-        .order('serial_no', { ascending: false });
-      if (error) throw error;
-      setSurveys(data || []);
+      const [dbRes, sheetRes] = await Promise.all([
+        supabase
+          .from('surveys')
+          .select('id, serial_no, survey_no, owner_name')
+          .order('serial_no', { ascending: false }),
+        fetch('/api/surveys/sheet')
+          .then((res) => res.json())
+          .catch(() => ({ surveys: [] })),
+      ]);
+
+      if (dbRes.error) throw dbRes.error;
+      const dbRecords = (dbRes.data || []) as { id: number; serial_no: number; survey_no?: string | null; owner_name: string }[];
+      const sheetRecords = ((sheetRes?.surveys || []) as Survey[]).map((s) => ({
+        id: s.id,
+        serial_no: s.serial_no,
+        survey_no: s.survey_no,
+        owner_name: s.owner_name,
+      }));
+
+      const existingDbIds = new Set(dbRecords.map((r) => String(r.id)));
+      const allSurveys = [
+        ...dbRecords,
+        ...sheetRecords.filter((s) => !existingDbIds.has(String(s.id))),
+      ];
+
+      setSurveys(allSurveys);
     } catch (err) {
       console.error('Error fetching surveys:', err);
     }
@@ -371,6 +427,26 @@ export default function ReferencesPage() {
     fetchSurveys();
   }, []);
   useDataAutoRefresh(fetchReferences);
+
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    references.forEach((r) => {
+      const dateVal = r.created_at || r.issue_date;
+      if (dateVal) {
+        const y = new Date(dateVal).getFullYear();
+        if (!isNaN(y) && y > 2000) years.add(String(y));
+      }
+    });
+    const sortedYears = Array.from(years).sort((a, b) => Number(b) - Number(a));
+    return sortedYears.length > 0 ? sortedYears : ['2026', '2025'];
+  }, [references]);
+
+  // Default to latest year when references load
+  useEffect(() => {
+    if (availableYears.length > 0 && (!yearFilter || (!availableYears.includes(yearFilter) && yearFilter !== 'all'))) {
+      setYearFilter(availableYears[0]);
+    }
+  }, [availableYears, yearFilter]);
 
   // Filter application
   useEffect(() => {
@@ -385,6 +461,15 @@ export default function ReferencesPage() {
       );
     }
 
+    if (yearFilter && yearFilter !== 'all') {
+      result = result.filter((r) => {
+        const dateVal = r.created_at || r.issue_date;
+        if (!dateVal) return false;
+        const y = String(new Date(dateVal).getFullYear());
+        return y === yearFilter;
+      });
+    }
+
     if (statusFilter !== 'all') {
       result = result.filter(r => {
         const pInfo = getPaymentInfo(r);
@@ -393,14 +478,21 @@ export default function ReferencesPage() {
     }
 
     setFilteredRecords(result);
-  }, [searchQuery, statusFilter, references]);
+  }, [searchQuery, yearFilter, statusFilter, references]);
 
   const sortedReferences = useMemo(() => {
     const sorted = [...filteredReferences];
     sorted.sort((a, b) => {
       if (sortBy === 'ref_az') return a.ref_number.localeCompare(b.ref_number);
-      const diff = new Date(b.issue_date || 0).getTime() - new Date(a.issue_date || 0).getTime();
-      return sortBy === 'oldest' ? -diff : diff;
+      const timeA = new Date(a.issue_date || a.created_at || 0).getTime();
+      const timeB = new Date(b.issue_date || b.created_at || 0).getTime();
+      const diff = timeB - timeA;
+      if (diff !== 0) {
+        return sortBy === 'oldest' ? -diff : diff;
+      }
+      const numA = parseInt(a.ref_number.replace(/\D/g, '') || String(a.id), 10);
+      const numB = parseInt(b.ref_number.replace(/\D/g, '') || String(b.id), 10);
+      return sortBy === 'oldest' ? numA - numB : numB - numA;
     });
     return sorted;
   }, [filteredReferences, sortBy]);
@@ -500,6 +592,38 @@ export default function ReferencesPage() {
     e.preventDefault();
     setSaving(true);
 
+    const selectJoined = `
+      *,
+      surveys (
+        id,
+        serial_no,
+        survey_no,
+        owner_name,
+        neighborhood,
+        branch,
+        land_type,
+        sketch_area,
+        boundary_w_val,
+        boundary_w_neighbor,
+        boundary_b_val,
+        boundary_b_neighbor,
+        boundary_k_val,
+        boundary_k_neighbor,
+        boundary_g_val,
+        boundary_g_neighbor
+      ),
+      receipts (
+        id,
+        reference_id,
+        receipt_no,
+        amount,
+        status,
+        payment_mode,
+        payment_date,
+        details
+      )
+    `;
+
     try {
       // Editing an existing reference: the ref number is locked (sequential, issued
       // once), so only the descriptive fields and the linked survey can change.
@@ -510,9 +634,21 @@ export default function ReferencesPage() {
           issue_date: issueDate ? new Date(issueDate).toISOString() : editingRef.issue_date,
           survey_id: isSurveyLinkVisible() && selectedSurveyId ? parseInt(selectedSurveyId) : null,
         };
-        const { error } = await supabase.from('references').update(updatePayload).eq('id', editingRef.id);
+        const { data: updatedData, error } = await supabase
+          .from('references')
+          .update(updatePayload)
+          .eq('id', editingRef.id)
+          .select(selectJoined)
+          .maybeSingle();
+
         if (error) throw error;
 
+        if (updatedData) {
+          setReferences((prev) => prev.map((r) => (r.id === updatedData.id ? (updatedData as Reference) : r)));
+          setFilteredReferences((prev) => prev.map((r) => (r.id === updatedData.id ? (updatedData as Reference) : r)));
+        }
+
+        notifyDataChanged();
         showAlert('Guul', `Sumadda (${editingRef.ref_number}) si guul leh ayaa loo cusboonaysiiyey!`, 'success');
         handleCloseAddForm();
         fetchReferences();
@@ -556,19 +692,36 @@ export default function ReferencesPage() {
         status: 'In Progress'
       };
 
-      let { error } = await supabase
+      let { data: insertedData, error } = await supabase
         .from('references')
-        .insert([payload]);
+        .insert([payload])
+        .select(selectJoined)
+        .maybeSingle();
 
       // If schema error occurs because verification_token column is missing on DB, retry without it
       if (error && (error.code === 'PGRST204' || error.message.includes('verification_token'))) {
         const { verification_token, ...fallbackPayload } = payload;
-        const res = await supabase.from('references').insert([fallbackPayload]);
+        const res = await supabase.from('references').insert([fallbackPayload]).select(selectJoined).maybeSingle();
+        insertedData = res.data;
         error = res.error;
       }
 
       if (error) throw error;
 
+      // Optimistic instant display in list
+      if (insertedData) {
+        const newRef = insertedData as Reference;
+        setReferences((prev) => [newRef, ...prev.filter((r) => r.id !== newRef.id)]);
+        setFilteredReferences((prev) => [newRef, ...prev.filter((r) => r.id !== newRef.id)]);
+      }
+
+      // Ensure active year filter matches new reference's year
+      const refYear = String(new Date(payload.issue_date).getFullYear());
+      setYearFilter(refYear);
+      setSearchQuery('');
+      setStatusFilter('all');
+
+      notifyDataChanged();
       showAlert('Guul', `Sumadda (${finalRefNumber}) si guul leh ayaa loo keydiyey!`, 'success');
       handleCloseAddForm();
       fetchReferences();
@@ -601,7 +754,9 @@ export default function ReferencesPage() {
       if (!response.ok) throw new Error(result.error || 'Tirtiridda wuu fashilmay.');
 
       setReferences((prev) => prev.filter((r) => r.id !== reference.id));
+      setFilteredReferences((prev) => prev.filter((r) => r.id !== reference.id));
       setSelectedRef(null);
+      notifyDataChanged();
       showAlert('Guul', 'Reference-ka waa la tirtiray.', 'success');
     } catch (err) {
       console.error('Error deleting reference:', err);
@@ -811,6 +966,22 @@ export default function ReferencesPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
+                <Calendar className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                <select
+                  value={yearFilter}
+                  onChange={(e) => setYearFilter(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer shrink-0"
+                >
+                  <option value="all">Sanadka: All</option>
+                  {availableYears.map((year) => (
+                    <option key={year} value={year}>
+                      Sanadka {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}

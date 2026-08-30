@@ -27,12 +27,30 @@ import { ALL_NEIGHBORHOODS, ALL_BRANCHES } from '@/lib/boundaryDetection';
 export default function RecordsPage() {
   const { newEntityIdsFor, dismissNewEntity } = useNotifications();
   const newSurveyIds = newEntityIdsFor('/records');
-  const [records, setRecords] = useState<Survey[]>([]);
+  const [records, setRecords] = useState<Survey[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const pendingRaw = window.sessionStorage.getItem(PENDING_SURVEY_KEY);
+        if (pendingRaw) {
+          const p = JSON.parse(pendingRaw) as Survey;
+          if (p && (p.id || p.owner_name)) return [p];
+        }
+      } catch {}
+    }
+    return [];
+  });
   const fetchRequestId = useRef(0);
   const profileNames = useProfileNames();
   const [usedSurveyIds, setUsedSurveyIds] = useState<Set<number>>(new Set());
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        if (window.sessionStorage.getItem(PENDING_SURVEY_KEY)) return false;
+      } catch {}
+    }
+    return true;
+  });
   
   // Search & Filter state
   const [search, setSearch] = useState('');
@@ -51,7 +69,7 @@ export default function RecordsPage() {
   const [selectedRecord, setSelectedRecord] = useState<Survey | null>(null);
   const [managedRecord, setManagedRecord] = useState<Survey | null>(null);
 
-  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'owner_az'>('newest');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'sn_desc' | 'sn_asc' | 'owner_az'>('newest');
   const [groupBy, setGroupBy] = useState<'none' | 'date' | 'status'>('none');
   const [groupAggregate, setGroupAggregate] = useState<'none' | 'count'>('count');
 
@@ -64,21 +82,39 @@ export default function RecordsPage() {
     Completed: 'bg-emerald-50 text-emerald-700',
   }[status]);
 
-  // Fetch all records from Supabase
+  // Fetch all records from Supabase and live sheet
   const fetchRecords = async () => {
     const requestId = ++fetchRequestId.current;
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('surveys')
-        .select('*')
-        .order('serial_no', { ascending: false });
+      const [dbRes, sheetRes] = await Promise.all([
+        supabase
+          .from('surveys')
+          .select('*')
+          .order('serial_no', { ascending: false }),
+        fetch('/api/surveys/sheet')
+          .then((res) => res.json())
+          .catch((err) => {
+            console.error('Error fetching sheet surveys:', err);
+            return { surveys: [] };
+          }),
+      ]);
 
-      if (error) throw error;
+      if (dbRes.error) throw dbRes.error;
       // Focus, reconnect, and data-change events can overlap. Only the newest request
       // may update the list, otherwise a slower stale response can hide a new survey.
       if (requestId !== fetchRequestId.current) return;
-      const remoteRecords = (data || []) as Survey[];
+
+      const dbRecords = (dbRes.data || []) as Survey[];
+      const sheetRecords = (sheetRes?.surveys || []) as Survey[];
+
+      // Merge: keep DB surveys and seamlessly add sheet surveys
+      const existingDbIds = new Set(dbRecords.map((r) => String(r.id)));
+      const remoteRecords = [
+        ...dbRecords,
+        ...sheetRecords.filter((s) => !existingDbIds.has(String(s.id))),
+      ];
+
       let pendingSurvey: Survey | null = null;
       try {
         const pendingRaw = window.sessionStorage.getItem(PENDING_SURVEY_KEY);
@@ -119,12 +155,19 @@ export default function RecordsPage() {
   const filteredRecords = useMemo(() => {
     let result = [...records];
 
-    // 1. Search Query (Magaca / Neighborhood)
+    // 1. Search Query (Magaca / Neighborhood / S/N / Vicinity / Branch / Creator)
     if (search.trim() !== '') {
       const query = search.toLowerCase();
       result = result.filter(
-        r => r.owner_name.toLowerCase().includes(query) || 
-             r.neighborhood.toLowerCase().includes(query)
+        r =>
+          r.owner_name.toLowerCase().includes(query) ||
+          r.neighborhood.toLowerCase().includes(query) ||
+          (r.branch && r.branch.toLowerCase().includes(query)) ||
+          (r.vicinity && r.vicinity.toLowerCase().includes(query)) ||
+          String(r.serial_no).includes(query) ||
+          (r.survey_no && r.survey_no.toLowerCase().includes(query)) ||
+          (r.created_by && r.created_by.toLowerCase().includes(query)) ||
+          (r.built_details && r.built_details.toLowerCase().includes(query))
       );
     }
 
@@ -149,16 +192,16 @@ export default function RecordsPage() {
 
     // 4. Boundary Dimension Filters
     if (searchW) {
-      result = result.filter(r => r.boundary_w_val?.includes(searchW));
+      result = result.filter(r => r.boundary_w_val?.includes(searchW) || r.boundary_w_neighbor?.toLowerCase().includes(searchW.toLowerCase()));
     }
     if (searchB) {
-      result = result.filter(r => r.boundary_b_val?.includes(searchB));
+      result = result.filter(r => r.boundary_b_val?.includes(searchB) || r.boundary_b_neighbor?.toLowerCase().includes(searchB.toLowerCase()));
     }
     if (searchK) {
-      result = result.filter(r => r.boundary_k_val?.includes(searchK));
+      result = result.filter(r => r.boundary_k_val?.includes(searchK) || r.boundary_k_neighbor?.toLowerCase().includes(searchK.toLowerCase()));
     }
     if (searchG) {
-      result = result.filter(r => r.boundary_g_val?.includes(searchG));
+      result = result.filter(r => r.boundary_g_val?.includes(searchG) || r.boundary_g_neighbor?.toLowerCase().includes(searchG.toLowerCase()));
     }
 
     return result;
@@ -168,8 +211,19 @@ export default function RecordsPage() {
     const sorted = [...filteredRecords];
     sorted.sort((a, b) => {
       if (sortBy === 'owner_az') return a.owner_name.localeCompare(b.owner_name);
-      const diff = new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-      return sortBy === 'oldest' ? -diff : diff;
+      if (sortBy === 'sn_desc') return (b.serial_no || 0) - (a.serial_no || 0);
+      if (sortBy === 'sn_asc') return (a.serial_no || 0) - (b.serial_no || 0);
+
+      const timeA = new Date(a.created_at || 0).getTime();
+      const timeB = new Date(b.created_at || 0).getTime();
+      const diff = timeB - timeA;
+
+      if (diff !== 0) {
+        return sortBy === 'oldest' ? -diff : diff;
+      }
+      const snA = a.serial_no || 0;
+      const snB = b.serial_no || 0;
+      return sortBy === 'oldest' ? snA - snB : snB - snA;
     });
     return sorted;
   }, [filteredRecords, sortBy]);
@@ -257,6 +311,8 @@ export default function RecordsPage() {
             >
               <option value="newest">Sort: Newest first</option>
               <option value="oldest">Sort: Oldest first</option>
+              <option value="sn_desc">Sort: S/N (High → Low)</option>
+              <option value="sn_asc">Sort: S/N (Low → High)</option>
               <option value="owner_az">Sort: Owner (A–Z)</option>
             </select>
 
@@ -395,7 +451,7 @@ export default function RecordsPage() {
                           className={`${newSurveyIds.has(record.id) ? 'bg-blue-50/80 ring-1 ring-inset ring-blue-200' : ''} hover:bg-teal-500/5 transition-all cursor-pointer group`}
                         >
                           <td className="px-6 py-4 font-black text-slate-400 group-hover:text-teal-600 transition-colors">
-                            {record.survey_no || record.serial_no}
+                            {record.serial_no}
                           </td>
                           <td className="px-6 py-4 font-extrabold text-slate-800 text-sm">
                             <span className="flex items-center gap-2">
@@ -478,7 +534,7 @@ export default function RecordsPage() {
                       }}
                       className={`grid grid-cols-[52px_1fr_auto_40px] items-center gap-3 px-1 py-3.5 cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-50 ${newSurveyIds.has(record.id) ? 'bg-blue-50/80 ring-1 ring-inset ring-blue-200' : ''}`}
                     >
-                      <span className="truncate text-xs font-black text-slate-500">{numericIdentifier(record.survey_no || record.serial_no)}</span>
+                      <span className="truncate text-xs font-black text-slate-500">{record.serial_no}</span>
                       <div className="min-w-0">
                         <h4 className="flex items-center gap-1.5 truncate text-xs font-extrabold text-slate-800">{record.owner_name}{newSurveyIds.has(record.id) && <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[7px] font-black uppercase text-white">New</span>}</h4>
                         <p className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-slate-500">
