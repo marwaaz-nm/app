@@ -10,7 +10,11 @@ import { Clock3, FileText, History, Loader2, RotateCcw, Save, Trash2, Upload, X 
 import SurveyFormFields from '@/components/SurveyFormFields';
 
 type Tab = 'edit' | 'workflow' | 'documents' | 'history';
-type Props = { record: Survey; onClose: () => void; onChanged: () => void };
+export type SurveyChange =
+  | { type: 'updated'; survey: Survey }
+  | { type: 'deleted'; surveyId: number };
+
+type Props = { record: Survey; onClose: () => void; onChanged: (change: SurveyChange) => void | Promise<void> };
 
 const fields: Array<keyof Survey> = [
   'owner_name', 'land_type', 'neighborhood', 'branch', 'vicinity',
@@ -106,7 +110,7 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
       setSurvey(result.survey);
       setDraft(result.survey);
       setMessage({ type: 'success', text: 'Isbeddelka si guul leh ayaa loo kaydiyey.' });
-      onChanged();
+      await onChanged({ type: 'updated', survey: result.survey as Survey });
       await load();
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Isbeddelku wuu fashilmay.' });
@@ -128,7 +132,7 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
         setSurvey(data as Survey);
         setDraft(data as Survey);
         setMessage({ type: 'success', text: 'Isbeddelka si guul leh ayaa loo kaydiyey.' });
-        onChanged();
+        await onChanged({ type: 'updated', survey: data as Survey });
       }
       setBusy(false);
       return;
@@ -172,7 +176,7 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
     setMessage(null);
     try {
       await request(`/api/surveys/${record.id}`, { method: 'DELETE' });
-      onChanged();
+      await onChanged({ type: 'deleted', surveyId: record.id });
       onClose();
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Survey-ga lama tirtirin.' });

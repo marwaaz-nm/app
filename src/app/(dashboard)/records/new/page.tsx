@@ -7,7 +7,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { ArrowLeft, Check, AlertCircle, Loader2, X } from 'lucide-react';
 import Link from 'next/link';
 import SurveyFormFields, { type SurveyDraft } from '@/components/SurveyFormFields';
-import { notifyDataChanged, PENDING_SURVEY_KEY } from '@/lib/useDataAutoRefresh';
+import { PENDING_SURVEY_KEY } from '@/lib/useDataAutoRefresh';
 
 export default function NewRecordPage() {
   const router = useRouter();
@@ -70,7 +70,6 @@ export default function NewRecordPage() {
         window.sessionStorage.setItem(PENDING_SURVEY_KEY, JSON.stringify(result.survey));
       }
 
-      notifyDataChanged();
       router.replace(`/records?updated=${Date.now()}`);
     } catch (err: unknown) {
       console.error('Error saving survey record:', err);

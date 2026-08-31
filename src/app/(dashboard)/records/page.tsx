@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Survey } from '@/types';
 import DetailsModal from '@/components/DetailsModal';
-import SurveyManagementModal from '@/components/SurveyManagementModal';
+import SurveyManagementModal, { type SurveyChange } from '@/components/SurveyManagementModal';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
@@ -40,6 +40,7 @@ export default function RecordsPage() {
     return [];
   });
   const fetchRequestId = useRef(0);
+  const pendingChangeRef = useRef<(SurveyChange & { expiresAt: number }) | null>(null);
   const profileNames = useProfileNames();
   const [usedSurveyIds, setUsedSurveyIds] = useState<Set<number>>(new Set());
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
@@ -57,6 +58,7 @@ export default function RecordsPage() {
   const [showAdvanceFilters, setShowAdvanceFilters] = useState(false);
   const [filterXaafada, setFilterXaafada] = useState('');
   const [filterLaanta, setFilterLaanta] = useState('');
+  const [creatorFilter, setCreatorFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   
@@ -125,9 +127,27 @@ export default function RecordsPage() {
       const remoteHasPending = pendingSurvey
         ? remoteRecords.some((record) => String(record.id) === String(pendingSurvey?.id))
         : false;
-      const nextRecords = pendingSurvey && !remoteHasPending
+      let nextRecords = pendingSurvey && !remoteHasPending
         ? [pendingSurvey, ...remoteRecords]
         : remoteRecords;
+
+      // A read made immediately after a successful write can briefly return the old
+      // row. Keep the server-confirmed mutation visible until a refresh observes it.
+      const pendingChange = pendingChangeRef.current;
+      if (pendingChange) {
+        if (pendingChange.type === 'deleted') {
+          const deleteConfirmed = !remoteRecords.some((record) => record.id === pendingChange.surveyId);
+          nextRecords = nextRecords.filter((record) => record.id !== pendingChange.surveyId);
+          if (deleteConfirmed || Date.now() >= pendingChange.expiresAt) pendingChangeRef.current = null;
+        } else {
+          const remoteSurvey = remoteRecords.find((record) => record.id === pendingChange.survey.id);
+          const updateConfirmed = remoteSurvey?.updated_at === pendingChange.survey.updated_at;
+          nextRecords = nextRecords.some((record) => record.id === pendingChange.survey.id)
+            ? nextRecords.map((record) => record.id === pendingChange.survey.id ? pendingChange.survey : record)
+            : [pendingChange.survey, ...nextRecords];
+          if (updateConfirmed || Date.now() >= pendingChange.expiresAt) pendingChangeRef.current = null;
+        }
+      }
       setRecords(nextRecords);
       if (remoteHasPending) window.sessionStorage.removeItem(PENDING_SURVEY_KEY);
     } catch (err) {
@@ -135,6 +155,27 @@ export default function RecordsPage() {
     } finally {
       if (requestId === fetchRequestId.current) setLoading(false);
     }
+  };
+
+  const handleRecordChanged = async (change: SurveyChange) => {
+    // Reflect the confirmed mutation immediately; the background fetch below then
+    // reconciles sheet data and any changes made by other users.
+    pendingChangeRef.current = { ...change, expiresAt: Date.now() + 10000 };
+    setRecords((current) => change.type === 'deleted'
+      ? current.filter((record) => record.id !== change.surveyId)
+      : current.some((record) => record.id === change.survey.id)
+        ? current.map((record) => record.id === change.survey.id ? change.survey : record)
+        : [change.survey, ...current]);
+
+    if (change.type === 'updated') {
+      setManagedRecord(change.survey);
+      setSelectedRecord((current) => current?.id === change.survey.id ? change.survey : current);
+    } else {
+      setSelectedRecord((current) => current?.id === change.surveyId ? null : current);
+    }
+
+    await fetchRecords();
+    window.setTimeout(() => void fetchRecords(), 1200);
   };
 
   // The refresh hook performs the initial fetch as well as subsequent reconciliations.
@@ -178,6 +219,9 @@ export default function RecordsPage() {
     if (filterLaanta) {
       result = result.filter(r => r.branch === filterLaanta);
     }
+    if (creatorFilter) {
+      result = result.filter(r => r.created_by === creatorFilter);
+    }
 
     // 3. Date Filters
     if (startDate) {
@@ -205,7 +249,9 @@ export default function RecordsPage() {
     }
 
     return result;
-  }, [search, filterXaafada, filterLaanta, startDate, endDate, searchW, searchB, searchK, searchG, records]);
+  }, [search, filterXaafada, filterLaanta, creatorFilter, startDate, endDate, searchW, searchB, searchK, searchG, records]);
+
+  const recordCreators = useMemo(() => Array.from(new Set(records.map((record) => record.created_by).filter((value): value is string => Boolean(value)))).sort((a, b) => (resolveCreatorName(a, profileNames) || a).localeCompare(resolveCreatorName(b, profileNames) || b)), [records, profileNames]);
 
   const sortedRecords = useMemo(() => {
     const sorted = [...filteredRecords];
@@ -289,6 +335,17 @@ export default function RecordsPage() {
               {ALL_BRANCHES.map((b) => (
                 <option key={b} value={b}>{b}</option>
               ))}
+            </select>
+
+            {/* Toggle Advanced Filters */}
+            <select
+              value={creatorFilter}
+              onChange={(e) => setCreatorFilter(e.target.value)}
+              aria-label="Filter by Record Creator"
+              className="max-w-52 bg-slate-50/60 border border-slate-200/80 rounded-xl md:rounded-2xl px-3 md:px-4 py-2.5 md:py-3.5 text-xs text-slate-700 focus:outline-none focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 focus:bg-white transition-all cursor-pointer"
+            >
+              <option value="">Record Creator (All)...</option>
+              {recordCreators.map((creator) => <option key={creator} value={creator}>{resolveCreatorName(creator, profileNames) || creator}</option>)}
             </select>
 
             {/* Toggle Advanced Filters */}
@@ -585,7 +642,7 @@ export default function RecordsPage() {
         <SurveyManagementModal
           record={managedRecord}
           onClose={() => setManagedRecord(null)}
-          onChanged={fetchRecords}
+          onChanged={handleRecordChanged}
         />
       )}
 

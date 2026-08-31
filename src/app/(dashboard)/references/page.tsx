@@ -167,6 +167,9 @@ export default function ReferencesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [yearFilter, setYearFilter] = useState<string>('2026');
   const [statusFilter, setStatusFilter] = useState<'all' | 'Paid' | 'Unpaid'>('all');
+  const [subjectFilter, setSubjectFilter] = useState('all');
+  const [workflowFilter, setWorkflowFilter] = useState<'all' | Reference['status']>('all');
+  const [creatorFilter, setCreatorFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'ref_az'>('newest');
   const [groupBy, setGroupBy] = useState<'none' | 'date' | 'status'>('none');
   const [groupAggregate, setGroupAggregate] = useState<'none' | 'count'>('count');
@@ -441,6 +444,10 @@ export default function ReferencesPage() {
     return sortedYears.length > 0 ? sortedYears : ['2026', '2025'];
   }, [references]);
 
+  const availableSubjects = useMemo(() => Array.from(new Set(references.map((reference) => reference.subject).filter(Boolean))).sort((a, b) => a.localeCompare(b)), [references]);
+  const availableWorkflowStatuses = useMemo(() => Array.from(new Set(references.map((reference) => reference.status).filter(Boolean))), [references]);
+  const availableCreators = useMemo(() => Array.from(new Set(references.map((reference) => reference.created_by).filter((value): value is string => Boolean(value)))).sort((a, b) => (resolveCreatorName(a, profileNames) || a).localeCompare(resolveCreatorName(b, profileNames) || b)), [references, profileNames]);
+
   // Default to latest year when references load
   useEffect(() => {
     if (availableYears.length > 0 && (!yearFilter || (!availableYears.includes(yearFilter) && yearFilter !== 'all'))) {
@@ -477,8 +484,12 @@ export default function ReferencesPage() {
       });
     }
 
-    setFilteredRecords(result);
-  }, [searchQuery, yearFilter, statusFilter, references]);
+    if (subjectFilter !== 'all') result = result.filter((reference) => reference.subject === subjectFilter);
+    if (workflowFilter !== 'all') result = result.filter((reference) => reference.status === workflowFilter);
+    if (creatorFilter !== 'all') result = result.filter((reference) => reference.created_by === creatorFilter);
+
+    setFilteredReferences(result);
+  }, [searchQuery, yearFilter, statusFilter, subjectFilter, workflowFilter, creatorFilter, references]);
 
   const sortedReferences = useMemo(() => {
     const sorted = [...filteredReferences];
@@ -582,10 +593,6 @@ export default function ReferencesPage() {
     const isExcluded = excludedWords.some(word => details.toLowerCase().includes(word));
 
     return rentalCondition && typeCondition && !isExcluded && subject !== '';
-  };
-
-  const setFilteredRecords = (data: Reference[]) => {
-    setFilteredReferences(data);
   };
 
   const handleSaveReference = async (e: React.FormEvent) => {
@@ -993,6 +1000,36 @@ export default function ReferencesPage() {
               </select>
 
               <select
+                value={subjectFilter}
+                onChange={(e) => setSubjectFilter(e.target.value)}
+                aria-label="Filter by Ujeedo"
+                className="max-w-52 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0 font-medium"
+              >
+                <option value="all">Ujeedo: All</option>
+                {availableSubjects.map((availableSubject) => <option key={availableSubject} value={availableSubject}>{availableSubject}</option>)}
+              </select>
+
+              <select
+                value={workflowFilter}
+                onChange={(e) => setWorkflowFilter(e.target.value as typeof workflowFilter)}
+                aria-label="Filter by Workflow Status"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0 font-medium"
+              >
+                <option value="all">Workflow: All</option>
+                {availableWorkflowStatuses.map((workflowStatus) => <option key={workflowStatus} value={workflowStatus}>Workflow: {workflowStatus}</option>)}
+              </select>
+
+              <select
+                value={creatorFilter}
+                onChange={(e) => setCreatorFilter(e.target.value)}
+                aria-label="Filter by Record Creator"
+                className="max-w-52 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0 font-medium"
+              >
+                <option value="all">Record Creator: All</option>
+                {availableCreators.map((creator) => <option key={creator} value={creator}>{resolveCreatorName(creator, profileNames) || creator}</option>)}
+              </select>
+
+              <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
                 className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
@@ -1046,6 +1083,7 @@ export default function ReferencesPage() {
                       <th className="px-6 py-4">Ujeedo</th>
                       <th className="px-6 py-4">Faahfaahin</th>
                       <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Workflow Status</th>
                       <th className="px-6 py-4">Record Creator</th>
                     </tr>
                   </thead>
@@ -1054,7 +1092,7 @@ export default function ReferencesPage() {
                       <React.Fragment key={group.key}>
                         {groupBy !== 'none' && (
                           <tr>
-                            <td colSpan={5} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                            <td colSpan={6} className="bg-slate-50/70 px-6 py-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                               {group.label}
                             </td>
                           </tr>
@@ -1087,6 +1125,11 @@ export default function ReferencesPage() {
                                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 border rounded-full text-xs uppercase tracking-wide ${pInfo.badgeClass}`}>
                                   {pInfo.isPaid ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : null}
                                   {pInfo.badgeText}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={`inline-flex px-3 py-1 border rounded-full text-[10px] font-extrabold uppercase ${getStatusBadgeClass(r.status)}`}>
+                                  {r.status}
                                 </span>
                               </td>
                               <td className="px-6 py-4 text-slate-600 font-bold">
@@ -1146,10 +1189,15 @@ export default function ReferencesPage() {
                                 </p>
                               )}
                             </div>
-                            <span className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full border text-[10px] uppercase ${pInfo.badgeClass}`}>
-                              {pInfo.isPaid ? <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600" /> : null}
-                              {pInfo.badgeText}
-                            </span>
+                            <div className="flex shrink-0 flex-col items-end gap-1">
+                              <span className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full border text-[10px] uppercase ${pInfo.badgeClass}`}>
+                                {pInfo.isPaid ? <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600" /> : null}
+                                {pInfo.badgeText}
+                              </span>
+                              <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase ${getStatusBadgeClass(r.status)}`}>
+                                {r.status}
+                              </span>
+                            </div>
                             <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
                           </div>
                         );
@@ -1225,6 +1273,13 @@ export default function ReferencesPage() {
                       <Calendar className="h-4 w-4 text-slate-400" />
                       {selectedRef.issue_date ? new Date(selectedRef.issue_date).toLocaleDateString('so-SO') : '-'}
                     </div>
+                  </div>
+                </div>
+
+                <div className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                  <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-1">RECORD CREATOR</span>
+                  <div className="text-sm font-extrabold text-slate-800">
+                    {resolveCreatorName(selectedRef.created_by, profileNames) || '-'}
                   </div>
                 </div>
 

@@ -28,6 +28,7 @@ import { useModal } from '@/context/ModalContext';
 import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/lib/supabase';
 import { getDirectionFromCenter, parseDirectionPositions, type BoundaryInfo, type CompassDirection } from '@/lib/geoDirection';
+import { resolveCreatorName, useProfileNames } from '@/lib/useProfileNames';
 
 interface DetailsModalProps {
   record: Survey | null;
@@ -35,6 +36,7 @@ interface DetailsModalProps {
 }
 
 export default function DetailsModal({ record, onClose }: DetailsModalProps) {
+  const profileNames = useProfileNames();
   const { showAlert } = useModal();
   const { settings } = useSettings();
   const [mounted, setMounted] = useState(false);
@@ -1379,6 +1381,16 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
                 <div>
                   <span className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-0.5">MILKILAHA DHULKA</span>
                   <div className="text-sm font-bold text-slate-800">{record.owner_name}</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 p-4 border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
+                  <User className="h-5 w-5" />
+                </div>
+                <div>
+                  <span className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-0.5">RECORD CREATOR</span>
+                  <div className="text-sm font-bold text-slate-800">{resolveCreatorName(record.created_by, profileNames) || '-'}</div>
                 </div>
               </div>
 

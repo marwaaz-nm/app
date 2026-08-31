@@ -42,6 +42,7 @@ export default function TransfersPage() {
 
   // Search/Filter states
   const [searchQuery, setSearchQuery] = useState('');
+  const [creatorFilter, setCreatorFilter] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'price_high'>('newest');
   const [groupBy, setGroupBy] = useState<'none' | 'date'>('none');
   const [groupAggregate, setGroupAggregate] = useState<'none' | 'count' | 'sum'>('count');
@@ -126,19 +127,16 @@ export default function TransfersPage() {
 
   // Filter application
   useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredTransfers(transfers);
-      return;
+    let result = [...transfers];
+    if (searchQuery.trim() !== '') {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(t => t.seller_name.toLowerCase().includes(query) || t.buyer_name.toLowerCase().includes(query) || t.surveys?.owner_name.toLowerCase().includes(query));
     }
-
-    const query = searchQuery.toLowerCase();
-    const result = transfers.filter(
-      t => t.seller_name.toLowerCase().includes(query) || 
-           t.buyer_name.toLowerCase().includes(query) ||
-           t.surveys?.owner_name.toLowerCase().includes(query)
-    );
+    if (creatorFilter) result = result.filter((transfer) => transfer.created_by === creatorFilter);
     setFilteredTransfers(result);
-  }, [searchQuery, transfers]);
+  }, [searchQuery, creatorFilter, transfers]);
+
+  const transferCreators = useMemo(() => Array.from(new Set(transfers.map((transfer) => transfer.created_by).filter((value): value is string => Boolean(value)))).sort((a, b) => (resolveCreatorName(a, profileNames) || a).localeCompare(resolveCreatorName(b, profileNames) || b)), [transfers, profileNames]);
 
   const sortedTransfers = useMemo(() => {
     const sorted = [...filteredTransfers];
@@ -537,6 +535,15 @@ export default function TransfersPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <select
+                value={creatorFilter}
+                onChange={(e) => setCreatorFilter(e.target.value)}
+                aria-label="Filter by Record Creator"
+                className="max-w-52 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
+              >
+                <option value="">Record Creator: All</option>
+                {transferCreators.map((creator) => <option key={creator} value={creator}>{resolveCreatorName(creator, profileNames) || creator}</option>)}
+              </select>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as typeof sortBy)}

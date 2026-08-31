@@ -202,23 +202,63 @@ export async function GET(req: NextRequest) {
       }, null, 2), `marwaazpn-app-backup-${new Date().toISOString().slice(0, 10)}.json`, 'application/json; charset=utf-8');
     }
 
-    // 4. Default Summary View: Fetch only lightweight projection columns and 8 recent surveys
-    const [recentSurveyResult, surveyStatusesResult, referenceResult, transferResult, receiptResult, expenseResult, schemaResult, sheetSurveys, sheetReferences] = await Promise.all([
-      viewer.admin.from('surveys').select('id, serial_no, survey_no, owner_name, neighborhood, status, sketch_area, created_at').order('created_at', { ascending: false }).limit(8),
-      viewer.admin.from('surveys').select('status').limit(10000),
-      viewer.admin.from('references').select('id, status').limit(10000),
-      viewer.admin.from('transfers').select('price').limit(10000),
-      viewer.admin.from('receipts').select('amount, status').limit(10000),
-      viewer.admin.from('expenses').select('total').limit(10000),
+    // 4. Default Summary View. Every query uses the same optional reporting period so
+    // dashboard totals, breakdowns, recent rows and the generated PDF always agree.
+    const rawStart = req.nextUrl.searchParams.get('start') || '';
+    const rawEnd = req.nextUrl.searchParams.get('end') || '';
+    const start = /^\d{4}-\d{2}-\d{2}$/.test(rawStart) ? rawStart : '';
+    const end = /^\d{4}-\d{2}-\d{2}$/.test(rawEnd) ? rawEnd : '';
+    const startTimestamp = start ? `${start}T00:00:00.000Z` : '';
+    const endTimestamp = end ? `${end}T23:59:59.999Z` : '';
+
+    let recentSurveyQuery = viewer.admin.from('surveys').select('id, serial_no, survey_no, owner_name, neighborhood, branch, land_type, status, sketch_area, created_by, created_at').order('created_at', { ascending: false }).limit(10000);
+    let surveyStatusesQuery = viewer.admin.from('surveys').select('status, created_at').limit(10000);
+    let referenceQuery = viewer.admin.from('references').select('id, ref_number, subject, status, issue_date, created_by, created_at, receipts(status)').order('issue_date', { ascending: false }).limit(10000);
+    let transferQuery = viewer.admin.from('transfers').select('id, serial_no, seller_name, buyer_name, price, transfer_date').order('transfer_date', { ascending: false }).limit(10000);
+    let receiptQuery = viewer.admin.from('receipts').select('id, receipt_no, amount, status, payment_mode, payment_date, created_by, references(subject)').order('payment_date', { ascending: false }).limit(10000);
+    let expenseQuery = viewer.admin.from('expenses').select('id, expense_no, description, total, expense_date, created_by').order('expense_date', { ascending: false }).limit(10000);
+
+    if (startTimestamp) {
+      recentSurveyQuery = recentSurveyQuery.gte('created_at', startTimestamp);
+      surveyStatusesQuery = surveyStatusesQuery.gte('created_at', startTimestamp);
+      referenceQuery = referenceQuery.gte('issue_date', start);
+      transferQuery = transferQuery.gte('transfer_date', start);
+      receiptQuery = receiptQuery.gte('payment_date', start);
+      expenseQuery = expenseQuery.gte('expense_date', start);
+    }
+    if (endTimestamp) {
+      recentSurveyQuery = recentSurveyQuery.lte('created_at', endTimestamp);
+      surveyStatusesQuery = surveyStatusesQuery.lte('created_at', endTimestamp);
+      referenceQuery = referenceQuery.lte('issue_date', end);
+      transferQuery = transferQuery.lte('transfer_date', end);
+      receiptQuery = receiptQuery.lte('payment_date', end);
+      expenseQuery = expenseQuery.lte('expense_date', end);
+    }
+
+    const [recentSurveyResult, surveyStatusesResult, referenceResult, transferResult, receiptResult, expenseResult, profileResult, schemaResult, allSheetSurveys, allSheetReferences] = await Promise.all([
+      recentSurveyQuery,
+      surveyStatusesQuery,
+      referenceQuery,
+      transferQuery,
+      receiptQuery,
+      expenseQuery,
+      viewer.admin.from('profiles').select('id, fullname').limit(10000),
       viewer.admin.from('surveys').select('status').limit(1),
       getGoogleSheetSurveys().catch(() => []),
       getGoogleSheetReferences().catch(() => []),
     ]);
 
     const schemaReady = schemaResult.error?.code !== '42703';
-    const requestError = recentSurveyResult.error || surveyStatusesResult.error || referenceResult.error || transferResult.error || receiptResult.error || expenseResult.error || (schemaResult.error?.code === '42703' ? null : schemaResult.error);
+    const requestError = recentSurveyResult.error || surveyStatusesResult.error || referenceResult.error || transferResult.error || receiptResult.error || expenseResult.error || profileResult.error || (schemaResult.error?.code === '42703' ? null : schemaResult.error);
     if (requestError) throw requestError;
 
+    const withinPeriod = (value?: string | null) => {
+      if (!value) return !start && !end;
+      const day = value.slice(0, 10);
+      return (!start || day >= start) && (!end || day <= end);
+    };
+    const sheetSurveys = allSheetSurveys.filter((item) => withinPeriod(item.created_at));
+    const sheetReferences = allSheetReferences.filter((item) => withinPeriod(item.issue_date || item.created_at));
     const surveyStatuses = surveyStatusesResult.data || [];
     const references = referenceResult.data || [];
     const transfers = transferResult.data || [];
@@ -238,20 +278,54 @@ export async function GET(req: NextRequest) {
     statusCounts['Approved'] = (statusCounts['Approved'] || 0) + sheetSurveys.length;
 
     const sum = (rows: Array<Record<string, unknown>>, field: string) => rows.reduce((total, row) => total + (Number(row[field]) || 0), 0);
+    const cleanLabel = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim().replace(/\s+/g, ' ') : 'Unknown';
+    const profileNames = new Map((profileResult.data || []).map((profile) => [profile.id, cleanLabel(profile.fullname || profile.id)]));
+    const creatorName = (value: unknown) => typeof value === 'string' && value ? cleanLabel(profileNames.get(value) || value) : 'Unknown';
+    const breakdown = (values: unknown[]) => {
+      const counts = new Map<string, { label: string; count: number }>();
+      for (const value of values) {
+        const label = cleanLabel(value);
+        const key = label.toLocaleLowerCase();
+        const current = counts.get(key);
+        counts.set(key, { label: current?.label || label, count: (current?.count || 0) + 1 });
+      }
+      return [...counts.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)).slice(0, 12);
+    };
 
-    const mergedRecentSurveys = [
-      ...(recentSurveyResult.data || []),
-      ...sheetSurveys.slice(0, 8).map((s) => ({
-        id: s.id,
-        serial_no: s.serial_no,
-        survey_no: s.survey_no,
-        owner_name: s.owner_name,
-        neighborhood: s.neighborhood,
-        status: s.status || 'Approved',
-        sketch_area: s.sketch_area,
-        created_at: s.created_at,
-      })),
-    ].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()).slice(0, 8);
+    const surveyRows = [
+      ...(recentSurveyResult.data || []).map((survey) => ({ ...survey, creator: creatorName(survey.created_by) })),
+      ...sheetSurveys.map((survey) => ({ ...survey, status: survey.status || 'Approved', creator: creatorName(survey.created_by) })),
+    ];
+    const referenceRows = [...references, ...sheetReferences].map((reference) => {
+      const paymentStates = 'receipts' in reference && Array.isArray(reference.receipts) ? reference.receipts.map((receipt) => receipt.status) : [];
+      const payment_status = paymentStates.includes('Credit') ? 'Credit' : paymentStates.includes('Paid') ? 'Paid' : 'Unpaid';
+      return { ...reference, payment_status, creator: creatorName(reference.created_by) };
+    });
+    const paymentRows = receipts.map((receipt) => ({
+      ...receipt,
+      subject: receipt.references?.[0]?.subject,
+      creator: creatorName(receipt.created_by),
+    }));
+    const expenseRows = expenses.map((expense) => ({ ...expense, creator: creatorName(expense.created_by) }));
+
+    const mergedRecentSurveys = surveyRows.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()).slice(0, 100);
+    const branchGroupsMap = new Map<string, { neighborhood: string; count: number; branchCounts: Map<string, { label: string; count: number }> }>();
+    for (const row of surveyRows) {
+      const neighborhood = cleanLabel(row.neighborhood);
+      const neighborhoodKey = neighborhood.toLocaleLowerCase();
+      const group = branchGroupsMap.get(neighborhoodKey) || { neighborhood, count: 0, branchCounts: new Map() };
+      group.count += 1;
+      const branch = cleanLabel(row.branch);
+      const branchKey = branch.toLocaleLowerCase();
+      const currentBranch = group.branchCounts.get(branchKey);
+      group.branchCounts.set(branchKey, { label: currentBranch?.label || branch, count: (currentBranch?.count || 0) + 1 });
+      branchGroupsMap.set(neighborhoodKey, group);
+    }
+    const branchGroups = [...branchGroupsMap.values()].map((group) => ({
+      neighborhood: group.neighborhood,
+      count: group.count,
+      branches: [...group.branchCounts.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
+    })).sort((a, b) => b.count - a.count || a.neighborhood.localeCompare(b.neighborhood));
 
     return NextResponse.json({
       schemaReady,
@@ -266,7 +340,38 @@ export async function GET(req: NextRequest) {
         expenses: sum(expenses, 'total'),
         statusCounts,
       },
+      period: { start: start || null, end: end || null },
       recentSurveys: mergedRecentSurveys,
+      recentReferences: referenceRows
+        .sort((a, b) => new Date(b.issue_date || b.created_at || 0).getTime() - new Date(a.issue_date || a.created_at || 0).getTime())
+        .slice(0, 100),
+      recentTransfers: transfers.slice(0, 100),
+      recentPayments: paymentRows.slice(0, 100),
+      recentExpenses: expenseRows.slice(0, 100),
+      breakdowns: {
+        surveys: {
+          neighborhoods: breakdown(surveyRows.map((row) => row.neighborhood)),
+          branches: breakdown(surveyRows.map((row) => row.branch)),
+          branchGroups,
+          creators: breakdown(surveyRows.map((row) => row.creator)),
+          landTypes: breakdown(surveyRows.map((row) => row.land_type)),
+        },
+        references: {
+          subjects: breakdown(referenceRows.map((row) => row.subject)),
+          paymentStatuses: breakdown(referenceRows.map((row) => row.payment_status)),
+          workflowStatuses: breakdown(referenceRows.map((row) => row.status)),
+          creators: breakdown(referenceRows.map((row) => row.creator)),
+        },
+        payments: {
+          subjects: breakdown(paymentRows.map((row) => row.subject)),
+          statuses: breakdown(paymentRows.map((row) => row.status)),
+          creators: breakdown(paymentRows.map((row) => row.creator)),
+        },
+        expenses: {
+          descriptions: breakdown(expenseRows.map((row) => row.description)),
+          creators: breakdown(expenseRows.map((row) => row.creator)),
+        },
+      },
     });
   } catch (error) {
     const resolved = apiError(error);

@@ -11,6 +11,7 @@ import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
 import { useDataAutoRefresh } from '@/lib/useDataAutoRefresh';
+import { resolveCreatorName, useProfileNames } from '@/lib/useProfileNames';
 import {
   TrendingUp,
   TrendingDown,
@@ -47,7 +48,8 @@ const serializeReceiptDetails = (payerName: string, details: string, refNumbers 
   `${RECEIPT_DETAILS_PREFIX}${JSON.stringify({ payerName: payerName.trim(), details: details.trim(), refNumbers: refNumbers.trim() })}`;
 
 export default function FinancialsPage() {
-  const { profile } = useAuth();
+  const profileNames = useProfileNames();
+  const { profile, user } = useAuth();
   const { showAlert, showConfirm } = useModal();
   const { settings, refetch: refetchSettings } = useSettings();
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
@@ -75,11 +77,13 @@ export default function FinancialsPage() {
   // Search / sort / group controls
   const [receiptSearchQuery, setReceiptSearchQuery] = useState('');
   const [receiptStatusFilter, setReceiptStatusFilter] = useState<'' | 'Paid' | 'Credit' | 'Unpaid'>('');
+  const [receiptCreatorFilter, setReceiptCreatorFilter] = useState('');
   const [receiptSortBy, setReceiptSortBy] = useState<'newest' | 'oldest'>('newest');
   const [receiptGroupBy, setReceiptGroupBy] = useState<'none' | 'date'>('none');
   const [receiptGroupAggregate, setReceiptGroupAggregate] = useState<'none' | 'count' | 'sum'>('count');
 
   const [expenseSearchQuery, setExpenseSearchQuery] = useState('');
+  const [expenseCreatorFilter, setExpenseCreatorFilter] = useState('');
   const [expenseSortBy, setExpenseSortBy] = useState<'newest' | 'oldest' | 'amount_high'>('newest');
   const [expenseGroupBy, setExpenseGroupBy] = useState<'none' | 'date'>('none');
   const [expenseGroupAggregate, setExpenseGroupAggregate] = useState<'none' | 'count' | 'sum'>('count');
@@ -146,6 +150,7 @@ export default function FinancialsPage() {
           id,
           ref_number,
           subject,
+          created_by,
           issue_date,
           surveys (
             serial_no,
@@ -163,7 +168,8 @@ export default function FinancialsPage() {
             status,
             payment_mode,
             payment_date,
-            details
+            details,
+            created_by
           )
         `)
         .order('created_at', { ascending: false });
@@ -227,8 +233,14 @@ export default function FinancialsPage() {
       });
     }
 
+    if (receiptCreatorFilter) {
+      result = result.filter((reference) => reference.created_by === receiptCreatorFilter || (reference.receipts || []).some((receipt: { created_by?: string }) => receipt.created_by === receiptCreatorFilter));
+    }
+
     return result;
-  }, [referencesWithReceipts, receiptSearchQuery, receiptStatusFilter]);
+  }, [referencesWithReceipts, receiptSearchQuery, receiptStatusFilter, receiptCreatorFilter]);
+
+  const paymentCreators = useMemo(() => Array.from(new Set(referencesWithReceipts.flatMap((reference) => [reference.created_by, ...(reference.receipts || []).map((receipt: { created_by?: string }) => receipt.created_by)].filter((value): value is string => Boolean(value))))).sort((a, b) => (resolveCreatorName(a, profileNames) || a).localeCompare(resolveCreatorName(b, profileNames) || b)), [referencesWithReceipts, profileNames]);
 
   const sortedReferencesWithReceipts = useMemo(() => {
     const sorted = [...filteredReferencesWithReceipts];
@@ -258,10 +270,16 @@ export default function FinancialsPage() {
   }, [sortedReferencesWithReceipts, receiptGroupBy, receiptGroupAggregate]);
 
   const filteredExpenses = useMemo(() => {
-    if (expenseSearchQuery.trim() === '') return expenses;
-    const q = expenseSearchQuery.toLowerCase();
-    return expenses.filter((e) => e.description.toLowerCase().includes(q));
-  }, [expenses, expenseSearchQuery]);
+    let result = [...expenses];
+    if (expenseSearchQuery.trim() !== '') {
+      const q = expenseSearchQuery.toLowerCase();
+      result = result.filter((expense) => expense.description.toLowerCase().includes(q));
+    }
+    if (expenseCreatorFilter) result = result.filter((expense) => expense.created_by === expenseCreatorFilter);
+    return result;
+  }, [expenses, expenseSearchQuery, expenseCreatorFilter]);
+
+  const expenseCreators = useMemo(() => Array.from(new Set(expenses.map((expense) => expense.created_by).filter((value): value is string => Boolean(value)))).sort((a, b) => (resolveCreatorName(a, profileNames) || a).localeCompare(resolveCreatorName(b, profileNames) || b)), [expenses, profileNames]);
 
   const sortedExpenses = useMemo(() => {
     const sorted = [...filteredExpenses];
@@ -390,6 +408,7 @@ export default function FinancialsPage() {
         status: payStatus,
         payment_mode: payMode,
         payment_date: payDate,
+        created_by: user?.id,
       };
 
       const { error } = await supabase
@@ -550,7 +569,8 @@ export default function FinancialsPage() {
               status: 'Paid',
               payment_mode: payDebtMode,
               payment_date: today,
-              details: payDebtDetails || `Bixinta qeyb ka mid ah deynta (${payDebtRef.ref_number})`
+              details: payDebtDetails || `Bixinta qeyb ka mid ah deynta (${payDebtRef.ref_number})`,
+              created_by: user?.id,
             });
 
           if (insertError) throw insertError;
@@ -1316,6 +1336,15 @@ export default function FinancialsPage() {
                 <option value="Unpaid">Unpaid</option>
               </select>
               <select
+                value={receiptCreatorFilter}
+                onChange={(e) => setReceiptCreatorFilter(e.target.value)}
+                aria-label="Filter payments by Record Creator"
+                className="max-w-52 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
+              >
+                <option value="">Record Creator: All</option>
+                {paymentCreators.map((creator) => <option key={creator} value={creator}>{resolveCreatorName(creator, profileNames) || creator}</option>)}
+              </select>
+              <select
                 value={receiptSortBy}
                 onChange={(e) => setReceiptSortBy(e.target.value as typeof receiptSortBy)}
                 className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
@@ -1325,7 +1354,15 @@ export default function FinancialsPage() {
               </select>
             </>
           ) : (
-            <select
+            <><select
+              value={expenseCreatorFilter}
+              onChange={(e) => setExpenseCreatorFilter(e.target.value)}
+              aria-label="Filter expenses by Record Creator"
+              className="max-w-52 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
+            >
+              <option value="">Record Creator: All</option>
+              {expenseCreators.map((creator) => <option key={creator} value={creator}>{resolveCreatorName(creator, profileNames) || creator}</option>)}
+            </select><select
               value={expenseSortBy}
               onChange={(e) => setExpenseSortBy(e.target.value as typeof expenseSortBy)}
               className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none cursor-pointer shrink-0"
@@ -1333,7 +1370,7 @@ export default function FinancialsPage() {
               <option value="newest">Sort: Newest first</option>
               <option value="oldest">Sort: Oldest first</option>
               <option value="amount_high">Sort: Amount (high–low)</option>
-            </select>
+            </select></>
           )}
         </div>
 
@@ -2171,6 +2208,13 @@ export default function FinancialsPage() {
                         </span>
                       </div>
 
+                      <div className="flex justify-between items-center gap-4">
+                        <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Record Creator</span>
+                        <span className="font-bold text-slate-700 text-right">
+                          {resolveCreatorName(selectedReceipt.created_by, profileNames) || '-'}
+                        </span>
+                      </div>
+
                       <div className="border-t border-slate-200/80 pt-3 mt-2">
                         <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-extrabold mb-1.5">
                           Faahfaahinta (Details)
@@ -2471,6 +2515,15 @@ export default function FinancialsPage() {
                   </div>
                 </div>
               </div>
+
+              {editingExpense && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Record Creator</span>
+                  <span className="mt-1 block text-sm font-bold text-slate-800">
+                    {resolveCreatorName(editingExpense.created_by, profileNames) || editingExpense.created_by || '-'}
+                  </span>
+                </div>
+              )}
 
               <button
                 type="submit"
