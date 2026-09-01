@@ -929,8 +929,12 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         if (ctx) {
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, sketchCanvas.width, sketchCanvas.height);
-          const lats = pdfPolygonCoords.map(([lat]) => lat);
-          const lngs = pdfPolygonCoords.map(([, lng]) => lng);
+          const savedDirectionPositions = parseDirectionPositions(record.boundary_label_positions);
+          const savedPositionValues = Object.values(savedDirectionPositions).filter(
+            (position): position is NonNullable<typeof position> => Boolean(position),
+          );
+          const lats = [...pdfPolygonCoords.map(([lat]) => lat), ...savedPositionValues.map((position) => position.lat)];
+          const lngs = [...pdfPolygonCoords.map(([, lng]) => lng), ...savedPositionValues.map((position) => position.lng)];
           const minLat = Math.min(...lats);
           const maxLat = Math.max(...lats);
           const minLng = Math.min(...lngs);
@@ -1013,8 +1017,24 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             ctx.fillText(length, 0, 0);
             ctx.restore();
 
+            if (!savedDirectionPositions[direction]) {
+              ctx.fillStyle = '#2563eb';
+              ctx.fillText(direction, midX + normalX * (dimensionOffset + 24), midY + normalY * (dimensionOffset + 24));
+            }
+          });
+
+          (['N', 'E', 'S', 'W'] as CompassDirection[]).forEach((direction) => {
+            const saved = savedDirectionPositions[direction];
+            if (!saved) return;
+            const x = offsetX + (saved.lng - minLng) * scale;
+            const y = offsetY + (maxLat - saved.lat) * scale;
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(((saved.rotation ?? 0) * Math.PI) / 180);
+            ctx.font = `bold ${Math.max(16, (saved.size ?? 12) * 1.65)}px Arial`;
             ctx.fillStyle = '#2563eb';
-            ctx.fillText(direction, midX + normalX * (dimensionOffset + 24), midY + normalY * (dimensionOffset + 24));
+            ctx.fillText(direction, 0, 0);
+            ctx.restore();
           });
           sketchImage = sketchCanvas.toDataURL('image/jpeg', 0.9);
           sketchCanvas.width = 1;
