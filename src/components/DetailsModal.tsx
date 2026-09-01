@@ -715,6 +715,9 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       const hasPdfPolygon = pdfPolygonCoords.length >= 3;
       const hasPdfGps = pdfGpsParts.length >= 2 && Number.isFinite(pdfGpsParts[0]) && Number.isFinite(pdfGpsParts[1]);
       const hasPdfMapData = hasPdfPolygon || hasPdfGps;
+      // 1.25 keeps the original CSS layout crisp while avoiding the 4x pixel
+      // workload and memory spike caused by a 2x canvas on the browser thread.
+      const pdfCaptureScale = 1.25;
 
       // Helper to temporarily prepare Leaflet map elements for html2canvas
       const prepareMapForCapture = (container: HTMLDivElement) => {
@@ -900,7 +903,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           const satCanvas = await html2canvas(container, {
             useCORS: true,
             allowTaint: true,
-            scale: 2,
+            scale: pdfCaptureScale,
             logging: false,
             backgroundColor: '#ffffff'
           });
@@ -983,7 +986,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           const sketchCanvas = await html2canvas(sketchMapContainerRef.current, {
             useCORS: true,
             allowTaint: true,
-            scale: 2,
+            scale: pdfCaptureScale,
             logging: false,
             backgroundColor: '#ffffff'
           });
@@ -1084,7 +1087,10 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       printContainer.style.width = '750px';
       printContainer.style.backgroundColor = '#ffffff';
 
-      printContainer.innerHTML = `
+      // This alternative preview is not part of the downloaded classic PDF.
+      // Skipping its DOM construction avoids loading and laying out two reports.
+      const buildUnusedPreviewTemplate = false;
+      if (buildUnusedPreviewTemplate) printContainer.innerHTML = `
         <!-- Page 1: Official Land Survey Form -->
         <div class="survey-pdf-page" style="width:750px;height:1060px;padding:32px 38px 28px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;background:#ffffff;color:#000000;position:relative;overflow:hidden;">
           ${watermarkHTML}
@@ -1313,14 +1319,14 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         const pageCanvas = await html2canvas(pages[index], {
           width: 750,
           height: 1060,
-          scale: 2,
+          scale: pdfCaptureScale,
           useCORS: true,
           allowTaint: true,
           backgroundColor: '#ffffff',
           logging: false,
         });
         if (index > 0) pdf.addPage('a4', 'portrait');
-        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.98), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
         // Release the large backing buffer immediately instead of retaining all
         // rendered pages until the download has completed.
         pageCanvas.width = 1;
