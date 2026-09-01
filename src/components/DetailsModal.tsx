@@ -791,25 +791,26 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         };
       };
 
-      // Pre-crop a captured canvas to a fixed aspect ratio (center-crop, like
-      // object-fit:cover) so the embedded <img> needs no CSS-level fitting.
-      // html2pdf's own html2canvas pass (which rasterizes the final assembled
-      // page) does not honor object-fit and stretches images to fill their
-      // box instead of cropping, which is what was squeezing the photo.
+      // Fit the complete map into the PDF aspect ratio without cropping or
+      // artificial zoom. Any spare space becomes a neutral map background.
       const cropCanvasToAspect = (source: HTMLCanvasElement, targetRatio: number) => {
         const sourceRatio = source.width / source.height;
-        let sx = 0, sy = 0, sw = source.width, sh = source.height;
+        let outWidth = source.width;
+        let outHeight = source.height;
         if (sourceRatio > targetRatio) {
-          sw = source.height * targetRatio;
-          sx = (source.width - sw) / 2;
+          outHeight = source.width / targetRatio;
         } else {
-          sh = source.width / targetRatio;
-          sy = (source.height - sh) / 2;
+          outWidth = source.height * targetRatio;
         }
         const out = document.createElement('canvas');
-        out.width = sw;
-        out.height = sh;
-        out.getContext('2d')?.drawImage(source, sx, sy, sw, sh, 0, 0, sw, sh);
+        out.width = Math.round(outWidth);
+        out.height = Math.round(outHeight);
+        const ctx = out.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#e2e8f0';
+          ctx.fillRect(0, 0, out.width, out.height);
+          ctx.drawImage(source, (out.width - source.width) / 2, (out.height - source.height) / 2);
+        }
         return out;
       };
 
@@ -1093,14 +1094,14 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       if (headerCtx) {
         headerCtx.fillStyle = '#ffffff';
         headerCtx.fillRect(0, 0, headerCanvas.width, headerCanvas.height);
-        headerCtx.font = 'bold 25px Arial';
+        headerCtx.font = 'bold 31px Arial';
         headerCtx.textBaseline = 'middle';
         headerCtx.textAlign = 'left';
         headerCtx.fillStyle = '#0865ed';
         headerCtx.fillText('Federal Republic of Somalia', 60, 62);
         headerCtx.fillStyle = '#c40000';
         headerCtx.fillText('Marwaaz Public Notary', 60, 97);
-        headerCtx.font = 'bold 20px Arial';
+        headerCtx.font = 'bold 25px Arial';
         headerCtx.fillStyle = '#1f2937';
         headerCtx.fillText('Baidoa, Somalia', 60, 130);
 
@@ -1112,27 +1113,27 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             image.src = logoData;
           });
           if (logoImage) {
-            const maxLogoSize = 120;
+            const maxLogoSize = 150;
             const logoScale = Math.min(maxLogoSize / logoImage.naturalWidth, maxLogoSize / logoImage.naturalHeight);
             const logoWidth = logoImage.naturalWidth * logoScale;
             const logoHeight = logoImage.naturalHeight * logoScale;
-            headerCtx.drawImage(logoImage, 600 - logoWidth / 2, 14, logoWidth, logoHeight);
+            headerCtx.drawImage(logoImage, 600 - logoWidth / 2, 4, logoWidth, logoHeight);
           }
         }
 
         headerCtx.direction = 'rtl';
         headerCtx.textAlign = 'right';
-        headerCtx.font = 'bold 25px Arial';
+        headerCtx.font = 'bold 31px Arial';
         headerCtx.fillStyle = '#0865ed';
         headerCtx.fillText('جمهورية الصومال الفيدرالية', 1140, 62);
         headerCtx.fillStyle = '#c40000';
         headerCtx.fillText('كاتب العدل مرواز', 1140, 97);
-        headerCtx.font = 'bold 20px Arial';
+        headerCtx.font = 'bold 25px Arial';
         headerCtx.fillStyle = '#1f2937';
         headerCtx.fillText('بيدوا، الصومال', 1140, 130);
         headerCtx.direction = 'ltr';
         headerCtx.textAlign = 'center';
-        headerCtx.font = 'bold 24px Arial';
+        headerCtx.font = 'bold 29px Arial';
         headerCtx.fillStyle = '#0865ed';
         headerCtx.fillText('Jamhuuriyadda Federaalka Soomaaliya', 600, 178);
         headerCtx.fillStyle = '#c40000';
@@ -1672,7 +1673,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
                   </div>
                   <div className="text-sm font-bold text-slate-800 flex items-center gap-1.5 mt-auto">
                     <Hash className="h-4 w-4 text-teal-600" />
-                    <span>{record.survey_no || record.serial_no}</span>
+                    <span>{record.serial_no}</span>
                   </div>
                 </div>
                 <div className="p-4 border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between">
