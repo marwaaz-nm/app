@@ -710,6 +710,11 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       showAlert('Sug fadlan...', 'PDF-ka ayaa la diyaarinayaa, fadlan sug...', 'info');
 
       const html2canvas = (await import('html2canvas')).default;
+      const pdfPolygonCoords = parsePolygonCoords(record.polygon_boundary).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+      const pdfGpsParts = (record.gps_location || '').split(',').map((part) => Number(part.trim()));
+      const hasPdfPolygon = pdfPolygonCoords.length >= 3;
+      const hasPdfGps = pdfGpsParts.length >= 2 && Number.isFinite(pdfGpsParts[0]) && Number.isFinite(pdfGpsParts[1]);
+      const hasPdfMapData = hasPdfPolygon || hasPdfGps;
 
       // Helper to temporarily prepare Leaflet map elements for html2canvas
       const prepareMapForCapture = (container: HTMLDivElement) => {
@@ -806,9 +811,58 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         return out;
       };
 
+      // Leaflet's HTML marker can be omitted by html2canvas in some browsers.
+      // Draw the GPS pin on the final cropped map as well so point-only surveys
+      // always have an unmistakable location marker in the exported PDF.
+      const drawPdfLocationPin = (canvas: HTMLCanvasElement) => {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const x = canvas.width / 2;
+        const y = canvas.height / 2;
+        const radius = Math.max(18, Math.min(34, canvas.width * 0.045));
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(15, 23, 42, 0.42)';
+        ctx.shadowBlur = radius * 0.45;
+        ctx.shadowOffsetY = radius * 0.2;
+        ctx.beginPath();
+        ctx.moveTo(x, y + radius * 1.7);
+        ctx.bezierCurveTo(
+          x - radius * 0.28,
+          y + radius * 1.18,
+          x - radius,
+          y + radius * 0.45,
+          x - radius,
+          y - radius * 0.18
+        );
+        ctx.arc(x, y - radius * 0.18, radius, Math.PI, 0, false);
+        ctx.bezierCurveTo(
+          x + radius,
+          y + radius * 0.45,
+          x + radius * 0.28,
+          y + radius * 1.18,
+          x,
+          y + radius * 1.7
+        );
+        ctx.closePath();
+        ctx.fillStyle = '#2563eb';
+        ctx.fill();
+        ctx.shadowColor = 'transparent';
+        ctx.lineWidth = Math.max(3, radius * 0.14);
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(x, y - radius * 0.18, radius * 0.34, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.restore();
+      };
+
       // 1. Capture Satellite Map
       let satImage = '';
-      if (satelliteMapContainerRef.current && satelliteMapRef.current) {
+      if (hasPdfMapData && satelliteMapContainerRef.current && satelliteMapRef.current) {
         const satMap = satelliteMapRef.current;
         const container = satelliteMapContainerRef.current;
         const originalInlineWidth = container.style.width;
@@ -845,6 +899,9 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           });
           // Match the tall satellite frame in the supplied second-page template.
           const satCropped = cropCanvasToAspect(satCanvas, 658 / 780);
+          if (!hasPdfPolygon && hasPdfGps) {
+            drawPdfLocationPin(satCropped);
+          }
           satImage = satCropped.toDataURL('image/jpeg', 0.95);
         } catch (e) {
           console.error('Failed to capture satellite map', e);
@@ -858,7 +915,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
       // 2. Capture Technical Sketch Map
       let sketchImage = '';
-      if (sketchMapContainerRef.current) {
+      if (hasPdfMapData && sketchMapContainerRef.current && sketchMapRef.current) {
         const sketchContainer = sketchMapContainerRef.current;
         const sketchMap = sketchMapRef.current;
         const originalSketchWidth = sketchContainer.style.width;
@@ -866,7 +923,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         sketchContainer.style.width = '680px';
         sketchContainer.style.height = '390px';
         sketchMap?.invalidateSize({ animate: false });
-        const pdfSketchCoords = parsePolygonCoords(record.polygon_boundary);
+        const pdfSketchCoords = pdfPolygonCoords;
         if (pdfSketchCoords.length >= 3) {
           const pdfSketchBounds = L.latLngBounds(pdfSketchCoords);
           Object.values(parseDirectionPositions(record.boundary_label_positions)).forEach((position) => {
@@ -1200,7 +1257,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             </table>
             <div style="font-size:14px;font-weight:800;margin:0 4px 8px;">Jaantuska Cabbirka iyo Bedka Dhulka</div>
             <div style="height:400px;border:1px solid #1683df;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;">
-              ${sketchImage ? `<img src="${sketchImage}" style="width:100%;height:100%;object-fit:contain;display:block;" />` : ''}
+              ${sketchImage ? `<img src="${sketchImage}" style="width:100%;height:100%;object-fit:contain;display:block;" />` : `<div style="padding:24px;text-align:center;color:#64748b;font-size:13px;line-height:1.6;"><strong style="display:block;color:#17324d;margin-bottom:6px;">Khariidad farsamo lama hayo</strong>Survey-kan polygon/GPS map kuma lifaaqna. Xogta kale ee survey-ga waa sax oo waa la soo dejiyey.</div>`}
             </div>
           </div>
           <div style="margin-top:auto;position:relative;z-index:1;">${contactLine}</div>
@@ -1210,7 +1267,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           <div>${classicHeader(true)}</div>
           <div style="height:46px;border:1.5px solid #111;display:flex;align-items:center;justify-content:center;text-align:center;font-size:14px;font-weight:800;margin:8px 0 14px;padding:0 10px;box-sizing:border-box;">GPS Ir Latitude&nbsp; <span style="color:#0000ee;">(${latVal}, ${lngVal})</span>&nbsp; Longitude</div>
           <div style="height:695px;border:1px solid #1683df;background:#e2e8f0;overflow:hidden;">
-            ${satImage ? `<img src="${satImage}" style="width:100%;height:100%;display:block;" />` : ''}
+            ${satImage ? `<img src="${satImage}" style="width:100%;height:100%;display:block;" />` : `<div style="height:100%;display:flex;align-items:center;justify-content:center;padding:30px;text-align:center;background:#f8fafc;color:#64748b;font-size:14px;line-height:1.7;"><div><strong style="display:block;color:#17324d;margin-bottom:8px;">Satellite map lama hayo</strong>Polygon ama GPS coordinates laguma darin survey-kan. PDF-ga xogtiisa kale si caadi ah ayaa loo diyaariyey.</div></div>`}
           </div>
           <div style="margin-top:auto;">${contactLine}</div>
         </div>
