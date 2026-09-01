@@ -1145,7 +1145,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         headerCtx.imageSmoothingEnabled = true;
         headerCtx.imageSmoothingQuality = 'high';
 
-        // 1. Center Logo (220px, perfect circular proportion, vertically centered with text)
+        // 1. Center Logo (230px, crisp circular emblem, vertically aligned with text)
         if (logoData) {
           const logoImage = await new Promise<HTMLImageElement | null>((resolve) => {
             const image = new Image();
@@ -1154,50 +1154,50 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             image.src = logoData;
           });
           if (logoImage) {
-            const maxLogoSize = 220;
+            const maxLogoSize = 230;
             const logoScale = Math.min(maxLogoSize / logoImage.naturalWidth, maxLogoSize / logoImage.naturalHeight);
             const logoWidth = logoImage.naturalWidth * logoScale;
             const logoHeight = logoImage.naturalHeight * logoScale;
             headerCtx.drawImage(
               logoImage,
               910 - logoWidth / 2,
-              18 + (maxLogoSize - logoHeight) / 2,
+              10 + (maxLogoSize - logoHeight) / 2,
               logoWidth,
               logoHeight
             );
           }
         }
 
-        // 2. English Column (Left - Centered at x=380)
+        // 2. English Column (Left - Centered at x=400)
         headerCtx.textBaseline = 'middle';
         headerCtx.textAlign = 'center';
-        headerCtx.font = 'bold 36px "Segoe UI", Arial, sans-serif';
+        headerCtx.font = 'bold 46px "Segoe UI", Arial, sans-serif';
         headerCtx.fillStyle = '#0865ed';
-        headerCtx.fillText('Federal Republic of Somalia', 380, 75);
+        headerCtx.fillText('Federal Republic of Somalia', 400, 70);
 
         headerCtx.fillStyle = '#c40000';
-        headerCtx.fillText('Marwaaz Public Notary', 380, 126);
+        headerCtx.fillText('Marwaaz Public Notary', 400, 125);
 
-        headerCtx.font = 'bold 30px "Segoe UI", Arial, sans-serif';
+        headerCtx.font = 'bold 38px "Segoe UI", Arial, sans-serif';
         headerCtx.fillStyle = '#1f2937';
-        headerCtx.fillText('Baidoa, Somalia', 380, 175);
+        headerCtx.fillText('Baidoa, Somalia', 400, 178);
 
-        // 3. Arabic Column (Right - Centered at x=1440)
-        headerCtx.font = 'bold 36px "Segoe UI", Tahoma, Arial, sans-serif';
+        // 3. Arabic Column (Right - Centered at x=1420)
+        headerCtx.font = 'bold 46px "Segoe UI", Tahoma, Arial, sans-serif';
         headerCtx.fillStyle = '#0865ed';
-        headerCtx.fillText('جمهورية الصومال الفيدرالية', 1440, 75);
+        headerCtx.fillText('جمهورية الصومال الفيدرالية', 1420, 70);
 
         headerCtx.fillStyle = '#c40000';
-        headerCtx.fillText('كاتب العدل مرواز', 1440, 126);
+        headerCtx.fillText('كاتب العدل مرواز', 1420, 125);
 
-        headerCtx.font = 'bold 30px "Segoe UI", Tahoma, Arial, sans-serif';
+        headerCtx.font = 'bold 38px "Segoe UI", Tahoma, Arial, sans-serif';
         headerCtx.fillStyle = '#1f2937';
-        headerCtx.fillText('بيدوا، الصومال', 1440, 175);
+        headerCtx.fillText('بيدوا، الصومال', 1420, 178);
 
         // 4. Somali Column (Center Bottom - Centered at x=910)
-        headerCtx.font = 'bold 35px "Segoe UI", Arial, sans-serif';
+        headerCtx.font = 'bold 44px "Segoe UI", Arial, sans-serif';
         headerCtx.fillStyle = '#0865ed';
-        headerCtx.fillText('Jamhuuriyadda Federaalka Soomaaliya', 910, 275);
+        headerCtx.fillText('Jamhuuriyadda Federaalka Soomaaliya', 910, 270);
 
         headerCtx.fillStyle = '#c40000';
         headerCtx.fillText('Nootaayo Marwaaz', 910, 318);
@@ -1206,8 +1206,8 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         headerCtx.strokeStyle = '#0b2f63';
         headerCtx.lineWidth = 6;
         headerCtx.beginPath();
-        headerCtx.moveTo(30, 362);
-        headerCtx.lineTo(1790, 362);
+        headerCtx.moveTo(30, 360);
+        headerCtx.lineTo(1790, 360);
         headerCtx.stroke();
       }
       const headerImageData = headerCanvas.toDataURL('image/png');
@@ -1219,13 +1219,15 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         pdf.setDrawColor(71, 85, 105);
         pdf.setLineWidth(0.35);
         pdf.line(margin, 284, pageWidth - margin, 284);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(9.5);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
         pdf.setTextColor(51, 65, 85);
         const phone = settings.contact_phone || '+252 617414141 | 613536363';
         const email = settings.contact_email || 'info@marwaazpn.com | marwaaznotary@gmail.com';
         pdf.text(phone, margin, 289.5);
+        pdf.setFont('helvetica', 'bold');
         pdf.text(`Bogga ${pageNo} / 2`, pageWidth / 2, 289.5, { align: 'center' });
+        pdf.setFont('helvetica', 'normal');
         pdf.text(email, pageWidth - margin, 289.5, { align: 'right' });
       };
 
