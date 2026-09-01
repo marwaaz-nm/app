@@ -791,38 +791,16 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         };
       };
 
-      // Fit the complete map into the PDF aspect ratio without cropping or
-      // artificial zoom. Any spare space becomes a neutral map background.
-      const cropCanvasToAspect = (source: HTMLCanvasElement, targetRatio: number) => {
-        const sourceRatio = source.width / source.height;
-        let outWidth = source.width;
-        let outHeight = source.height;
-        if (sourceRatio > targetRatio) {
-          outHeight = source.width / targetRatio;
-        } else {
-          outWidth = source.height * targetRatio;
-        }
-        const out = document.createElement('canvas');
-        out.width = Math.round(outWidth);
-        out.height = Math.round(outHeight);
-        const ctx = out.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = '#e2e8f0';
-          ctx.fillRect(0, 0, out.width, out.height);
-          ctx.drawImage(source, (out.width - source.width) / 2, (out.height - source.height) / 2);
-        }
-        return out;
-      };
 
       // Leaflet's HTML marker can be omitted by html2canvas in some browsers.
       // Draw the GPS pin on the final cropped map as well so point-only surveys
       // always have an unmistakable location marker in the exported PDF.
-      const drawPdfLocationPin = (canvas: HTMLCanvasElement) => {
+      const drawPdfLocationPin = (canvas: HTMLCanvasElement, pinX?: number, pinY?: number) => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const x = canvas.width / 2;
-        const y = canvas.height / 2;
+        const x = pinX ?? canvas.width / 2;
+        const y = pinY ?? canvas.height / 2;
         const radius = Math.max(18, Math.min(34, canvas.width * 0.045));
 
         ctx.save();
@@ -863,60 +841,129 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         ctx.restore();
       };
 
-      // 1. Capture Satellite Map
+      // 1. Capture Satellite Map with exact aspect ratio of PDF frame (182mm x 215mm)
       let satImage = '';
-      if (hasPdfMapData && satelliteMapContainerRef.current && satelliteMapRef.current) {
-        const satMap = satelliteMapRef.current;
-        const container = satelliteMapContainerRef.current;
+      if (hasPdfMapData) {
+        let offscreenDiv: HTMLDivElement | null = null;
+        let offSatMap: L.Map | null = null;
         try {
-          const width = Math.max(320, container.clientWidth);
-          const height = Math.max(260, container.clientHeight);
+          const frameWidthPx = 910;
+          const frameHeightPx = 1075; // Matches 182mm : 215mm aspect ratio
+
+          let center: L.LatLng;
+          let zoom: number;
+
+          if (satelliteMapRef.current) {
+            center = satelliteMapRef.current.getCenter();
+            zoom = satelliteMapRef.current.getZoom();
+          } else if (hasPdfPolygon) {
+            const bounds = L.latLngBounds(pdfPolygonCoords.map(([lat, lng]) => [lat, lng]));
+            center = bounds.getCenter();
+            zoom = 18;
+          } else {
+            center = L.latLng(pdfGpsParts[0], pdfGpsParts[1]);
+            zoom = 18.5;
+          }
+
+          offscreenDiv = document.createElement('div');
+          offscreenDiv.style.position = 'fixed';
+          offscreenDiv.style.left = '-10000px';
+          offscreenDiv.style.top = '0px';
+          offscreenDiv.style.width = `${frameWidthPx}px`;
+          offscreenDiv.style.height = `${frameHeightPx}px`;
+          offscreenDiv.style.zIndex = '-9999';
+          offscreenDiv.style.pointerEvents = 'none';
+          document.body.appendChild(offscreenDiv);
+
+          offSatMap = L.map(offscreenDiv, {
+            attributionControl: false,
+            zoomControl: false,
+            scrollWheelZoom: false,
+            dragging: false,
+            touchZoom: false,
+            fadeAnimation: false,
+            zoomAnimation: false,
+            preferCanvas: true,
+          });
+
+          const offSatTile = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            crossOrigin: true,
+          });
+
+          offSatTile.addTo(offSatMap);
+          offSatMap.setView(center, zoom, { animate: false });
+
+          // Wait for tiles to load (or fallback timeout)
+          await new Promise<void>((resolve) => {
+            let timer: NodeJS.Timeout | null = null;
+            let settled = false;
+            const finish = () => {
+              if (settled) return;
+              settled = true;
+              if (timer) clearTimeout(timer);
+              resolve();
+            };
+            offSatTile.once('load', () => setTimeout(finish, 120));
+            timer = setTimeout(finish, 2800);
+          });
+
           const satCanvas = document.createElement('canvas');
-          satCanvas.width = width;
-          satCanvas.height = height;
+          satCanvas.width = frameWidthPx;
+          satCanvas.height = frameHeightPx;
           const ctx = satCanvas.getContext('2d');
-          if (!ctx) throw new Error('Satellite canvas is unavailable');
-          ctx.fillStyle = '#e2e8f0';
-          ctx.fillRect(0, 0, width, height);
+          if (ctx) {
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, frameWidthPx, frameHeightPx);
 
-          const containerRect = container.getBoundingClientRect();
-          const tiles = Array.from(container.querySelectorAll<HTMLImageElement>('.leaflet-tile-loaded'));
-          for (const tile of tiles) {
-            if (!tile.complete || tile.naturalWidth === 0) continue;
-            const tileRect = tile.getBoundingClientRect();
-            ctx.drawImage(
-              tile,
-              tileRect.left - containerRect.left,
-              tileRect.top - containerRect.top,
-              tileRect.width,
-              tileRect.height,
-            );
-          }
+            const containerRect = offscreenDiv.getBoundingClientRect();
+            const tiles = Array.from(offscreenDiv.querySelectorAll<HTMLImageElement>('.leaflet-tile-loaded'));
+            for (const tile of tiles) {
+              if (!tile.complete || tile.naturalWidth === 0) continue;
+              const tileRect = tile.getBoundingClientRect();
+              ctx.drawImage(
+                tile,
+                tileRect.left - containerRect.left,
+                tileRect.top - containerRect.top,
+                tileRect.width,
+                tileRect.height,
+              );
+            }
 
-          if (hasPdfPolygon) {
-            ctx.beginPath();
-            pdfPolygonCoords.forEach(([lat, lng], index) => {
-              const point = satMap.latLngToContainerPoint([lat, lng]);
-              if (index === 0) ctx.moveTo(point.x, point.y);
-              else ctx.lineTo(point.x, point.y);
-            });
-            ctx.closePath();
-            ctx.fillStyle = 'rgba(234, 179, 8, 0.18)';
-            ctx.fill();
-            ctx.strokeStyle = '#eab308';
-            ctx.lineWidth = 3;
-            ctx.stroke();
-          }
+            if (hasPdfPolygon) {
+              ctx.beginPath();
+              pdfPolygonCoords.forEach(([lat, lng], index) => {
+                const point = offSatMap!.latLngToContainerPoint([lat, lng]);
+                if (index === 0) ctx.moveTo(point.x, point.y);
+                else ctx.lineTo(point.x, point.y);
+              });
+              ctx.closePath();
+              ctx.fillStyle = 'rgba(234, 179, 8, 0.18)';
+              ctx.fill();
+              ctx.strokeStyle = '#eab308';
+              ctx.lineWidth = 3.5;
+              ctx.stroke();
+            }
 
-          const satCropped = cropCanvasToAspect(satCanvas, 658 / 780);
-          if (!hasPdfPolygon && hasPdfGps) {
-            drawPdfLocationPin(satCropped);
+            if (!hasPdfPolygon && hasPdfGps) {
+              const pinPt = offSatMap.latLngToContainerPoint([pdfGpsParts[0], pdfGpsParts[1]]);
+              drawPdfLocationPin(satCanvas, pinPt.x, pinPt.y);
+            }
+
+            satImage = satCanvas.toDataURL('image/jpeg', 0.95);
+            satCanvas.width = 1;
+            satCanvas.height = 1;
           }
-          satImage = satCropped.toDataURL('image/jpeg', 0.95);
-          satCanvas.width = 1;
-          satCanvas.height = 1;
         } catch (e) {
-          console.error('Failed to capture satellite map', e);
+          console.error('Failed to capture full aspect satellite map', e);
+        } finally {
+          if (offSatMap) {
+            try { offSatMap.remove(); } catch {}
+          }
+          if (offscreenDiv && offscreenDiv.parentNode) {
+            offscreenDiv.parentNode.removeChild(offscreenDiv);
+          }
         }
       }
 
@@ -1094,17 +1141,10 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       if (headerCtx) {
         headerCtx.fillStyle = '#ffffff';
         headerCtx.fillRect(0, 0, headerCanvas.width, headerCanvas.height);
-        headerCtx.font = 'bold 31px Arial';
-        headerCtx.textBaseline = 'middle';
-        headerCtx.textAlign = 'left';
-        headerCtx.fillStyle = '#0865ed';
-        headerCtx.fillText('Federal Republic of Somalia', 60, 62);
-        headerCtx.fillStyle = '#c40000';
-        headerCtx.fillText('Marwaaz Public Notary', 60, 97);
-        headerCtx.font = 'bold 25px Arial';
-        headerCtx.fillStyle = '#1f2937';
-        headerCtx.fillText('Baidoa, Somalia', 60, 130);
+        headerCtx.imageSmoothingEnabled = true;
+        headerCtx.imageSmoothingQuality = 'high';
 
+        // 1. Center Logo
         if (logoData) {
           const logoImage = await new Promise<HTMLImageElement | null>((resolve) => {
             const image = new Image();
@@ -1113,36 +1153,54 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             image.src = logoData;
           });
           if (logoImage) {
-            const maxLogoSize = 150;
+            const maxLogoSize = 145;
             const logoScale = Math.min(maxLogoSize / logoImage.naturalWidth, maxLogoSize / logoImage.naturalHeight);
             const logoWidth = logoImage.naturalWidth * logoScale;
             const logoHeight = logoImage.naturalHeight * logoScale;
-            headerCtx.drawImage(logoImage, 600 - logoWidth / 2, 4, logoWidth, logoHeight);
+            headerCtx.drawImage(logoImage, 600 - logoWidth / 2, 10 + (maxLogoSize - logoHeight) / 2, logoWidth, logoHeight);
           }
         }
 
-        headerCtx.direction = 'rtl';
-        headerCtx.textAlign = 'right';
-        headerCtx.font = 'bold 31px Arial';
-        headerCtx.fillStyle = '#0865ed';
-        headerCtx.fillText('جمهورية الصومال الفيدرالية', 1140, 62);
-        headerCtx.fillStyle = '#c40000';
-        headerCtx.fillText('كاتب العدل مرواز', 1140, 97);
-        headerCtx.font = 'bold 25px Arial';
-        headerCtx.fillStyle = '#1f2937';
-        headerCtx.fillText('بيدوا، الصومال', 1140, 130);
-        headerCtx.direction = 'ltr';
+        // 2. English Column (Left - Centered at x=250)
+        headerCtx.textBaseline = 'middle';
         headerCtx.textAlign = 'center';
-        headerCtx.font = 'bold 29px Arial';
+        headerCtx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
         headerCtx.fillStyle = '#0865ed';
-        headerCtx.fillText('Jamhuuriyadda Federaalka Soomaaliya', 600, 178);
+        headerCtx.fillText('Federal Republic of Somalia', 250, 48);
+
         headerCtx.fillStyle = '#c40000';
-        headerCtx.fillText('Nootaayo Marwaaz', 600, 211);
+        headerCtx.fillText('Marwaaz Public Notary', 250, 84);
+
+        headerCtx.font = 'bold 23px "Segoe UI", Arial, sans-serif';
+        headerCtx.fillStyle = '#1f2937';
+        headerCtx.fillText('Baidoa, Somalia', 250, 120);
+
+        // 3. Arabic Column (Right - Centered at x=950)
+        headerCtx.font = 'bold 28px "Segoe UI", Tahoma, Arial, sans-serif';
+        headerCtx.fillStyle = '#0865ed';
+        headerCtx.fillText('جمهورية الصومال الفيدرالية', 950, 48);
+
+        headerCtx.fillStyle = '#c40000';
+        headerCtx.fillText('كاتب العدل مرواز', 950, 84);
+
+        headerCtx.font = 'bold 23px "Segoe UI", Tahoma, Arial, sans-serif';
+        headerCtx.fillStyle = '#1f2937';
+        headerCtx.fillText('بيدوا، الصومال', 950, 120);
+
+        // 4. Somali Column (Center Bottom - Centered at x=600)
+        headerCtx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
+        headerCtx.fillStyle = '#0865ed';
+        headerCtx.fillText('Jamhuuriyadda Federaalka Soomaaliya', 600, 176);
+
+        headerCtx.fillStyle = '#c40000';
+        headerCtx.fillText('Nootaayo Marwaaz', 600, 208);
+
+        // 5. Divider Line
         headerCtx.strokeStyle = '#0b2f63';
-        headerCtx.lineWidth = 5;
+        headerCtx.lineWidth = 4.5;
         headerCtx.beginPath();
-        headerCtx.moveTo(15, 239);
-        headerCtx.lineTo(1185, 239);
+        headerCtx.moveTo(20, 238);
+        headerCtx.lineTo(1180, 238);
         headerCtx.stroke();
       }
       const headerImageData = headerCanvas.toDataURL('image/png');
