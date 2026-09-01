@@ -879,21 +879,28 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           container.style.width = '720px';
           container.style.height = '850px';
           satMap.invalidateSize({ animate: false });
-          await new Promise<void>((resolve) => {
-            const tileLayer = satTileLayerRef.current;
-            if (!tileLayer) { resolve(); return; }
-            const done = () => resolve();
-            tileLayer.once('load', done);
-            setTimeout(done, 1200); // fallback in case tiles are already cached and 'load' never fires
-          });
-          await new Promise((resolve) => setTimeout(resolve, 150)); // settle buffer
+          const tileLayer = satTileLayerRef.current;
+          if (tileLayer?.isLoading()) {
+            await new Promise<void>((resolve) => {
+              let finished = false;
+              const done = () => {
+                if (finished) return;
+                finished = true;
+                tileLayer.off('load', done);
+                resolve();
+              };
+              tileLayer.once('load', done);
+              setTimeout(done, 450);
+            });
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
 
           restoreMap = prepareMapForCapture(container);
 
           const satCanvas = await html2canvas(container, {
             useCORS: true,
             allowTaint: true,
-            scale: 2,
+            scale: 1,
             logging: false,
             backgroundColor: '#ffffff'
           });
@@ -902,7 +909,9 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           if (!hasPdfPolygon && hasPdfGps) {
             drawPdfLocationPin(satCropped);
           }
-          satImage = satCropped.toDataURL('image/jpeg', 0.95);
+          satImage = satCropped.toDataURL('image/jpeg', 0.88);
+          satCanvas.width = 1;
+          satCanvas.height = 1;
         } catch (e) {
           console.error('Failed to capture satellite map', e);
         } finally {
@@ -915,7 +924,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
       // 2. Capture Technical Sketch Map
       let sketchImage = '';
-      if (hasPdfMapData && sketchMapContainerRef.current && sketchMapRef.current) {
+      if (hasPdfPolygon && sketchMapContainerRef.current && sketchMapRef.current) {
         const sketchContainer = sketchMapContainerRef.current;
         const sketchMap = sketchMapRef.current;
         const originalSketchWidth = sketchContainer.style.width;
@@ -974,7 +983,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           const sketchCanvas = await html2canvas(sketchMapContainerRef.current, {
             useCORS: true,
             allowTaint: true,
-            scale: 2,
+            scale: 1,
             logging: false,
             backgroundColor: '#ffffff'
           });
@@ -994,7 +1003,9 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             croppedSketch.width,
             croppedSketch.height,
           );
-          sketchImage = croppedSketch.toDataURL('image/jpeg', 0.95);
+          sketchImage = croppedSketch.toDataURL('image/jpeg', 0.88);
+          sketchCanvas.width = 1;
+          sketchCanvas.height = 1;
         } catch (e) {
           console.error('Failed to capture sketch map', e);
         } finally {
@@ -1291,23 +1302,29 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         })
       );
 
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
 
       const { jsPDF } = await import('jspdf');
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
       const pages = Array.from(printContainer.querySelectorAll('.survey-pdf-page')) as HTMLElement[];
       for (let index = 0; index < pages.length; index += 1) {
+        // Yield between pages so PDF generation does not lock the whole UI.
+        await new Promise((resolve) => setTimeout(resolve, 0));
         const pageCanvas = await html2canvas(pages[index], {
           width: 750,
           height: 1060,
-          scale: 2,
+          scale: 1,
           useCORS: true,
           allowTaint: true,
           backgroundColor: '#ffffff',
           logging: false,
         });
         if (index > 0) pdf.addPage('a4', 'portrait');
-        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.98), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+        // Release the large backing buffer immediately instead of retaining all
+        // rendered pages until the download has completed.
+        pageCanvas.width = 1;
+        pageCanvas.height = 1;
       }
       const fileName = `Survey_Report_SN_${record.serial_no}_${record.owner_name.replace(/\s+/g, '_')}.pdf`;
       const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.matchMedia('(pointer: coarse)').matches;
