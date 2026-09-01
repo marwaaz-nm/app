@@ -709,7 +709,6 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       document.head.appendChild(styleEl);
       showAlert('Sug fadlan...', 'PDF-ka ayaa la diyaarinayaa, fadlan sug...', 'info');
 
-      const html2canvas = (await import('html2canvas')).default;
       const pdfPolygonCoords = parsePolygonCoords(record.polygon_boundary).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
       const pdfGpsParts = (record.gps_location || '').split(',').map((part) => Number(part.trim()));
       const hasPdfPolygon = pdfPolygonCoords.length >= 3;
@@ -868,36 +867,46 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       if (hasPdfMapData && satelliteMapContainerRef.current && satelliteMapRef.current) {
         const satMap = satelliteMapRef.current;
         const container = satelliteMapContainerRef.current;
-        let restoreMap: (() => void) | null = null;
         try {
-          // Capture the already-loaded live map. Resizing here previously
-          // triggered fresh tile requests and produced white gaps/delay.
-          const tileLayer = satTileLayerRef.current;
-          if (tileLayer?.isLoading()) {
-            await new Promise<void>((resolve) => {
-              let finished = false;
-              const done = () => {
-                if (finished) return;
-                finished = true;
-                tileLayer.off('load', done);
-                resolve();
-              };
-              tileLayer.once('load', done);
-              setTimeout(done, 250);
-            });
+          const width = Math.max(320, container.clientWidth);
+          const height = Math.max(260, container.clientHeight);
+          const satCanvas = document.createElement('canvas');
+          satCanvas.width = width;
+          satCanvas.height = height;
+          const ctx = satCanvas.getContext('2d');
+          if (!ctx) throw new Error('Satellite canvas is unavailable');
+          ctx.fillStyle = '#e2e8f0';
+          ctx.fillRect(0, 0, width, height);
+
+          const containerRect = container.getBoundingClientRect();
+          const tiles = Array.from(container.querySelectorAll<HTMLImageElement>('.leaflet-tile-loaded'));
+          for (const tile of tiles) {
+            if (!tile.complete || tile.naturalWidth === 0) continue;
+            const tileRect = tile.getBoundingClientRect();
+            ctx.drawImage(
+              tile,
+              tileRect.left - containerRect.left,
+              tileRect.top - containerRect.top,
+              tileRect.width,
+              tileRect.height,
+            );
           }
-          await new Promise((resolve) => requestAnimationFrame(resolve));
 
-          restoreMap = prepareMapForCapture(container);
+          if (hasPdfPolygon) {
+            ctx.beginPath();
+            pdfPolygonCoords.forEach(([lat, lng], index) => {
+              const point = satMap.latLngToContainerPoint([lat, lng]);
+              if (index === 0) ctx.moveTo(point.x, point.y);
+              else ctx.lineTo(point.x, point.y);
+            });
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(234, 179, 8, 0.18)';
+            ctx.fill();
+            ctx.strokeStyle = '#eab308';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+          }
 
-          const satCanvas = await html2canvas(container, {
-            useCORS: true,
-            allowTaint: true,
-            scale: pdfCaptureScale,
-            logging: false,
-            backgroundColor: '#ffffff'
-          });
-          // Match the tall satellite frame in the supplied second-page template.
           const satCropped = cropCanvasToAspect(satCanvas, 658 / 780);
           if (!hasPdfPolygon && hasPdfGps) {
             drawPdfLocationPin(satCropped);
@@ -907,112 +916,70 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           satCanvas.height = 1;
         } catch (e) {
           console.error('Failed to capture satellite map', e);
-        } finally {
-          restoreMap?.();
-          satMap.invalidateSize({ animate: false });
         }
       }
 
       // 2. Capture Technical Sketch Map
       let sketchImage = '';
-      if (hasPdfPolygon && sketchMapContainerRef.current && sketchMapRef.current) {
-        const sketchContainer = sketchMapContainerRef.current;
-        const sketchMap = sketchMapRef.current;
-        const originalSketchWidth = sketchContainer.style.width;
-        const originalSketchHeight = sketchContainer.style.height;
-        sketchContainer.style.width = '680px';
-        sketchContainer.style.height = '390px';
-        sketchMap?.invalidateSize({ animate: false });
-        const pdfSketchCoords = pdfPolygonCoords;
-        if (pdfSketchCoords.length >= 3) {
-          const pdfSketchBounds = L.latLngBounds(pdfSketchCoords);
-          Object.values(parseDirectionPositions(record.boundary_label_positions)).forEach((position) => {
-            if (position) pdfSketchBounds.extend([position.lat, position.lng]);
+      if (hasPdfPolygon) {
+        const sketchCanvas = document.createElement('canvas');
+        sketchCanvas.width = 900;
+        sketchCanvas.height = 520;
+        const ctx = sketchCanvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, sketchCanvas.width, sketchCanvas.height);
+          const lats = pdfPolygonCoords.map(([lat]) => lat);
+          const lngs = pdfPolygonCoords.map(([, lng]) => lng);
+          const minLat = Math.min(...lats);
+          const maxLat = Math.max(...lats);
+          const minLng = Math.min(...lngs);
+          const maxLng = Math.max(...lngs);
+          const padding = 75;
+          const spanX = Math.max(maxLng - minLng, 0.000001);
+          const spanY = Math.max(maxLat - minLat, 0.000001);
+          const scale = Math.min((sketchCanvas.width - padding * 2) / spanX, (sketchCanvas.height - padding * 2) / spanY);
+          const plotWidth = spanX * scale;
+          const plotHeight = spanY * scale;
+          const offsetX = (sketchCanvas.width - plotWidth) / 2;
+          const offsetY = (sketchCanvas.height - plotHeight) / 2;
+          const points = pdfPolygonCoords.map(([lat, lng]) => ({
+            x: offsetX + (lng - minLng) * scale,
+            y: offsetY + (maxLat - lat) * scale,
+          }));
+
+          ctx.beginPath();
+          points.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+          ctx.closePath();
+          ctx.fillStyle = '#e8f1fb';
+          ctx.fill();
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 4;
+          ctx.stroke();
+
+          ctx.font = 'bold 20px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          points.forEach((point, index) => {
+            const next = points[(index + 1) % points.length];
+            const source = pdfPolygonCoords[index];
+            const target = pdfPolygonCoords[(index + 1) % pdfPolygonCoords.length];
+            const midX = (point.x + next.x) / 2;
+            const midY = (point.y + next.y) / 2;
+            const centerX = points.reduce((sum, item) => sum + item.x, 0) / points.length;
+            const centerY = points.reduce((sum, item) => sum + item.y, 0) / points.length;
+            const dx = midX - centerX;
+            const dy = midY - centerY;
+            const length = L.latLng(source).distanceTo(L.latLng(target)).toFixed(1);
+            ctx.fillStyle = '#0f172a';
+            ctx.fillText(`${length}m`, midX + Math.sign(dx || 1) * 25, midY + Math.sign(dy || 1) * 22);
+            ctx.fillStyle = '#2563eb';
+            const direction = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'E' : 'W') : (dy > 0 ? 'S' : 'N');
+            ctx.fillText(direction, midX + Math.sign(dx || 1) * 48, midY + Math.sign(dy || 1) * 44);
           });
-          sketchMap?.fitBounds(pdfSketchBounds, { animate: false, padding: [20, 20] });
-        } else {
-          sketchMap?.setView([0, 0], 17.5);
-        }
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        const restoreSketch = prepareMapForCapture(sketchContainer);
-
-        // The supplied template does not show the total-area badge inside the sketch.
-        const areaMarker = sketchContainer.querySelector('.sketch-area-label') as HTMLElement | null;
-        const originalAreaDisplay = areaMarker?.style.display || '';
-        if (areaMarker) areaMarker.style.display = 'none';
-
-        const originalStyles = new Map<any, any>();
-        sketchMapRef.current?.eachLayer((layer: any) => {
-          if (layer.setStyle) {
-            originalStyles.set(layer, {
-              color: layer.options.color,
-              weight: layer.options.weight,
-              fillColor: layer.options.fillColor,
-              fillOpacity: layer.options.fillOpacity
-            });
-
-            if (layer instanceof L.Polygon) {
-              layer.setStyle({
-                color: '#0f172a',
-                weight: 2.5,
-                fillColor: '#dbeafe',
-                fillOpacity: 0.42,
-                opacity: 1
-              });
-            }
-            // Plain Polyline instances are the dimension/extension lines —
-            // left untouched so they keep their blue design color in the PDF.
-          }
-        });
-
-        // Leaflet's Canvas renderer batches setStyle repaints into the next
-        // animation frame, so wait for one to actually land before capturing —
-        // otherwise html2canvas grabs the pre-restyle (blue) pixels.
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-        try {
-          const sketchCanvas = await html2canvas(sketchMapContainerRef.current, {
-            useCORS: true,
-            allowTaint: true,
-            scale: pdfCaptureScale,
-            logging: false,
-            backgroundColor: '#ffffff'
-          });
-          const cropX = Math.round(sketchCanvas.width * 0.08);
-          const cropY = Math.round(sketchCanvas.height * 0.04);
-          const croppedSketch = document.createElement('canvas');
-          croppedSketch.width = sketchCanvas.width - cropX * 2;
-          croppedSketch.height = sketchCanvas.height - cropY * 2;
-          croppedSketch.getContext('2d')?.drawImage(
-            sketchCanvas,
-            cropX,
-            cropY,
-            croppedSketch.width,
-            croppedSketch.height,
-            0,
-            0,
-            croppedSketch.width,
-            croppedSketch.height,
-          );
-          sketchImage = croppedSketch.toDataURL('image/jpeg', 0.95);
+          sketchImage = sketchCanvas.toDataURL('image/jpeg', 0.9);
           sketchCanvas.width = 1;
           sketchCanvas.height = 1;
-        } catch (e) {
-          console.error('Failed to capture sketch map', e);
-        } finally {
-          originalStyles.forEach((style, layer) => {
-            layer.setStyle(style);
-          });
-          if (areaMarker) areaMarker.style.display = originalAreaDisplay;
-          restoreSketch();
-          sketchContainer.style.width = originalSketchWidth;
-          sketchContainer.style.height = originalSketchHeight;
-          sketchMap?.invalidateSize({ animate: false });
-          if (pdfSketchCoords.length >= 3) {
-            sketchMap?.fitBounds(L.polygon(pdfSketchCoords).getBounds(), { animate: false, padding: [60, 60] });
-          } else {
-            sketchMap?.setView([0, 0], 18);
-          }
         }
       }
 
@@ -1207,6 +1174,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       return;
       }
 
+      const html2canvas = (await import('html2canvas')).default;
       const watermarkHTML = `
         <div style="position:absolute;top:51%;left:50%;transform:translate(-50%,-50%);width:330px;height:330px;opacity:0.035;pointer-events:none;z-index:0;">
           <img src="/icon.png" alt="" style="width:100%;height:100%;object-fit:contain;" />
