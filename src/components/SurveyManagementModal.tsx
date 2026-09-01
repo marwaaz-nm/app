@@ -128,16 +128,33 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
       const { data, error } = await supabase.from('surveys').update(payload).eq('id', record.id).select('*').single();
       if (error) {
         setMessage({ type: 'error', text: error.message });
+        setBusy(false);
       } else {
         setSurvey(data as Survey);
         setDraft(data as Survey);
-        setMessage({ type: 'success', text: 'Isbeddelka si guul leh ayaa loo kaydiyey.' });
         await onChanged({ type: 'updated', survey: data as Survey });
+        setBusy(false);
+        onClose();
       }
-      setBusy(false);
       return;
     }
-    await runAction('update', payload);
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await request(`/api/surveys/${record.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update', ...payload }),
+      });
+      setSurvey(result.survey);
+      setDraft(result.survey);
+      await onChanged({ type: 'updated', survey: result.survey as Survey });
+      setBusy(false);
+      onClose();
+    } catch (error) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Isbeddelku wuu fashilmay.' });
+      setBusy(false);
+    }
   }
 
   async function uploadDocument() {

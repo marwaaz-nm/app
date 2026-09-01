@@ -21,7 +21,8 @@ import {
   Minimize2,
   ChevronLeft,
   ChevronRight,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import L from 'leaflet';
 import { useModal } from '@/context/ModalContext';
@@ -33,23 +34,47 @@ import { resolveCreatorName, useProfileNames } from '@/lib/useProfileNames';
 interface DetailsModalProps {
   record: Survey | null;
   onClose: () => void;
+  onDeleted?: (surveyId: number) => void;
 }
 
-export default function DetailsModal({ record, onClose }: DetailsModalProps) {
+export default function DetailsModal({ record, onClose, onDeleted }: DetailsModalProps) {
   const profileNames = useProfileNames();
   const { showAlert } = useModal();
   const { settings } = useSettings();
   const [mounted, setMounted] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [isSatFullscreen, setIsSatFullscreen] = useState(false);
   const [isSketchFullscreen, setIsSketchFullscreen] = useState(false);
   const [showRefPanel, setShowRefPanel] = useState(false);
   const [linkedRefs, setLinkedRefs] = useState<Reference[]>([]);
   const [linkedRefsLoading, setLinkedRefsLoading] = useState(false);
 
-  // Reference numbers (Nootaayo/Document Archive records) that were issued against this
-  // specific land parcel — `references.survey_id` is the link. Fetched whenever a
-  // different record is opened, independent of whether the side panel is visible yet, so
-  // the toggle button can show a count right away.
+  const handleDeleteSurvey = async () => {
+    if (!record?.id) return;
+    const confirmText = `Ma hubtaa inaad tirtirto sahanka #${record.serial_no} (${record.owner_name})? Tallaabadan lama soo celin karo.`;
+    if (!window.confirm(confirmText)) return;
+
+    setDeleting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/surveys/${record.id}`, {
+        method: 'DELETE',
+        headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || 'Tirtirista waa fashilantay.');
+      }
+      showAlert('Guul', 'Sahanka si guul leh ayaa loo tirtiray.', 'success');
+      onDeleted?.(record.id);
+      onClose();
+    } catch (error) {
+      showAlert('Cillad', error instanceof Error ? error.message : 'Tirtiristu way fashilantay.', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   useEffect(() => {
     if (!record?.id) {
       setLinkedRefs([]);
@@ -64,8 +89,6 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       .order('created_at', { ascending: false })
       .then(({ data, error }) => {
         if (cancelled) return;
-
-
         if (!error) setLinkedRefs((data as Reference[]) || []);
         setLinkedRefsLoading(false);
       });
@@ -1713,6 +1736,16 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
                   {linkedRefs.length}
                 </span>
               )}
+            </button>
+            <button
+              onClick={handleDeleteSurvey}
+              disabled={deleting}
+              className="flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold py-2 md:py-2.5 px-3 md:px-4 rounded-xl shadow-xs cursor-pointer transition-all active:scale-95 shrink-0 disabled:opacity-50"
+              title="Tirtir sahankan"
+            >
+              <Trash2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">TIRTIR</span>
+              <span className="sm:hidden">DEL</span>
             </button>
             <button
               onClick={handlePrintPDF}

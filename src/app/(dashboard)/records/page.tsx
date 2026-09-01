@@ -635,6 +635,7 @@ export default function RecordsPage() {
         <DetailsModal 
           record={selectedRecord} 
           onClose={() => setSelectedRecord(null)} 
+          onDeleted={(id) => handleRecordChanged({ type: 'deleted', surveyId: id })}
         />
       )}
 
