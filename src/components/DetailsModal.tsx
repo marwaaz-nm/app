@@ -1168,33 +1168,38 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           }
         }
 
-        // 2. English Column (Left - Centered at x=400)
+        // 2. English Column (Left - Flush aligned with table left margin at X=0)
+        headerCtx.direction = 'ltr';
         headerCtx.textBaseline = 'middle';
-        headerCtx.textAlign = 'center';
+        headerCtx.textAlign = 'left';
         headerCtx.font = 'bold 46px "Segoe UI", Arial, sans-serif';
         headerCtx.fillStyle = '#0865ed';
-        headerCtx.fillText('Federal Republic of Somalia', 400, 70);
+        headerCtx.fillText('Federal Republic of Somalia', 0, 70);
 
         headerCtx.fillStyle = '#c40000';
-        headerCtx.fillText('Marwaaz Public Notary', 400, 125);
+        headerCtx.fillText('Marwaaz Public Notary', 0, 125);
 
         headerCtx.font = 'bold 38px "Segoe UI", Arial, sans-serif';
         headerCtx.fillStyle = '#1f2937';
-        headerCtx.fillText('Baidoa, Somalia', 400, 178);
+        headerCtx.fillText('Baidoa, Somalia', 0, 178);
 
-        // 3. Arabic Column (Right - Centered at x=1420)
+        // 3. Arabic Column (Right - Flush aligned with table right margin at X=1820)
+        headerCtx.direction = 'rtl';
+        headerCtx.textAlign = 'right';
         headerCtx.font = 'bold 46px "Segoe UI", Tahoma, Arial, sans-serif';
         headerCtx.fillStyle = '#0865ed';
-        headerCtx.fillText('جمهورية الصومال الفيدرالية', 1420, 70);
+        headerCtx.fillText('جمهورية الصومال الفيدرالية', 1820, 70);
 
         headerCtx.fillStyle = '#c40000';
-        headerCtx.fillText('كاتب العدل مرواز', 1420, 125);
+        headerCtx.fillText('كاتب العدل مرواز', 1820, 125);
 
         headerCtx.font = 'bold 38px "Segoe UI", Tahoma, Arial, sans-serif';
         headerCtx.fillStyle = '#1f2937';
-        headerCtx.fillText('بيدوا، الصومال', 1420, 178);
+        headerCtx.fillText('بيدوا، الصومال', 1820, 178);
 
         // 4. Somali Column (Center Bottom - Centered at x=910)
+        headerCtx.direction = 'ltr';
+        headerCtx.textAlign = 'center';
         headerCtx.font = 'bold 44px "Segoe UI", Arial, sans-serif';
         headerCtx.fillStyle = '#0865ed';
         headerCtx.fillText('Jamhuuriyadda Federaalka Soomaaliya', 910, 270);
@@ -1202,12 +1207,12 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         headerCtx.fillStyle = '#c40000';
         headerCtx.fillText('Nootaayo Marwaaz', 910, 318);
 
-        // 5. Divider Line
+        // 5. Divider Line (Full width matching table from 0 to 1820)
         headerCtx.strokeStyle = '#0b2f63';
         headerCtx.lineWidth = 6;
         headerCtx.beginPath();
-        headerCtx.moveTo(30, 360);
-        headerCtx.lineTo(1790, 360);
+        headerCtx.moveTo(0, 360);
+        headerCtx.lineTo(1820, 360);
         headerCtx.stroke();
       }
       const headerImageData = headerCanvas.toDataURL('image/png');
