@@ -960,22 +960,61 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           ctx.font = 'bold 20px Arial';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
+          const centerX = points.reduce((sum, item) => sum + item.x, 0) / points.length;
+          const centerY = points.reduce((sum, item) => sum + item.y, 0) / points.length;
+          const boundaryValues: Record<string, string | undefined> = {
+            N: record.boundary_w_val,
+            E: record.boundary_b_val,
+            S: record.boundary_k_val,
+            W: record.boundary_g_val,
+          };
           points.forEach((point, index) => {
             const next = points[(index + 1) % points.length];
             const source = pdfPolygonCoords[index];
             const target = pdfPolygonCoords[(index + 1) % pdfPolygonCoords.length];
             const midX = (point.x + next.x) / 2;
             const midY = (point.y + next.y) / 2;
-            const centerX = points.reduce((sum, item) => sum + item.x, 0) / points.length;
-            const centerY = points.reduce((sum, item) => sum + item.y, 0) / points.length;
-            const dx = midX - centerX;
-            const dy = midY - centerY;
-            const length = L.latLng(source).distanceTo(L.latLng(target)).toFixed(1);
+            const edgeX = next.x - point.x;
+            const edgeY = next.y - point.y;
+            const edgeLength = Math.max(1, Math.hypot(edgeX, edgeY));
+            let normalX = -edgeY / edgeLength;
+            let normalY = edgeX / edgeLength;
+            if ((midX + normalX * 20 - centerX) ** 2 + (midY + normalY * 20 - centerY) ** 2 <
+                (midX - normalX * 20 - centerX) ** 2 + (midY - normalY * 20 - centerY) ** 2) {
+              normalX *= -1;
+              normalY *= -1;
+            }
+            const direction = Math.abs(normalX) > Math.abs(normalY)
+              ? (normalX > 0 ? 'E' : 'W')
+              : (normalY > 0 ? 'S' : 'N');
+            const savedLength = boundaryValues[direction]?.trim().replace(/\s*m+$/i, '');
+            const length = savedLength || L.latLng(source).distanceTo(L.latLng(target)).toFixed(1);
+            const dimensionOffset = 28;
+            const startX = point.x + normalX * dimensionOffset;
+            const startY = point.y + normalY * dimensionOffset;
+            const endX = next.x + normalX * dimensionOffset;
+            const endY = next.y + normalY * dimensionOffset;
+
+            ctx.strokeStyle = '#78aef5';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(point.x, point.y);
+            ctx.lineTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.lineTo(next.x, next.y);
+            ctx.stroke();
+
+            let angle = Math.atan2(edgeY, edgeX);
+            if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
+            ctx.save();
+            ctx.translate(midX + normalX * (dimensionOffset - 9), midY + normalY * (dimensionOffset - 9));
+            ctx.rotate(angle);
             ctx.fillStyle = '#0f172a';
-            ctx.fillText(`${length}m`, midX + Math.sign(dx || 1) * 25, midY + Math.sign(dy || 1) * 22);
+            ctx.fillText(length, 0, 0);
+            ctx.restore();
+
             ctx.fillStyle = '#2563eb';
-            const direction = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'E' : 'W') : (dy > 0 ? 'S' : 'N');
-            ctx.fillText(direction, midX + Math.sign(dx || 1) * 48, midY + Math.sign(dy || 1) * 44);
+            ctx.fillText(direction, midX + normalX * (dimensionOffset + 24), midY + normalY * (dimensionOffset + 24));
           });
           sketchImage = sketchCanvas.toDataURL('image/jpeg', 0.9);
           sketchCanvas.width = 1;
@@ -1027,28 +1066,67 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       };
 
       const logoData = await loadImageData('/icon.png');
+      const headerCanvas = document.createElement('canvas');
+      headerCanvas.width = 1200;
+      headerCanvas.height = 250;
+      const headerCtx = headerCanvas.getContext('2d');
+      if (headerCtx) {
+        headerCtx.fillStyle = '#ffffff';
+        headerCtx.fillRect(0, 0, headerCanvas.width, headerCanvas.height);
+        headerCtx.font = 'bold 25px Arial';
+        headerCtx.textBaseline = 'middle';
+        headerCtx.textAlign = 'left';
+        headerCtx.fillStyle = '#0865ed';
+        headerCtx.fillText('Federal Republic of Somalia', 60, 62);
+        headerCtx.fillStyle = '#c40000';
+        headerCtx.fillText('Marwaaz Public Notary', 60, 97);
+        headerCtx.font = 'bold 20px Arial';
+        headerCtx.fillStyle = '#1f2937';
+        headerCtx.fillText('Baidoa, Somalia', 60, 130);
+
+        if (logoData) {
+          const logoImage = await new Promise<HTMLImageElement | null>((resolve) => {
+            const image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = () => resolve(null);
+            image.src = logoData;
+          });
+          if (logoImage) {
+            const maxLogoSize = 120;
+            const logoScale = Math.min(maxLogoSize / logoImage.naturalWidth, maxLogoSize / logoImage.naturalHeight);
+            const logoWidth = logoImage.naturalWidth * logoScale;
+            const logoHeight = logoImage.naturalHeight * logoScale;
+            headerCtx.drawImage(logoImage, 600 - logoWidth / 2, 14, logoWidth, logoHeight);
+          }
+        }
+
+        headerCtx.direction = 'rtl';
+        headerCtx.textAlign = 'right';
+        headerCtx.font = 'bold 25px Arial';
+        headerCtx.fillStyle = '#0865ed';
+        headerCtx.fillText('جمهورية الصومال الفيدرالية', 1140, 62);
+        headerCtx.fillStyle = '#c40000';
+        headerCtx.fillText('كاتب العدل مرواز', 1140, 97);
+        headerCtx.font = 'bold 20px Arial';
+        headerCtx.fillStyle = '#1f2937';
+        headerCtx.fillText('بيدوا، الصومال', 1140, 130);
+        headerCtx.direction = 'ltr';
+        headerCtx.textAlign = 'center';
+        headerCtx.font = 'bold 24px Arial';
+        headerCtx.fillStyle = '#0865ed';
+        headerCtx.fillText('Jamhuuriyadda Federaalka Soomaaliya', 600, 178);
+        headerCtx.fillStyle = '#c40000';
+        headerCtx.fillText('Nootaayo Marwaaz', 600, 211);
+        headerCtx.strokeStyle = '#0b2f63';
+        headerCtx.lineWidth = 5;
+        headerCtx.beginPath();
+        headerCtx.moveTo(15, 239);
+        headerCtx.lineTo(1185, 239);
+        headerCtx.stroke();
+      }
+      const headerImageData = headerCanvas.toDataURL('image/png');
       const drawHeader = () => {
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(...blue);
-        pdf.setFontSize(11);
-        pdf.text('Federal Republic of Somalia', margin, 15);
-        pdf.setTextColor(...red);
-        pdf.text('Marwaaz Public Notary', margin, 21);
-        pdf.setTextColor(31, 41, 55);
-        pdf.setFontSize(9);
-        pdf.text('Baidoa, Somalia', margin, 27);
-        if (logoData) pdf.addImage(logoData, 'PNG', 91, 7, 28, 28, undefined, 'FAST');
-        pdf.setTextColor(...blue);
-        pdf.setFontSize(10);
-        pdf.text('Jamhuuriyadda Federaalka Soomaaliya', pageWidth - margin, 16, { align: 'right' });
-        pdf.setTextColor(...red);
-        pdf.text('Nootaayo Marwaaz', pageWidth - margin, 22, { align: 'right' });
-        pdf.setTextColor(31, 41, 55);
-        pdf.setFontSize(9);
-        pdf.text('Baydhabo, Soomaaliya', pageWidth - margin, 28, { align: 'right' });
-        pdf.setDrawColor(...navy);
-        pdf.setLineWidth(0.8);
-        pdf.line(margin, 39, pageWidth - margin, 39);
+        pdf.addImage(headerImageData, 'PNG', margin, 5, contentWidth, 38, undefined, 'FAST');
       };
 
       const drawFooter = (pageNo: number) => {
