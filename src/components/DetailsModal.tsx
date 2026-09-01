@@ -900,7 +900,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           const satCanvas = await html2canvas(container, {
             useCORS: true,
             allowTaint: true,
-            scale: 1,
+            scale: 2,
             logging: false,
             backgroundColor: '#ffffff'
           });
@@ -909,7 +909,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           if (!hasPdfPolygon && hasPdfGps) {
             drawPdfLocationPin(satCropped);
           }
-          satImage = satCropped.toDataURL('image/jpeg', 0.88);
+          satImage = satCropped.toDataURL('image/jpeg', 0.95);
           satCanvas.width = 1;
           satCanvas.height = 1;
         } catch (e) {
@@ -983,7 +983,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           const sketchCanvas = await html2canvas(sketchMapContainerRef.current, {
             useCORS: true,
             allowTaint: true,
-            scale: 1,
+            scale: 2,
             logging: false,
             backgroundColor: '#ffffff'
           });
@@ -1003,7 +1003,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             croppedSketch.width,
             croppedSketch.height,
           );
-          sketchImage = croppedSketch.toDataURL('image/jpeg', 0.88);
+          sketchImage = croppedSketch.toDataURL('image/jpeg', 0.95);
           sketchCanvas.width = 1;
           sketchCanvas.height = 1;
         } catch (e) {
@@ -1313,14 +1313,14 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         const pageCanvas = await html2canvas(pages[index], {
           width: 750,
           height: 1060,
-          scale: 1,
+          scale: 2,
           useCORS: true,
           allowTaint: true,
           backgroundColor: '#ffffff',
           logging: false,
         });
         if (index > 0) pdf.addPage('a4', 'portrait');
-        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.98), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
         // Release the large backing buffer immediately instead of retaining all
         // rendered pages until the download has completed.
         pageCanvas.width = 1;
