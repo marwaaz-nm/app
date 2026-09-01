@@ -1133,10 +1133,11 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         }
       };
 
-      const logoData = await loadImageData('/icon.png');
+      const logoUrl = settings.logo_url || '/icon.png';
+      const logoData = await loadImageData(logoUrl);
       const headerCanvas = document.createElement('canvas');
-      headerCanvas.width = 1200;
-      headerCanvas.height = 250;
+      headerCanvas.width = 1820;
+      headerCanvas.height = 380;
       const headerCtx = headerCanvas.getContext('2d');
       if (headerCtx) {
         headerCtx.fillStyle = '#ffffff';
@@ -1144,7 +1145,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         headerCtx.imageSmoothingEnabled = true;
         headerCtx.imageSmoothingQuality = 'high';
 
-        // 1. Center Logo
+        // 1. Center Logo (220px, perfect circular proportion, vertically centered with text)
         if (logoData) {
           const logoImage = await new Promise<HTMLImageElement | null>((resolve) => {
             const image = new Image();
@@ -1153,54 +1154,60 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
             image.src = logoData;
           });
           if (logoImage) {
-            const maxLogoSize = 145;
+            const maxLogoSize = 220;
             const logoScale = Math.min(maxLogoSize / logoImage.naturalWidth, maxLogoSize / logoImage.naturalHeight);
             const logoWidth = logoImage.naturalWidth * logoScale;
             const logoHeight = logoImage.naturalHeight * logoScale;
-            headerCtx.drawImage(logoImage, 600 - logoWidth / 2, 10 + (maxLogoSize - logoHeight) / 2, logoWidth, logoHeight);
+            headerCtx.drawImage(
+              logoImage,
+              910 - logoWidth / 2,
+              18 + (maxLogoSize - logoHeight) / 2,
+              logoWidth,
+              logoHeight
+            );
           }
         }
 
-        // 2. English Column (Left - Centered at x=250)
+        // 2. English Column (Left - Centered at x=380)
         headerCtx.textBaseline = 'middle';
         headerCtx.textAlign = 'center';
-        headerCtx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
+        headerCtx.font = 'bold 36px "Segoe UI", Arial, sans-serif';
         headerCtx.fillStyle = '#0865ed';
-        headerCtx.fillText('Federal Republic of Somalia', 250, 48);
+        headerCtx.fillText('Federal Republic of Somalia', 380, 75);
 
         headerCtx.fillStyle = '#c40000';
-        headerCtx.fillText('Marwaaz Public Notary', 250, 84);
+        headerCtx.fillText('Marwaaz Public Notary', 380, 126);
 
-        headerCtx.font = 'bold 23px "Segoe UI", Arial, sans-serif';
+        headerCtx.font = 'bold 30px "Segoe UI", Arial, sans-serif';
         headerCtx.fillStyle = '#1f2937';
-        headerCtx.fillText('Baidoa, Somalia', 250, 120);
+        headerCtx.fillText('Baidoa, Somalia', 380, 175);
 
-        // 3. Arabic Column (Right - Centered at x=950)
-        headerCtx.font = 'bold 28px "Segoe UI", Tahoma, Arial, sans-serif';
+        // 3. Arabic Column (Right - Centered at x=1440)
+        headerCtx.font = 'bold 36px "Segoe UI", Tahoma, Arial, sans-serif';
         headerCtx.fillStyle = '#0865ed';
-        headerCtx.fillText('جمهورية الصومال الفيدرالية', 950, 48);
+        headerCtx.fillText('جمهورية الصومال الفيدرالية', 1440, 75);
 
         headerCtx.fillStyle = '#c40000';
-        headerCtx.fillText('كاتب العدل مرواز', 950, 84);
+        headerCtx.fillText('كاتب العدل مرواز', 1440, 126);
 
-        headerCtx.font = 'bold 23px "Segoe UI", Tahoma, Arial, sans-serif';
+        headerCtx.font = 'bold 30px "Segoe UI", Tahoma, Arial, sans-serif';
         headerCtx.fillStyle = '#1f2937';
-        headerCtx.fillText('بيدوا، الصومال', 950, 120);
+        headerCtx.fillText('بيدوا، الصومال', 1440, 175);
 
-        // 4. Somali Column (Center Bottom - Centered at x=600)
-        headerCtx.font = 'bold 28px "Segoe UI", Arial, sans-serif';
+        // 4. Somali Column (Center Bottom - Centered at x=910)
+        headerCtx.font = 'bold 35px "Segoe UI", Arial, sans-serif';
         headerCtx.fillStyle = '#0865ed';
-        headerCtx.fillText('Jamhuuriyadda Federaalka Soomaaliya', 600, 176);
+        headerCtx.fillText('Jamhuuriyadda Federaalka Soomaaliya', 910, 275);
 
         headerCtx.fillStyle = '#c40000';
-        headerCtx.fillText('Nootaayo Marwaaz', 600, 208);
+        headerCtx.fillText('Nootaayo Marwaaz', 910, 318);
 
         // 5. Divider Line
         headerCtx.strokeStyle = '#0b2f63';
-        headerCtx.lineWidth = 4.5;
+        headerCtx.lineWidth = 6;
         headerCtx.beginPath();
-        headerCtx.moveTo(20, 238);
-        headerCtx.lineTo(1180, 238);
+        headerCtx.moveTo(30, 362);
+        headerCtx.lineTo(1790, 362);
         headerCtx.stroke();
       }
       const headerImageData = headerCanvas.toDataURL('image/png');
@@ -1210,14 +1217,16 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
 
       const drawFooter = (pageNo: number) => {
         pdf.setDrawColor(71, 85, 105);
-        pdf.setLineWidth(0.3);
+        pdf.setLineWidth(0.35);
         pdf.line(margin, 284, pageWidth - margin, 284);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(7.5);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9.5);
         pdf.setTextColor(51, 65, 85);
-        pdf.text(settings.contact_phone || '+252 61 7 41 41 41', margin, 289);
-        pdf.text(`Bogga ${pageNo} / 2`, pageWidth / 2, 289, { align: 'center' });
-        pdf.text(settings.contact_email || 'info@marwaazpn.com', pageWidth - margin, 289, { align: 'right' });
+        const phone = settings.contact_phone || '+252 617414141 | 613536363';
+        const email = settings.contact_email || 'info@marwaazpn.com | marwaaznotary@gmail.com';
+        pdf.text(phone, margin, 289.5);
+        pdf.text(`Bogga ${pageNo} / 2`, pageWidth / 2, 289.5, { align: 'center' });
+        pdf.text(email, pageWidth - margin, 289.5, { align: 'right' });
       };
 
       const drawTableRow = (
