@@ -90,10 +90,8 @@ export async function POST(req: NextRequest) {
     const { data: surveyNo, error: surveyNoError } = await viewer.admin.rpc('next_survey_number');
     if (surveyNoError) throw surveyNoError;
 
-    const nextSerialNo = await getNextSurveySerial(viewer.admin);
-    const assignedSerialNo = body.serial_no && Number(body.serial_no) > 0
-      ? Number(body.serial_no)
-      : nextSerialNo;
+    // Dynamically compute the atomic next serial number at the exact moment of saving
+    const assignedSerialNo = await getNextSurveySerial(viewer.admin);
 
     const payload = {
       serial_no: assignedSerialNo,
