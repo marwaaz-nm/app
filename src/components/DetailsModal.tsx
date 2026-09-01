@@ -868,20 +868,10 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
       if (hasPdfMapData && satelliteMapContainerRef.current && satelliteMapRef.current) {
         const satMap = satelliteMapRef.current;
         const container = satelliteMapContainerRef.current;
-        const originalInlineWidth = container.style.width;
-        const originalInlineHeight = container.style.height;
         let restoreMap: (() => void) | null = null;
         try {
-          // Capture at the SAME zoom level as the live view (so the
-          // surrounding plots/streets stay visible), but temporarily at a
-          // much larger on-screen pixel size. Leaflet fills the extra space
-          // with more real tiles at that zoom, giving genuinely more detail
-          // instead of us upscaling a small capture afterward — zooming in
-          // instead would have shown less area, which is the tradeoff we're
-          // avoiding here.
-          container.style.width = '720px';
-          container.style.height = '850px';
-          satMap.invalidateSize({ animate: false });
+          // Capture the already-loaded live map. Resizing here previously
+          // triggered fresh tile requests and produced white gaps/delay.
           const tileLayer = satTileLayerRef.current;
           if (tileLayer?.isLoading()) {
             await new Promise<void>((resolve) => {
@@ -893,7 +883,7 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
                 resolve();
               };
               tileLayer.once('load', done);
-              setTimeout(done, 450);
+              setTimeout(done, 250);
             });
           }
           await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -919,8 +909,6 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
           console.error('Failed to capture satellite map', e);
         } finally {
           restoreMap?.();
-          container.style.width = originalInlineWidth;
-          container.style.height = originalInlineHeight;
           satMap.invalidateSize({ animate: false });
         }
       }
@@ -1038,6 +1026,186 @@ export default function DetailsModal({ record, onClose }: DetailsModalProps) {
         if (!val || val === 'undefined' || val === 'null' || !val.trim()) return '-';
         return val.trim().replace(/\s*m+$/i, '') || '-';
       };
+
+      const useFastPdfRenderer = typeof window !== 'undefined';
+      if (useFastPdfRenderer) {
+      // Build the report directly with jsPDF. Capturing complete HTML pages with
+      // html2canvas blocked the browser's main thread and caused Chrome's
+      // "Page Unresponsive" dialog. Only the two actual map images stay raster.
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const margin = 14;
+      const contentWidth = pageWidth - margin * 2;
+      const blue: [number, number, number] = [11, 121, 189];
+      const navy: [number, number, number] = [11, 47, 99];
+      const red: [number, number, number] = [196, 0, 0];
+      const light: [number, number, number] = [231, 243, 247];
+
+      const loadImageData = async (src: string) => {
+        try {
+          const response = await fetch(src, { cache: 'force-cache' });
+          if (!response.ok) return '';
+          const blob = await response.blob();
+          return await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(blob);
+          });
+        } catch {
+          return '';
+        }
+      };
+
+      const logoData = await loadImageData('/icon.png');
+      const drawHeader = () => {
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(...blue);
+        pdf.setFontSize(11);
+        pdf.text('Federal Republic of Somalia', margin, 15);
+        pdf.setTextColor(...red);
+        pdf.text('Marwaaz Public Notary', margin, 21);
+        pdf.setTextColor(31, 41, 55);
+        pdf.setFontSize(9);
+        pdf.text('Baidoa, Somalia', margin, 27);
+        if (logoData) pdf.addImage(logoData, 'PNG', 91, 7, 28, 28, undefined, 'FAST');
+        pdf.setTextColor(...blue);
+        pdf.setFontSize(10);
+        pdf.text('Jamhuuriyadda Federaalka Soomaaliya', pageWidth - margin, 16, { align: 'right' });
+        pdf.setTextColor(...red);
+        pdf.text('Nootaayo Marwaaz', pageWidth - margin, 22, { align: 'right' });
+        pdf.setTextColor(31, 41, 55);
+        pdf.setFontSize(9);
+        pdf.text('Baydhabo, Soomaaliya', pageWidth - margin, 28, { align: 'right' });
+        pdf.setDrawColor(...navy);
+        pdf.setLineWidth(0.8);
+        pdf.line(margin, 39, pageWidth - margin, 39);
+      };
+
+      const drawFooter = (pageNo: number) => {
+        pdf.setDrawColor(71, 85, 105);
+        pdf.setLineWidth(0.3);
+        pdf.line(margin, 284, pageWidth - margin, 284);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(51, 65, 85);
+        pdf.text(settings.contact_phone || '+252 61 7 41 41 41', margin, 289);
+        pdf.text(`Bogga ${pageNo} / 2`, pageWidth / 2, 289, { align: 'center' });
+        pdf.text(settings.contact_email || 'info@marwaazpn.com', pageWidth - margin, 289, { align: 'right' });
+      };
+
+      const drawTableRow = (
+        y: number,
+        values: string[],
+        widths: number[],
+        options: { header?: boolean; height?: number } = {},
+      ) => {
+        const height = options.height ?? 10;
+        let x = margin;
+        values.forEach((value, index) => {
+          pdf.setFillColor(...(options.header ? blue : (index % 2 === 0 ? [255, 255, 255] : light)) as [number, number, number]);
+          pdf.setDrawColor(180, 199, 211);
+          pdf.rect(x, y, widths[index], height, 'FD');
+          pdf.setFont('helvetica', options.header ? 'bold' : 'normal');
+          pdf.setFontSize(11);
+          pdf.setTextColor(options.header ? 255 : 20, options.header ? 255 : 32, options.header ? 255 : 48);
+          const lines = pdf.splitTextToSize(String(value || '-'), widths[index] - 5).slice(0, 2);
+          pdf.text(lines, x + 2.5, y + (lines.length > 1 ? 4.2 : 6.2));
+          x += widths[index];
+        });
+        return y + height;
+      };
+
+      drawHeader();
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(`Sumad No: ${record.survey_no || record.serial_no}`, margin, 46);
+      pdf.text(`Taariikh: ${issueDate}`, pageWidth - margin, 46, { align: 'right' });
+      pdf.setFontSize(13);
+      pdf.text('WARBIXINTA RASMIGA AH EE DHULKA', pageWidth / 2, 53, { align: 'center' });
+
+      let tableY = 58;
+      tableY = drawTableRow(tableY, ['Milkiilaha / Owner', 'Goobta / Location'], [91, 91], { header: true, height: 9 });
+      tableY = drawTableRow(tableY, [record.owner_name || '-', `${record.neighborhood || '-'}${record.branch ? ` - ${record.branch}` : ''}`], [91, 91], { height: 10 });
+      tableY = drawTableRow(tableY, ['GPS Coordinates', 'Cabirka Guud / Total Area'], [91, 91], { header: true, height: 9 });
+      tableY = drawTableRow(tableY, [`${latVal}, ${lngVal}`, `${areaClean} m2`], [91, 91], { height: 10 });
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.text('Cabirka iyo Soohdimaha Dhulka / Plot Measurements', margin, tableY + 8);
+      tableY += 12;
+      tableY = drawTableRow(tableY, ['Jihada / Side', 'Cabirka / Length', 'Deriska / Neighbour'], [48, 48, 86], { header: true, height: 9 });
+      const measurementRows = [
+        ['Waqooyi / North', cleanVal(record.boundary_w_val), record.boundary_w_neighbor || '-'],
+        ['Bari / East', cleanVal(record.boundary_b_val), record.boundary_b_neighbor || '-'],
+        ['Galbeed / West', cleanVal(record.boundary_g_val), record.boundary_g_neighbor || '-'],
+        ['Koonfur / South', cleanVal(record.boundary_k_val), record.boundary_k_neighbor || '-'],
+      ];
+      measurementRows.forEach((row) => { tableY = drawTableRow(tableY, row, [48, 48, 86], { height: 9 }); });
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text('Jaantuska Cabbirka iyo Bedka Dhulka', margin, tableY + 8);
+      const sketchY = tableY + 12;
+      const sketchHeight = 278 - sketchY;
+      pdf.setDrawColor(...blue);
+      pdf.rect(margin, sketchY, contentWidth, sketchHeight);
+      if (sketchImage) {
+        pdf.addImage(sketchImage, 'JPEG', margin + 2, sketchY + 2, contentWidth - 4, sketchHeight - 4, undefined, 'FAST');
+      } else {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(10);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text('Polygon sketch lama hayo.', pageWidth / 2, sketchY + sketchHeight / 2, { align: 'center' });
+      }
+      drawFooter(1);
+
+      pdf.addPage('a4', 'portrait');
+      drawHeader();
+      pdf.setFillColor(248, 250, 252);
+      pdf.setDrawColor(17, 24, 39);
+      pdf.rect(margin, 45, contentWidth, 13, 'FD');
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(`GPS Location: ${latVal}, ${lngVal}`, pageWidth / 2, 53, { align: 'center' });
+      const mapY = 63;
+      const mapHeight = 215;
+      pdf.setDrawColor(...blue);
+      pdf.rect(margin, mapY, contentWidth, mapHeight);
+      if (satImage) {
+        pdf.addImage(satImage, 'JPEG', margin + 1, mapY + 1, contentWidth - 2, mapHeight - 2, undefined, 'FAST');
+      } else {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(10);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text('Satellite map lama hayo.', pageWidth / 2, mapY + mapHeight / 2, { align: 'center' });
+      }
+      drawFooter(2);
+
+      const fileName = `Survey_Report_SN_${record.serial_no}_${record.owner_name.replace(/\s+/g, '_')}.pdf`;
+      const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.matchMedia('(pointer: coarse)').matches;
+      if (isMobileDevice) {
+        const pdfBlob = pdf.output('blob');
+        const blobUrl = URL.createObjectURL(pdfBlob);
+        const downloadLink = document.createElement('a');
+        downloadLink.href = blobUrl;
+        downloadLink.download = fileName;
+        downloadLink.rel = 'noopener';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        downloadLink.remove();
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      } else {
+        pdf.save(fileName);
+      }
+      showAlert('Guul', 'PDF-ka waa la soo dejiyay.', 'success');
+      return;
+      }
 
       const watermarkHTML = `
         <div style="position:absolute;top:51%;left:50%;transform:translate(-50%,-50%);width:330px;height:330px;opacity:0.035;pointer-events:none;z-index:0;">
