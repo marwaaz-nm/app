@@ -204,6 +204,27 @@ export default function SurveyFormFields({ draft, onChange, landTypes }: SurveyF
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+          {draft.serial_no && (
+            <div className="md:col-span-12">
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-teal-50/70 border border-teal-200/80 text-slate-800">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-600 text-white text-xs font-black shadow-xs">#</span>
+                  <div>
+                    <div className="text-xs font-bold text-slate-600">
+                      Serial Number (S/N): <span className="text-teal-700 font-black text-sm ml-1">#{draft.serial_no}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-medium">
+                      Tiro-taxanaha sahankan si toos ah ayuu ugu kordhayaa kii ugu dambeeyay.
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[11px] font-black px-2.5 py-1 rounded-lg bg-teal-100/80 text-teal-800">
+                  S/N #{draft.serial_no}
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="md:col-span-12">
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
               Magaca Milkiilaha (Owner Full Name)

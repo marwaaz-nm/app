@@ -1,8 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError, requireViewer } from '@/lib/server-auth';
 import { detectBoundaryFromSurveyLocation } from '@/lib/boundaryDetection';
+import { getGoogleSheetSurveys } from '@/lib/googleSheetSurveys';
 
 const requiredText = (value: unknown) => typeof value === 'string' ? value.trim() : '';
+
+// Calculate next serial_no taking into account both Supabase DB and Google Sheet records
+export async function getNextSurveySerial(adminClient: any): Promise<number> {
+  const { data: maxDb } = await adminClient
+    .from('surveys')
+    .select('serial_no')
+    .order('serial_no', { ascending: false })
+    .limit(1);
+  const maxDbSerial = maxDb && maxDb.length > 0 ? Number(maxDb[0].serial_no) || 0 : 0;
+
+  let maxSheetSerial = 0;
+  try {
+    const sheetSurveys = await getGoogleSheetSurveys();
+    if (sheetSurveys && sheetSurveys.length > 0) {
+      maxSheetSerial = Math.max(...sheetSurveys.map((s) => Number(s.serial_no) || 0));
+    }
+  } catch (e) {
+    console.error('Error reading sheet surveys for serial_no:', e);
+  }
+
+  return Math.max(maxDbSerial, maxSheetSerial, 0) + 1;
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const viewer = await requireViewer(req);
+    const nextSerialNo = await getNextSurveySerial(viewer.admin);
+
+    return NextResponse.json({
+      next_serial_no: nextSerialNo,
+    });
+  } catch (error) {
+    const resolved = apiError(error);
+    return NextResponse.json({ error: resolved.message }, { status: resolved.status });
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -53,7 +90,13 @@ export async function POST(req: NextRequest) {
     const { data: surveyNo, error: surveyNoError } = await viewer.admin.rpc('next_survey_number');
     if (surveyNoError) throw surveyNoError;
 
+    const nextSerialNo = await getNextSurveySerial(viewer.admin);
+    const assignedSerialNo = body.serial_no && Number(body.serial_no) > 0
+      ? Number(body.serial_no)
+      : nextSerialNo;
+
     const payload = {
+      serial_no: assignedSerialNo,
       owner_name: ownerName,
       neighborhood,
       branch,

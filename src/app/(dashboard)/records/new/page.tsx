@@ -16,6 +16,32 @@ export default function NewRecordPage() {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<SurveyDraft>({});
 
+  React.useEffect(() => {
+    let active = true;
+    const fetchNextSerial = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        const res = await fetch('/api/surveys', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (active && data.next_serial_no) {
+            setDraft((prev) => ({
+              ...prev,
+              serial_no: prev.serial_no || data.next_serial_no,
+            }));
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching next serial number:', err);
+      }
+    };
+    fetchNextSerial();
+    return () => { active = false; };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -23,6 +49,7 @@ export default function NewRecordPage() {
 
     try {
       const payload = {
+        serial_no: draft.serial_no || undefined,
         owner_name: draft.owner_name,
         neighborhood: draft.neighborhood,
         branch: draft.branch,
@@ -89,8 +116,15 @@ export default function NewRecordPage() {
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <div>
-          <h2 className="text-xl font-black text-slate-800">New Registration</h2>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-black text-slate-800">New Registration</h2>
+            {draft.serial_no && (
+              <span className="inline-flex items-center px-3 py-1 rounded-xl text-xs font-black bg-teal-50 text-teal-700 border border-teal-200/80 shadow-xs">
+                S/N: #{draft.serial_no}
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-500 mt-0.5 font-semibold">Foomka diiwaangelinta sahanka iyo milkiilaha dhulka.</p>
         </div>
       </div>
