@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { supabase } from '@/lib/supabase';
+import { canAction } from '@/lib/permissions';
 import { Reference, Survey } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
@@ -149,13 +150,14 @@ function formatSurveyBoundariesHtml(s?: Reference['surveys']): string {
 }
 
 export default function ReferencesPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { showAlert, showConfirm } = useModal();
   const { settings } = useSettings();
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
   const profileNames = useProfileNames();
 
   const [references, setReferences] = useState<Reference[]>([]);
+  const referencesRevision = useRef(0);
   const [filteredReferences, setFilteredReferences] = useState<Reference[]>([]);
   const [surveys, setSurveys] = useState<{ id: number; serial_no: number; survey_no?: string | null; owner_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -326,7 +328,7 @@ export default function ReferencesPage() {
 
   // Fetch all references with joined surveys (both DB and live sheet)
   const fetchReferences = async () => {
-    setLoading(true);
+    const revision = referencesRevision.current;
     try {
       const [dbRes, sheetRes] = await Promise.all([
         supabase
@@ -382,6 +384,7 @@ export default function ReferencesPage() {
         ),
       ];
 
+      if (revision !== referencesRevision.current) return;
       setReferences(allReferences);
       setFilteredReferences(allReferences);
     } catch (err) {
@@ -525,6 +528,7 @@ export default function ReferencesPage() {
 
   // Set default issue date when opening form
   const handleOpenAddForm = () => {
+    if (!canAction(profile, 'reference.create')) return void showAlert('Oggolaansho', 'Ma lihid Reference Add permission.', 'warning');
     const now = new Date();
     const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
       .toISOString()
@@ -543,6 +547,7 @@ export default function ReferencesPage() {
   // read-only field below) since it's sequential and issued once, but everything else
   // is editable.
   const handleOpenEditForm = (reference: Reference) => {
+    if (!canAction(profile, 'reference.edit')) return void showAlert('Oggolaansho', 'Ma lihid Reference Edit permission.', 'warning');
     setEditingRef(reference);
     setRefNumber(reference.ref_number);
     setSubject(reference.subject);
@@ -597,6 +602,7 @@ export default function ReferencesPage() {
 
   const handleSaveReference = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canAction(profile, editingRef ? 'reference.edit' : 'reference.create')) return void showAlert('Oggolaansho', 'Ma lihid fasaxa keydinta reference-kan.', 'warning');
     setSaving(true);
 
     const selectJoined = `
@@ -717,6 +723,7 @@ export default function ReferencesPage() {
 
       // Optimistic instant display in list
       if (insertedData) {
+        referencesRevision.current += 1;
         const newRef = insertedData as Reference;
         setReferences((prev) => [newRef, ...prev.filter((r) => r.id !== newRef.id)]);
         setFilteredReferences((prev) => [newRef, ...prev.filter((r) => r.id !== newRef.id)]);
@@ -727,11 +734,12 @@ export default function ReferencesPage() {
       setYearFilter(refYear);
       setSearchQuery('');
       setStatusFilter('all');
-
-      notifyDataChanged();
+      setSubjectFilter('all');
+      setWorkflowFilter('all');
+      setCreatorFilter('all');
+      setSortBy('newest');
       showAlert('Guul', `Sumadda (${finalRefNumber}) si guul leh ayaa loo keydiyey!`, 'success');
       handleCloseAddForm();
-      fetchReferences();
     } catch (err: any) {
       console.error('Error saving reference:', err);
       showAlert('Cillad', err.message || 'Cillad ayaa dhacday xilliga keydinta.', 'error');
@@ -741,6 +749,7 @@ export default function ReferencesPage() {
   };
 
   const handleDeleteReference = async (reference: Reference) => {
+    if (!canAction(profile, 'reference.delete')) return void showAlert('Oggolaansho', 'Ma lihid Reference Delete permission.', 'warning');
     const isConfirmed = await showConfirm(
       'Tirtir Reference-ka',
       `Ma hubtaa inaad tirtirto sumadda "${reference.ref_number}"? Tallaabadan lama soo celin karo.`,
@@ -760,10 +769,10 @@ export default function ReferencesPage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Tirtiridda wuu fashilmay.');
 
+      referencesRevision.current += 1;
       setReferences((prev) => prev.filter((r) => r.id !== reference.id));
       setFilteredReferences((prev) => prev.filter((r) => r.id !== reference.id));
       setSelectedRef(null);
-      notifyDataChanged();
       showAlert('Guul', 'Reference-ka waa la tirtiray.', 'success');
     } catch (err) {
       console.error('Error deleting reference:', err);
@@ -774,6 +783,7 @@ export default function ReferencesPage() {
   };
 
   const handleUpdateStatus = async (refId: number, newStatus: 'In Progress' | 'Completed' | 'Picked Up') => {
+    if (!canAction(profile, 'reference.edit')) return void showAlert('Oggolaansho', 'Ma lihid Reference Edit permission.', 'warning');
     const isConfirmed = await showConfirm(
       'Xaqiiji Beddelka Xaaladda',
       `Ma rabtaa inaad u beddesho status-ka: ${newStatus}?`,
@@ -819,13 +829,13 @@ export default function ReferencesPage() {
       
       {!showAddForm && (
         <div className="hidden md:flex justify-end">
-          <button
+          {canAction(profile, 'reference.create') ? (<button
             onClick={handleOpenAddForm}
             className="flex items-center gap-2 bg-teal-600 hover:bg-teal-705 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-md cursor-pointer transition-all active:scale-95 shrink-0"
           >
             <Plus className="h-4 w-4" />
             <span>Add New Ref</span>
-          </button>
+          </button>) : null}
         </div>
       )}
 
@@ -1225,19 +1235,19 @@ export default function ReferencesPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <button
+                {canAction(profile, 'reference.edit') ? (<button
                   onClick={() => handleOpenEditForm(selectedRef)}
                   className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
                 >
                   <Pencil className="h-3.5 w-3.5" /> Edit
-                </button>
-                <button
+                </button>) : null}
+                {canAction(profile, 'reference.delete') ? (<button
                   onClick={() => handleDeleteReference(selectedRef)}
                   disabled={deleting}
                   className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-[11px] font-bold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Delete
-                </button>
+                </button>) : null}
                 <button
                   onClick={() => setSelectedRef(null)}
                   className="text-slate-450 hover:text-slate-800 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
@@ -1477,7 +1487,7 @@ export default function ReferencesPage() {
 
                     {/* Step: In Progress */}
                     <div 
-                      onClick={() => handleUpdateStatus(selectedRef.id, 'In Progress')}
+                      onClick={canAction(profile, 'reference.edit') ? () => handleUpdateStatus(selectedRef.id, 'In Progress') : undefined}
                       className="relative flex gap-4 group cursor-pointer"
                     >
                       <div className={`absolute -left-6 flex h-5 w-5 items-center justify-center rounded-full border transition-all ${
@@ -1505,7 +1515,7 @@ export default function ReferencesPage() {
 
                     {/* Step: Completed */}
                     <div 
-                      onClick={() => handleUpdateStatus(selectedRef.id, 'Completed')}
+                      onClick={canAction(profile, 'reference.edit') ? () => handleUpdateStatus(selectedRef.id, 'Completed') : undefined}
                       className="relative flex gap-4 group cursor-pointer"
                     >
                       <div className={`absolute -left-6 flex h-5 w-5 items-center justify-center rounded-full border transition-all ${
@@ -1529,7 +1539,7 @@ export default function ReferencesPage() {
 
                     {/* Step: Picked Up */}
                     <div 
-                      onClick={() => handleUpdateStatus(selectedRef.id, 'Picked Up')}
+                      onClick={canAction(profile, 'reference.edit') ? () => handleUpdateStatus(selectedRef.id, 'Picked Up') : undefined}
                       className="relative flex gap-4 group cursor-pointer"
                     >
                       <div className={`absolute -left-6 flex h-5 w-5 items-center justify-center rounded-full border transition-all ${
@@ -1560,13 +1570,13 @@ export default function ReferencesPage() {
 
       {/* Floating Action Button (FAB) for mobile */}
       {!showAddForm && (
-        <button
+        (canAction(profile, 'reference.create') ? (<button
           onClick={handleOpenAddForm}
           className="fixed bottom-[calc(6rem_+_env(safe-area-inset-bottom))] right-6 z-40 md:hidden flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 hover:bg-teal-500 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
           aria-label="Add New Ref"
         >
           <Plus className="h-7 w-7" />
-        </button>
+        </button>) : null)
       )}
 
       {viewingSurvey && (

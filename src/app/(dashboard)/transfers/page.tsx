@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Transfer, Survey } from '@/types';
 import { useAuth } from '@/context/AuthContext';
+import { canAction } from '@/lib/permissions';
 import { useModal } from '@/context/ModalContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
@@ -27,7 +28,7 @@ import {
 } from 'lucide-react';
 
 export default function TransfersPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { showAlert, showConfirm } = useModal();
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
   const profileNames = useProfileNames();
@@ -162,6 +163,7 @@ export default function TransfersPage() {
   }, [sortedTransfers, groupBy, groupAggregate]);
 
   const handleOpenAddForm = () => {
+    if (!canAction(profile, 'transfer.create')) return void showAlert('Oggolaansho', 'Ma lihid Transfer Add permission.', 'warning');
     const today = new Date().toISOString().split('T')[0];
     setEditingTransfer(null);
     setSellers([{ name: '', tel: '' }]);
@@ -176,6 +178,7 @@ export default function TransfersPage() {
   // comma-joined strings on the record, so they're split back into per-person rows here
   // (matches how handleSaveTransfer re-joins them on save).
   const handleOpenEditForm = (transfer: Transfer) => {
+    if (!canAction(profile, 'transfer.edit')) return void showAlert('Oggolaansho', 'Ma lihid Transfer Edit permission.', 'warning');
     const sellerNames = transfer.seller_name.split(',').map((s) => s.trim());
     const sellerTels = transfer.seller_tel.split(',').map((s) => s.trim());
     const buyerNames = transfer.buyer_name.split(',').map((s) => s.trim());
@@ -203,6 +206,7 @@ export default function TransfersPage() {
 
   const handleSaveTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canAction(profile, editingTransfer ? 'transfer.edit' : 'transfer.create')) return void showAlert('Oggolaansho', 'Ma lihid fasaxa keydinta transfer-kan.', 'warning');
     setSaving(true);
 
     try {
@@ -257,6 +261,7 @@ export default function TransfersPage() {
   };
 
   const handleDeleteTransfer = async (transfer: Transfer) => {
+    if (!canAction(profile, 'transfer.delete')) return void showAlert('Oggolaansho', 'Ma lihid Transfer Delete permission.', 'warning');
     const isConfirmed = await showConfirm(
       'Tirtir Wareejinta',
       `Ma hubtaa inaad tirtirto wareejinta ${transfer.serial_no} (${transfer.seller_name} → ${transfer.buyer_name})? Tallaabadan lama soo celin karo.`,
@@ -284,13 +289,13 @@ export default function TransfersPage() {
       
       {!showAddForm && (
         <div className="hidden md:flex justify-end">
-          <button
+          {canAction(profile, 'transfer.create') ? (<button
             onClick={handleOpenAddForm}
             className="flex items-center gap-2 bg-teal-600 hover:bg-teal-705 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-md cursor-pointer transition-all active:scale-95 shrink-0"
           >
             <Plus className="h-4 w-4" />
             <span>New Transfer</span>
-          </button>
+          </button>) : null}
         </div>
       )}
 
@@ -649,21 +654,21 @@ export default function TransfersPage() {
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center justify-center gap-1.5">
-                                <button
+                                {canAction(profile, 'transfer.edit') ? (<button
                                   onClick={() => handleOpenEditForm(t)}
                                   className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 cursor-pointer"
                                   aria-label="Edit"
                                 >
                                   <Pencil className="h-3.5 w-3.5" />
-                                </button>
-                                <button
+                                </button>) : null}
+                                {canAction(profile, 'transfer.delete') ? (<button
                                   onClick={() => handleDeleteTransfer(t)}
                                   disabled={deletingId === t.id}
                                   className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 cursor-pointer disabled:opacity-50"
                                   aria-label="Delete"
                                 >
                                   {deletingId === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                                </button>
+                                </button>) : null}
                               </div>
                             </td>
                           </tr>
@@ -692,7 +697,7 @@ export default function TransfersPage() {
                       {group.items.map(t => (
                         <div
                           key={t.id}
-                          onClick={() => handleOpenEditForm(t)}
+                          onClick={canAction(profile, 'transfer.edit') ? () => handleOpenEditForm(t) : undefined}
                           className="grid grid-cols-[44px_1fr_auto] items-center gap-3 px-1 py-3.5 cursor-pointer active:bg-slate-50"
                         >
                           <span className="truncate text-xs font-black text-slate-500">{t.serial_no}</span>
@@ -716,14 +721,14 @@ export default function TransfersPage() {
                             <span className="whitespace-nowrap text-xs font-black text-emerald-600">
                               ${parseFloat(t.price.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </span>
-                            <button
+                            {canAction(profile, 'transfer.delete') ? (<button
                               onClick={(e) => { e.stopPropagation(); void handleDeleteTransfer(t); }}
                               disabled={deletingId === t.id}
                               className="rounded-lg p-1 text-rose-500 hover:bg-rose-50 cursor-pointer disabled:opacity-50"
                               aria-label="Delete"
                             >
                               {deletingId === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                            </button>
+                            </button>) : null}
                           </div>
                         </div>
                       ))}
@@ -738,13 +743,13 @@ export default function TransfersPage() {
 
       {/* Floating Action Button (FAB) for mobile */}
       {!showAddForm && (
-        <button
+        (canAction(profile, 'transfer.create') ? (<button
           onClick={handleOpenAddForm}
           className="fixed bottom-[calc(6rem_+_env(safe-area-inset-bottom))] right-6 z-40 md:hidden flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 hover:bg-teal-500 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
           aria-label="Wareejin Cusub"
         >
           <Plus className="h-7 w-7" />
-        </button>
+        </button>) : null)
       )}
 
     </div>

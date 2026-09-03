@@ -12,7 +12,7 @@ const MAX_SIZE = 1 * 1024 * 1024;
 // reference in the first place, not restricted to Admin.
 export async function POST(req: NextRequest) {
   try {
-    const viewer = await requireViewer(req);
+    const viewer = await requireViewer(req, 'archive.upload');
 
     const form = await req.formData();
     const file = form.get('file');

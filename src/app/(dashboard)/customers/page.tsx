@@ -1,4 +1,6 @@
 'use client';
+import { useAuth } from '@/context/AuthContext';
+import { canAction } from '@/lib/permissions';
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -63,6 +65,8 @@ function InfoRow({ icon: Icon, label, value }: { icon: typeof User; label: strin
 }
 
 export default function CustomersPage() {
+  const { profile } = useAuth();
+  const canSearch = canAction(profile, 'customer.search');
   const [searchInput, setSearchInput] = useState('');
   const [activeQuery, setActiveQuery] = useState('');
   const [results, setResults] = useState<CustomerRecord[]>([]);
@@ -113,6 +117,7 @@ export default function CustomersPage() {
   };
 
   useEffect(() => {
+    if (!canSearch) return;
     const trimmed = searchInput.trim();
     const timer = setTimeout(() => {
       if (trimmed) {
@@ -125,7 +130,7 @@ export default function CustomersPage() {
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchInput]);
+  }, [searchInput, canSearch]);
 
   const clearSearch = () => {
     setSearchInput('');
@@ -135,6 +140,7 @@ export default function CustomersPage() {
   };
 
   const notConfigured = error?.includes('lama dejin');
+  if (!canSearch) return <div className="p-8 text-sm text-slate-500">Ma lihid fasaxa raadinta Macmiisha.</div>;
 
   return (
     <div className="p-4 md:p-8 space-y-5 md:space-y-6">

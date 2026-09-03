@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { supabase } from '@/lib/supabase';
 import { Reference, Receipt, Expense } from '@/types';
 import { useAuth } from '@/context/AuthContext';
+import { canAction } from '@/lib/permissions';
 import { useModal } from '@/context/ModalContext';
 import { useSettings } from '@/context/SettingsContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
@@ -65,6 +66,7 @@ export default function FinancialsPage() {
   // Data states
   const [referencesWithReceipts, setReferencesWithReceipts] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const dataRevision = useRef(0);
 
   // Totals
   const [totalRevenue, setTotalRevenue] = useState(0);
@@ -141,7 +143,7 @@ export default function FinancialsPage() {
 
   // Fetch Financial Data
   const fetchData = async () => {
-    setLoading(true);
+    const revision = dataRevision.current;
     try {
       // 1. Fetch references with nested receipts
       const { data: refsData, error: refsError } = await supabase
@@ -175,6 +177,7 @@ export default function FinancialsPage() {
         .order('created_at', { ascending: false });
 
       if (refsError) throw refsError;
+      if (revision !== dataRevision.current) return;
       setReferencesWithReceipts(refsData || []);
 
       // 2. Fetch Expenses
@@ -184,6 +187,7 @@ export default function FinancialsPage() {
         .order('expense_date', { ascending: false });
 
       if (expError) throw expError;
+      if (revision !== dataRevision.current) return;
       setExpenses(expData || []);
 
       // 3. Calculate Totals
@@ -193,6 +197,7 @@ export default function FinancialsPage() {
         .select('amount, status');
       
       const revSum = receiptsData?.filter(r => r.status === 'Paid').reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0;
+      if (revision !== dataRevision.current) return;
       const creditSum = receiptsData?.filter(r => r.status === 'Credit').reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0;
       setTotalRevenue(revSum);
       setTotalCredit(creditSum);
@@ -385,6 +390,7 @@ export default function FinancialsPage() {
   // Save Client Payment Receipt
   const handleSaveReceipt = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canAction(profile, 'payment.create')) return void showAlert('Oggolaansho', 'Ma lihid Payment Add permission.', 'warning');
     if (selectedRefIds.length === 0) return;
     setSavingReceipt(true);
 
@@ -411,15 +417,23 @@ export default function FinancialsPage() {
         created_by: user?.id,
       };
 
-      const { error } = await supabase
+      const { data: savedReceipt, error } = await supabase
         .from('receipts')
-        .insert(payload);
+        .insert(payload).select('*').single();
 
       if (error) throw error;
 
+      dataRevision.current += 1;
+      setReferencesWithReceipts(current => current.map(reference => reference.id === savedReceipt.reference_id
+        ? { ...reference, receipts: [savedReceipt, ...(reference.receipts || []).filter((receipt: Receipt) => receipt.id !== savedReceipt.id)] }
+        : reference));
+      if (savedReceipt.status === 'Paid') setTotalRevenue(value => value + Number(savedReceipt.amount));
+      if (savedReceipt.status === 'Credit') setTotalCredit(value => value + Number(savedReceipt.amount));
+      setReceiptSearchQuery('');
+      setReceiptStatusFilter('');
+      setReceiptCreatorFilter('');
       showAlert('Guul', `Resiidhka (${baseRecNo}) si guul leh ayaa loo keydiyey!`, 'success');
       closePayDialog();
-      fetchData();
       refetchSettings();
     } catch (err: any) {
       console.error('Error saving receipt:', err);
@@ -431,6 +445,7 @@ export default function FinancialsPage() {
 
   // Mark Credit Receipt as Paid
   const handleUpdateCreditToPaid = async (receiptId: number) => {
+    if (!canAction(profile, 'payment.edit')) return void showAlert('Oggolaansho', 'Ma lihid Payment Edit permission.', 'warning');
     setUpdatingCredit(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -490,6 +505,7 @@ export default function FinancialsPage() {
   // Save Debt Payment (Full or Partial)
   const handleSaveDebtPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canAction(profile, 'payment.pay_debt')) return void showAlert('Oggolaansho', 'Ma lihid Pay Debt permission.', 'warning');
     if (!payDebtRef || !payDebtCreditReceipt) return;
 
     const payAmt = parseFloat(payDebtAmount);
@@ -624,6 +640,7 @@ export default function FinancialsPage() {
   // Save (or update) Office Expense
   const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canAction(profile, editingExpense ? 'expense.edit' : 'expense.create')) return void showAlert('Oggolaansho', 'Ma lihid fasaxa keydinta kharashkan.', 'warning');
     setSavingExpense(true);
 
     const qty = parseInt(expQty) || 0;
@@ -659,15 +676,20 @@ export default function FinancialsPage() {
         expense_no: expenseNo || null,
       };
 
-      const { error } = await supabase
+      const { data: savedExpense, error } = await supabase
         .from('expenses')
-        .insert([payload]);
+        .insert([payload]).select('*').single();
 
       if (error) throw error;
 
+      dataRevision.current += 1;
+      setExpenses(current => [savedExpense, ...current.filter(expense => expense.id !== savedExpense.id)]);
+      setTotalExpenses(value => value + Number(savedExpense.total));
+      setExpenseSearchQuery('');
+      setExpenseCreatorFilter('');
+      setExpenseSortBy('newest');
       showAlert('Guul', expenseNo ? `Kharashka (${expenseNo}) waa la keydiyey!` : 'Kharashka waa la keydiyey!', 'success');
       closeExpenseDialog();
-      fetchData();
       refetchSettings();
     } catch (err: any) {
       console.error('Error saving expense:', err);
@@ -678,6 +700,7 @@ export default function FinancialsPage() {
   };
 
   const handleDeleteExpense = async (expense: Expense) => {
+    if (!canAction(profile, 'expense.delete')) return void showAlert('Oggolaansho', 'Ma lihid Expense Delete permission.', 'warning');
     const isConfirmed = await showConfirm(
       'Tirtir Kharashka',
       `Ma hubtaa inaad tirtirto kharashka "${expense.description}"? Tallaabadan lama soo celin karo.`,
@@ -688,11 +711,13 @@ export default function FinancialsPage() {
 
     setDeletingExpenseId(expense.id);
     try {
-      const { error } = await supabase.from('expenses').delete().eq('id', expense.id);
+      const { data: deleted, error } = await supabase.from('expenses').delete().eq('id', expense.id).select('id, total').maybeSingle();
       if (error) throw error;
+      if (!deleted) throw new Error('Kharashka lama tirtirin. Hubi oggolaanshahaaga ama dib u cusboonaysii liiska.');
+      dataRevision.current += 1;
+      setExpenses(current => current.filter(item => item.id !== deleted.id));
+      setTotalExpenses(current => current - Number(deleted.total));
       showAlert('Guul', 'Kharashka waa la tirtiray.', 'success');
-      // Refetch (not a local patch) so the Total Expenses summary card stays accurate.
-      fetchData();
     } catch (err) {
       console.error('Error deleting expense:', err);
       showAlert('Cillad', err instanceof Error ? err.message : 'Tirtiridda wuu fashilmay.', 'error');
@@ -738,6 +763,7 @@ export default function FinancialsPage() {
 
   const handleSaveReceiptEdit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canAction(profile, 'payment.edit')) return void showAlert('Oggolaansho', 'Ma lihid Payment Edit permission.', 'warning');
     if (!selectedReceipt) return;
     setSavingReceiptEdit(true);
     try {
@@ -766,6 +792,7 @@ export default function FinancialsPage() {
   };
 
   const handleDeleteReceipt = async () => {
+    if (!canAction(profile, 'payment.delete')) return void showAlert('Oggolaansho', 'Ma lihid Payment Delete permission.', 'warning');
     if (!selectedReceipt) return;
     const isConfirmed = await showConfirm(
       'Tirtir Resiidhka',
@@ -777,12 +804,18 @@ export default function FinancialsPage() {
 
     setDeletingReceipt(true);
     try {
-      const { error } = await supabase.from('receipts').delete().eq('id', selectedReceipt.id);
+      const { data: deleted, error } = await supabase.from('receipts').delete().eq('id', selectedReceipt.id).select('id, amount, status').maybeSingle();
       if (error) throw error;
+      if (!deleted) throw new Error('Resiidhka lama tirtirin. Hubi oggolaanshahaaga ama dib u cusboonaysii liiska.');
+      dataRevision.current += 1;
+      setReferencesWithReceipts(current => current.map(reference => ({ ...reference,
+        receipts: (reference.receipts || []).filter((receipt: Receipt) => receipt.id !== deleted.id),
+      })));
+      if (deleted.status === 'Paid') setTotalRevenue(current => current - Number(deleted.amount));
+      if (deleted.status === 'Credit') setTotalCredit(current => current - Number(deleted.amount));
       showAlert('Guul', 'Resiidhka waa la tirtiray.', 'success');
       setSelectedReceipt(null);
       setReceiptEditMode(false);
-      fetchData();
     } catch (err) {
       console.error('Error deleting receipt:', err);
       showAlert('Cillad', err instanceof Error ? err.message : 'Tirtiridda wuu fashilmay.', 'error');
@@ -1544,20 +1577,20 @@ export default function FinancialsPage() {
                                       </span>
                                     )}
                                   </div>
-                                  <button
+                                  {canAction(profile, 'payment.pay_debt') ? (<button
                                     onClick={() => openPayDebtDialog(ref)}
                                     className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] py-1.5 px-3 rounded-xl shadow-sm cursor-pointer transition-all active:scale-95 flex items-center gap-1"
                                   >
                                     Pay Debt
-                                  </button>
+                                  </button>) : null}
                                 </div>
                               ) : (
-                                <button
+                                (canAction(profile, 'payment.create') ? (<button
                                   onClick={() => openPayDialog(ref.id, ref.ref_number, ref.subject)}
                                   className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] py-1.5 px-4 rounded-xl shadow-sm cursor-pointer transition-colors"
                                 >
                                   Pay Now
-                                </button>
+                                </button>) : null)
                               )}
                             </td>
                           </tr>
@@ -1640,20 +1673,20 @@ export default function FinancialsPage() {
                             <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full font-black uppercase text-[9px] cursor-pointer" onClick={() => openReceiptDetails(activeReceipt, ref.ref_number)}>
                               <AlertCircle className="h-2.5 w-2.5" /> Deyn: ${creditAmount.toFixed(2)}
                             </span>
-                            <button
+                            {canAction(profile, 'payment.pay_debt') ? (<button
                               onClick={() => openPayDebtDialog(ref)}
                               className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[9px] py-0.5 px-2 rounded-xl shadow-sm cursor-pointer transition-colors"
                             >
                               Pay Debt
-                            </button>
+                            </button>) : null}
                           </div>
                         ) : (
-                          <button
+                          (canAction(profile, 'payment.create') ? (<button
                             onClick={() => openPayDialog(ref.id, ref.ref_number, ref.subject)}
                             className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] py-1 px-3.5 rounded-xl shadow-sm cursor-pointer transition-colors"
                           >
                             Pay Now
-                          </button>
+                          </button>) : null)
                         )}
                       </div>
                     </div>
@@ -1680,12 +1713,12 @@ export default function FinancialsPage() {
         <div className="space-y-4">
           <div className="flex justify-between items-center px-1">
             <h4 className="font-extrabold text-sm text-slate-700">Liiska Kharashyada (Expense List)</h4>
-            <button
+            {canAction(profile, 'expense.create') ? (<button
               onClick={openExpenseDialog}
               className="flex items-center gap-1 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm cursor-pointer transition-colors"
             >
               <Plus className="h-4 w-4" /> Add Expense
-            </button>
+            </button>) : null}
           </div>
 
           {/* Desktop Table View */}
@@ -1749,21 +1782,21 @@ export default function FinancialsPage() {
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center justify-center gap-1.5">
-                                <button
+                                {canAction(profile, 'expense.edit') ? (<button
                                   onClick={() => openExpenseEditDialog(e)}
                                   className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 cursor-pointer"
                                   aria-label="Edit"
                                 >
                                   <Pencil className="h-3.5 w-3.5" />
-                                </button>
-                                <button
+                                </button>) : null}
+                                {canAction(profile, 'expense.delete') ? (<button
                                   onClick={() => handleDeleteExpense(e)}
                                   disabled={deletingExpenseId === e.id}
                                   className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 cursor-pointer disabled:opacity-50"
                                   aria-label="Delete"
                                 >
                                   {deletingExpenseId === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                                </button>
+                                </button>) : null}
                               </div>
                             </td>
                           </tr>
@@ -1801,7 +1834,7 @@ export default function FinancialsPage() {
                     {group.items.map((e) => (
                       <div
                         key={e.id}
-                        onClick={() => openExpenseEditDialog(e)}
+                        onClick={canAction(profile, 'expense.edit') ? () => openExpenseEditDialog(e) : undefined}
                         className="grid grid-cols-[36px_1fr_auto] items-center gap-3 px-1 py-3.5 cursor-pointer active:bg-slate-50"
                       >
                         <span className="truncate text-xs font-black text-slate-400">{expenseSerial.get(e.id)}</span>
@@ -1819,14 +1852,14 @@ export default function FinancialsPage() {
                           <span className="whitespace-nowrap text-xs font-black text-rose-600">
                             ${parseFloat(e.total.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                           </span>
-                          <button
+                          {canAction(profile, 'expense.delete') ? (<button
                             onClick={(ev) => { ev.stopPropagation(); void handleDeleteExpense(e); }}
                             disabled={deletingExpenseId === e.id}
                             className="rounded-lg p-1 text-rose-500 hover:bg-rose-50 cursor-pointer disabled:opacity-50"
                             aria-label="Delete"
                           >
                             {deletingExpenseId === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                          </button>
+                          </button>) : null}
                         </div>
                       </div>
                     ))}
@@ -2247,7 +2280,7 @@ export default function FinancialsPage() {
                     </button>
 
                     {selectedReceipt.status === 'Credit' && (
-                      <button
+                      (canAction(profile, 'payment.pay_debt') ? (<button
                         onClick={() => {
                           const currentSelected = selectedReceipt;
                           setSelectedReceipt(null);
@@ -2270,25 +2303,25 @@ export default function FinancialsPage() {
                       >
                         <CreditCard className="h-3.5 w-3.5" />
                         <span>BIXI DEYNTA (PAY DEBT)</span>
-                      </button>
+                      </button>) : null)
                     )}
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2.5">
-                    <button
+                    {canAction(profile, 'payment.edit') ? (<button
                       onClick={openReceiptEditMode}
                       className="flex items-center justify-center gap-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-2xs border border-slate-200 transition-all active:scale-95"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                       <span>EDIT</span>
-                    </button>
-                    <button
+                    </button>) : null}
+                    {canAction(profile, 'payment.delete') ? (<button
                       onClick={handleDeleteReceipt}
                       disabled={deletingReceipt}
                       className="flex items-center justify-center gap-1.5 rounded-xl bg-white hover:bg-rose-50 text-rose-600 font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-2xs border border-rose-200 transition-all active:scale-95 disabled:opacity-50"
                     >
                       {deletingReceipt ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                       <span>DELETE</span>
-                    </button>
+                    </button>) : null}
                   </div>
                 </div>
               </>
@@ -2554,12 +2587,12 @@ export default function FinancialsPage() {
             >
               Cancel
             </button>
-            <button
+            {canAction(profile, 'payment.create') ? (<button
               onClick={openBulkPayDialog}
               className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md transition-colors cursor-pointer"
             >
               Pay Selected
-            </button>
+            </button>) : null}
           </div>
         </div>
       )}

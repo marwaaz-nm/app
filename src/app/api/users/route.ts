@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { accountErrors, actionsForMenus } from '@/lib/userForm';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -62,8 +63,14 @@ export async function POST(req: NextRequest) {
 
     const { username, fullname, role, password, permitted_menus, permitted_actions } = await req.json();
 
+    const fields = accountErrors({ username, fullname, password }, true);
+    if (Object.keys(fields).length) return NextResponse.json({ error: 'Hubi meelaha calaamadaysan.', fields }, { status: 400 });
+
     if (!username || !fullname || !role || !password) {
       return NextResponse.json({ error: 'Fadlan buuxi dhamaan meelaha loo baahan yahay.' }, { status: 400 });
+    }
+    if (!['User', 'Admin'].includes(role)) {
+      return NextResponse.json({ error: 'Role-ka cusub waa inuu noqdaa User ama Admin.' }, { status: 400 });
     }
 
     const email = `${username.trim().toLowerCase()}@geosurvey.com`;
@@ -71,7 +78,7 @@ export async function POST(req: NextRequest) {
 
     const isDbAdmin = role === 'Admin' || role === 'SuperAdmin';
     const finalMenus = isDbAdmin ? null : (Array.isArray(permitted_menus) ? permitted_menus : []);
-    const finalActions = isDbAdmin ? [] : (Array.isArray(permitted_actions) ? permitted_actions : []);
+    const finalActions = isDbAdmin ? [] : actionsForMenus(Array.isArray(permitted_actions) ? permitted_actions : [], finalMenus || []);
 
     // Create user in Supabase Auth using admin client
     const { data, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -111,13 +118,16 @@ export async function POST(req: NextRequest) {
         .update(profilePayload)
         .eq('id', data.user.id);
       if (fallbackError) {
-        console.error('Error updating profile permitted_menus (fallback):', fallbackError);
+        throw new Error('Account-ka waa la abuuray, laakiin oggolaanshaha lama keydin. Edit ku sax; ha abuurin account kale.');
       }
     } else if (profileError) {
-      console.error('Error updating profile permitted_menus:', profileError);
+      throw new Error('Account-ka waa la abuuray, laakiin oggolaanshaha lama keydin. Edit ku sax; ha abuurin account kale.');
     }
 
-    return NextResponse.json({ result: 'success', user: data.user });
+    const { data: savedProfile, error: readError } = await supabaseAdmin
+      .from('profiles').select('*').eq('id', data.user.id).single();
+    if (readError) throw readError;
+    return NextResponse.json({ result: 'success', profile: savedProfile });
   } catch (err: any) {
     console.error('API User Create Exception:', err);
     return NextResponse.json({ error: err.message || 'Cillad ayaa dhacday.' }, { status: 500 });
@@ -134,8 +144,14 @@ export async function PUT(req: NextRequest) {
 
     const { username, fullname, role, password, permitted_menus, permitted_actions } = await req.json();
 
+    const fields = accountErrors({ username, fullname, password }, false);
+    if (Object.keys(fields).length) return NextResponse.json({ error: 'Hubi meelaha calaamadaysan.', fields }, { status: 400 });
+
     if (!username || !fullname || !role) {
       return NextResponse.json({ error: 'Fadlan buuxi dhamaan meelaha loo baahan yahay.' }, { status: 400 });
+    }
+    if (!['User', 'Admin', 'SuperAdmin'].includes(role)) {
+      return NextResponse.json({ error: 'Role aan sax ahayn.' }, { status: 400 });
     }
 
     const supabaseAdmin = getAdminClient();
@@ -151,10 +167,14 @@ export async function PUT(req: NextRequest) {
     if (profileFetchError || !targetProfile) {
       return NextResponse.json({ error: 'User-ka lama helin profiles table-ka.' }, { status: 404 });
     }
+    if ((targetProfile.role === 'SuperAdmin' && role !== 'SuperAdmin') ||
+        (targetProfile.role !== 'SuperAdmin' && role === 'SuperAdmin')) {
+      return NextResponse.json({ error: 'Role-ka SuperAdmin lagama beddeli karo foomkan.' }, { status: 403 });
+    }
 
     const isDbAdmin = role === 'Admin' || role === 'SuperAdmin';
     const finalMenus = isDbAdmin ? null : (Array.isArray(permitted_menus) ? permitted_menus : []);
-    const finalActions = isDbAdmin ? [] : (Array.isArray(permitted_actions) ? permitted_actions : []);
+    const finalActions = isDbAdmin ? [] : actionsForMenus(Array.isArray(permitted_actions) ? permitted_actions : [], finalMenus || []);
 
     // Update profile with fallback if permitted_actions column doesn't exist yet
     const profileUpdatePayload: any = {
@@ -205,9 +225,15 @@ export async function PUT(req: NextRequest) {
 
     if (authUpdateError) {
       console.error('Error updating auth metadata:', authUpdateError);
+      return NextResponse.json({
+        error: `Xogta profile-ka waa la keydiyey, laakiin password-ka ama Auth update-ku wuu fashilmay: ${authUpdateError.message}`,
+      }, { status: 400 });
     }
 
-    return NextResponse.json({ result: 'success' });
+    const { data: savedProfile, error: readError } = await supabaseAdmin
+      .from('profiles').select('*').eq('id', targetProfile.id).single();
+    if (readError) throw readError;
+    return NextResponse.json({ result: 'success', profile: savedProfile });
   } catch (err: any) {
     console.error('API User Update Exception:', err);
     return NextResponse.json({ error: err.message || 'Cillad ayaa dhacday.' }, { status: 500 });
@@ -229,7 +255,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Username is required' }, { status: 400 });
     }
 
-    if (username.toLowerCase() === 'admin') {
+    if (username.trim().toLowerCase() === 'admin') {
       return NextResponse.json({ error: 'User-ka admin-ka ah lama tirtiri karo.' }, { status: 400 });
     }
 
@@ -238,18 +264,24 @@ export async function DELETE(req: NextRequest) {
     // 1. Get profile to retrieve the UUID of the user
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id')
+      .select('id, role')
       .eq('username', username.trim().toLowerCase())
       .single();
 
     if (profileError || !profile) {
       return NextResponse.json({ error: 'User-ka lama helin profiles table-ka.' }, { status: 404 });
     }
+    if (profile.id === adminCheck.userId || profile.role === 'SuperAdmin') {
+      return NextResponse.json({ error: 'Ma tirtiri kartid account-ka aad ku jirto ama SuperAdmin.' }, { status: 403 });
+    }
 
     // 2. Delete user from Supabase Auth (cascades to profiles table via foreign key)
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(profile.id);
 
     if (deleteError) {
+      if (deleteError.code === 'unexpected_failure' || /database|foreign key/i.test(deleteError.message)) {
+        return NextResponse.json({ error: 'Database-ku wuu diiday tirtiridda user-ka. Waxaa jiri kara records ama dukumentiyo ku xiran; xogtaas lama tirtirin. Hubi xiriirrada user-ka ka hor tirtiridda.' }, { status: 409 });
+      }
       return NextResponse.json({ error: deleteError.message }, { status: 400 });
     }
 

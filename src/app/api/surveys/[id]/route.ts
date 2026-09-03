@@ -149,12 +149,15 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     await getSurvey(viewer, id);
 
     const { data: documents } = await viewer.admin.from('survey_documents').select('storage_path').eq('survey_id', id);
-    if (documents && documents.length > 0) {
-      await viewer.admin.storage.from('survey-documents').remove(documents.map((d) => d.storage_path));
-    }
-
-    const { error } = await viewer.admin.from('surveys').delete().eq('id', id);
+    const { data: deleted, error } = await viewer.admin.from('surveys').delete().eq('id', id).select('id').maybeSingle();
     if (error) throw error;
+    if (!deleted) return NextResponse.json({ error: 'Survey-ga lama helin.' }, { status: 404 });
+    // Never remove attachments before the database confirms deletion.
+    if (documents && documents.length > 0) {
+      try {
+        await viewer.admin.storage.from('survey-documents').remove(documents.map((d) => d.storage_path));
+      } catch (cleanupError) { console.error('Survey attachment cleanup failed:', cleanupError); }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { canAction } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import type { Survey, SurveyDocument, SurveyRevision, SurveyStatus } from '@/types';
 import { Clock3, FileText, History, Loader2, RotateCcw, Save, Trash2, Upload, X } from 'lucide-react';
@@ -51,11 +52,8 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
   const [file, setFile] = useState<File | null>(null);
   const loadedRecordRef = useRef<number | null>(null);
 
-  const isAdmin = profile?.role === 'Admin';
-  const can = (action: string) => {
-    if (!schemaReady) return action === 'survey.edit' && (isAdmin || Boolean(profile?.permitted_menus?.includes('/records')));
-    return isAdmin || Boolean(profile?.permitted_actions?.includes(action));
-  };
+  const isAdmin = profile?.role === 'Admin' || profile?.role === 'SuperAdmin';
+  const can = (action: string) => canAction(profile, action);
 
   async function request(path: string, options: RequestInit = {}) {
     const { data: { session } } = await supabase.auth.getSession();
@@ -252,7 +250,7 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
               />
             </fieldset>
 
-            <button disabled={busy || !can('survey.edit')} onClick={saveEdit} className="mt-5 flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-xs font-black text-white disabled:opacity-40"><Save className="h-4 w-4" /> Kaydi isbeddelka</button>
+            {can('survey.edit') && <button disabled={busy} onClick={saveEdit} className="mt-5 flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-xs font-black text-white disabled:opacity-40"><Save className="h-4 w-4" /> Kaydi isbeddelka</button>}
           </div>}
 
           {tab === 'documents' && <div className="space-y-5">

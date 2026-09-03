@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
+import { canAction } from '@/lib/permissions';
 import { supabase } from '@/lib/supabase';
 import { Survey } from '@/types';
 import DetailsModal from '@/components/DetailsModal';
@@ -25,6 +27,7 @@ import {
 import { ALL_NEIGHBORHOODS, ALL_BRANCHES } from '@/lib/boundaryDetection';
 
 export default function RecordsPage() {
+  const { profile } = useAuth();
   const { newEntityIdsFor, dismissNewEntity } = useNotifications();
   const newSurveyIds = newEntityIdsFor('/records');
   const [records, setRecords] = useState<Survey[]>(() => {
@@ -172,6 +175,12 @@ export default function RecordsPage() {
       setSelectedRecord((current) => current?.id === change.survey.id ? change.survey : current);
     } else {
       setSelectedRecord((current) => current?.id === change.surveyId ? null : current);
+      setManagedRecord(null);
+      try {
+        const pending = JSON.parse(window.sessionStorage.getItem(PENDING_SURVEY_KEY) || 'null');
+        if (pending?.id === change.surveyId) window.sessionStorage.removeItem(PENDING_SURVEY_KEY);
+      } catch { /* Storage may be unavailable. */ }
+      return;
     }
 
     await fetchRecords();
@@ -288,13 +297,13 @@ export default function RecordsPage() {
   return (
     <div className="p-4 md:p-8 w-full space-y-3.5 md:space-y-6 text-slate-800">
       <div className="hidden md:flex justify-end">
-        <Link
+        {canAction(profile, 'survey.create') ? (<Link
           href="/records/new"
           className="flex items-center gap-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-600 text-white font-bold text-sm px-5 py-3 rounded-2xl shadow-lg shadow-teal-600/15 hover:shadow-teal-600/25 cursor-pointer transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95 shrink-0 select-none"
         >
           <Plus className="h-4 w-4" />
           <span>Add New Survey</span>
-        </Link>
+        </Link>) : null}
       </div>
 
       {/* Filter and Search Card */}
@@ -648,13 +657,13 @@ export default function RecordsPage() {
       )}
 
       {/* Floating Action Button (FAB) for mobile */}
-      <Link
+      {canAction(profile, 'survey.create') ? (<Link
         href="/records/new"
         className="fixed bottom-[calc(6rem_+_env(safe-area-inset-bottom))] right-6 z-40 md:hidden flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 hover:bg-teal-500 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
         aria-label="Add New Survey"
       >
         <Plus className="h-7 w-7" />
-      </Link>
+      </Link>) : null}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertCircle, HelpCircle, Info } from 'lucide-react';
 
 interface ModalConfig {
@@ -90,8 +91,8 @@ export function ModalProvider({ children }: { children: ReactNode }) {
   return (
     <ModalContext.Provider value={{ showAlert, showConfirm }}>
       {children}
-      {config.isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-sm animate-in fade-in duration-200">
+      {config.isOpen && createPortal(
+        <div role="alertdialog" aria-modal="true" aria-label={config.title} className="fixed inset-0 z-[20000] flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-sm bg-white border border-slate-100 rounded-[2rem] overflow-hidden shadow-2xl p-6 space-y-6 text-center animate-in zoom-in-95 duration-200">
             {/* Header Icon */}
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full shadow-inner transition-all">
@@ -156,7 +157,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </ModalContext.Provider>
   );
 }

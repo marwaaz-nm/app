@@ -1,5 +1,5 @@
 /* Marwaazpn offline worker: app shell cache, per-session data cache, and survey sync queue. */
-const VERSION = 'marwaazpn-offline-v5';
+const VERSION = 'marwaazpn-offline-v6';
 const SHELL_CACHE = `${VERSION}-shell`;
 const DATA_CACHE_PREFIX = `${VERSION}-data-`;
 const DB_NAME = 'marwaazpn-offline';
@@ -39,12 +39,16 @@ self.addEventListener('fetch', (event) => {
       return;
     }
     const url = new URL(request.url);
+    if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) {
+      event.respondWith(networkFirstData(request));
+      return;
+    }
     if (url.origin === self.location.origin && (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/api/') || url.pathname === '/favicon.ico')) {
       event.respondWith(cacheWithNetworkRefresh(request));
       return;
     }
     if (url.hostname.endsWith('.supabase.co') && url.pathname.includes('/rest/v1/')) {
-      event.respondWith(cacheWithNetworkRefresh(request));
+      event.respondWith(networkFirstData(request));
     }
     return;
   }
@@ -75,6 +79,22 @@ async function navigationResponse(request) {
     return response;
   } catch {
     return (await cache.match(request)) || (await cache.match('/dashboard')) || (await cache.match('/login')) || offlineDocument();
+  }
+}
+
+// Mutable records must never be served stale while a successful network read
+// silently updates only the cache. Keep cached data solely as an offline fallback.
+async function networkFirstData(request) {
+  const cache = await caches.open(dataCacheName(request));
+  try {
+    const response = await fetch(request);
+    if (response.ok) await cache.put(request, response.clone());
+    return response;
+  } catch {
+    return (await cache.match(request)) || new Response(JSON.stringify({ error: 'Offline; xogtan hore looma kaydin.' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
 

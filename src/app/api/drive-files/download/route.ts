@@ -11,7 +11,7 @@ function contentDisposition(name: string): string {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireViewer(req);
+    await requireViewer(req, 'drive.download');
     const fileId = req.nextUrl.searchParams.get('fileId')?.trim();
     if (!fileId) throw Object.assign(new Error('fileId waa loo baahan yahay.'), { status: 400 });
     const connectionId = Number(req.nextUrl.searchParams.get('connectionId'));

@@ -3,7 +3,10 @@ import { apiError, requireViewer } from '@/lib/server-auth';
 
 export async function POST(req: NextRequest) {
   try {
-    const viewer = await requireViewer(req);
+    const viewer = await requireViewer(req, 'payment.pay_debt');
+    if (viewer.role !== 'Admin' && viewer.permittedMenus !== null && !viewer.permittedMenus.includes('/financials')) {
+      return NextResponse.json({ error: 'Financials access required.' }, { status: 403 });
+    }
     const body = await req.json();
 
     const referenceId = body.reference_id ? Number(body.reference_id) : null;

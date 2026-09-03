@@ -12,7 +12,7 @@ const MAX_SIZE = 1 * 1024 * 1024;
 // to Drive exactly once, then links every selected reference row to that same file.
 export async function POST(req: NextRequest) {
   try {
-    const viewer = await requireViewer(req);
+    const viewer = await requireViewer(req, 'archive.upload');
 
     const form = await req.formData();
     const file = form.get('file');

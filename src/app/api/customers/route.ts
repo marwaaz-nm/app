@@ -6,7 +6,7 @@ import { getAllActiveDriveConnections, listDriveConnectionSummaries } from '@/li
 
 export async function GET(req: NextRequest) {
   try {
-    await requireViewer(req);
+    await requireViewer(req, 'customer.search');
     const query = req.nextUrl.searchParams.get('q')?.trim();
     if (!query) return NextResponse.json({ query: '', results: [] });
 

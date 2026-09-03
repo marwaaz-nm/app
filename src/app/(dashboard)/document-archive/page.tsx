@@ -1,4 +1,6 @@
 'use client';
+import { useAuth } from '@/context/AuthContext';
+import { canAction } from '@/lib/permissions';
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -31,6 +33,7 @@ async function accessToken() {
 }
 
 export default function DocumentArchivePage() {
+  const { profile } = useAuth();
   const { showAlert } = useModal();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Reference[]>([]);
@@ -231,7 +234,7 @@ export default function DocumentArchivePage() {
           >
             Ka noqo
           </button>
-          <label className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border px-4 py-2.5 text-xs font-bold transition-colors ${
+          {canAction(profile, 'archive.upload') ? (<label className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border px-4 py-2.5 text-xs font-bold transition-colors ${
             bulkUploading ? 'border-teal-200 bg-white text-teal-300' : 'border-teal-300 bg-white text-teal-700 hover:bg-teal-100'
           }`}>
             {bulkUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
@@ -247,7 +250,7 @@ export default function DocumentArchivePage() {
                 if (file) void handleBulkUpload(file);
               }}
             />
-          </label>
+          </label>) : null}
         </div>
       )}
 
@@ -280,7 +283,7 @@ export default function DocumentArchivePage() {
                     : 'Weli PDF lama darin.'}
                 </p>
               </div>
-              <label className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold cursor-pointer shrink-0 transition-colors ${
+              {canAction(profile, 'archive.upload') ? (<label className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold cursor-pointer shrink-0 transition-colors ${
                 uploadingId === reference.id ? 'border-slate-200 text-slate-400' : 'border-slate-200 text-slate-600 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700'
               }`}>
                 {uploadingId === reference.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
@@ -296,7 +299,7 @@ export default function DocumentArchivePage() {
                     if (file) void handleUpload(reference, file);
                   }}
                 />
-              </label>
+              </label>) : null}
             </div>
           ))}
         </div>

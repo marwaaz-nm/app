@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { NextRequest } from 'next/server';
+import { canAction } from './permissions';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -69,7 +70,7 @@ export async function requireViewer(req: NextRequest, action?: string): Promise<
   const legacyActions = ['survey.create', 'survey.edit', 'survey.submit', 'reference.manage', 'transfer.create', 'finance.manage', 'report.view'];
   const permittedActions = Array.isArray(profile.permitted_actions) ? profile.permitted_actions : legacyActions;
   const permittedMenus = Array.isArray(profile.permitted_menus) ? profile.permitted_menus : null;
-  if (action && role !== 'Admin' && !permittedActions.includes(action)) {
+  if (action && !canAction({ role, permitted_actions: permittedActions, permitted_menus: permittedMenus }, action)) {
     throw Object.assign(new Error(`Permission required: ${action}`), { status: 403 });
   }
 
@@ -78,6 +79,9 @@ export async function requireViewer(req: NextRequest, action?: string): Promise<
 
 export function apiError(error: unknown) {
   const databaseCode = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+  if (databaseCode === '23503') {
+    return { status: 409, message: 'Record-kan waxaa ku xiran xog kale. Marka hore hubi xogta ku xiran ka hor inta aanad tirtirin.' };
+  }
   if (['42703', '42P01', '42883', 'PGRST202', 'PGRST205'].includes(databaseCode)) {
     return { status: 503, message: 'Database upgrade required. Run the Supabase migrations listed in README.md.' };
   }

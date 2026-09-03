@@ -11,13 +11,13 @@ type RouteContext = { params: Promise<{ id: string }> };
 // instead of the direct-Supabase-client pattern the rest of this page otherwise uses.
 export async function DELETE(req: NextRequest, context: RouteContext) {
   try {
-    const viewer = await requireViewer(req);
+    const viewer = await requireViewer(req, 'reference.delete');
     const id = Number((await context.params).id);
     if (!Number.isInteger(id)) return NextResponse.json({ error: 'Invalid reference id.' }, { status: 400 });
 
     const { data: reference, error: fetchError } = await viewer.admin
       .from('references')
-      .select('id, archive_drive_file_id')
+      .select('*')
       .eq('id', id)
       .single();
     if (fetchError || !reference) return NextResponse.json({ error: 'Reference-ka lama helin.' }, { status: 404 });

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
+import { canAction } from '@/lib/permissions';
 import { supabase } from '@/lib/supabase';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
 import {
@@ -109,6 +111,7 @@ function sortItems(items: DriveItem[], sortKey: SortKey): DriveItem[] {
 }
 
 export default function DriveFilesPage() {
+  const { profile } = useAuth();
   // Connection picker state
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(true);
@@ -612,7 +615,7 @@ export default function DriveFilesPage() {
                             </span>
                           </Link>
                         )}
-                        <button
+                        {canAction(profile, 'drive.download') ? (<button
                           type="button"
                           onClick={() => handleDownload(item)}
                           disabled={downloadingId === item.id}
@@ -620,7 +623,7 @@ export default function DriveFilesPage() {
                           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {downloadingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                        </button>
+                        </button>) : null}
                       </div>
                     )}
                   </li>
@@ -663,7 +666,7 @@ export default function DriveFilesPage() {
                             )}
                           </Link>
                         )}
-                        <button
+                        {canAction(profile, 'drive.download') ? (<button
                           type="button"
                           onClick={() => handleDownload(item)}
                           disabled={downloadingId === item.id}
@@ -671,7 +674,7 @@ export default function DriveFilesPage() {
                           className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 opacity-0 group-hover:opacity-100 hover:border-teal-200 hover:text-teal-700 transition-all cursor-pointer disabled:opacity-50"
                         >
                           {downloadingId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                        </button>
+                        </button>) : null}
                       </>
                     )}
                   </div>
@@ -707,7 +710,7 @@ export default function DriveFilesPage() {
                     <RotateCw className="h-3.5 w-3.5" />
                   </button>
                 )}
-                <button
+                {canAction(profile, 'drive.download') ? (<button
                   type="button"
                   onClick={() => handleDownload(previewItem)}
                   disabled={downloadingId === previewItem.id}
@@ -715,7 +718,7 @@ export default function DriveFilesPage() {
                 >
                   {downloadingId === previewItem.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                   <span className="hidden sm:inline">Soo deji</span>
-                </button>
+                </button>) : null}
                 <button
                   type="button"
                   onClick={closePreview}

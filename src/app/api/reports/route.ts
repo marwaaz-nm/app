@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
   try {
     const viewer = await requireViewer(req, 'report.view');
     const format = req.nextUrl.searchParams.get('format');
+    if (format && format !== 'backup') await requireViewer(req, 'report.export');
 
     // 1. CSV Format: Query both DB surveys and sheet surveys
     if (format === 'csv') {
