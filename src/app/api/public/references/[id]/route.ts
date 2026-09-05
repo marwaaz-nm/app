@@ -5,6 +5,7 @@ import { authorizePublicReference, publicReferenceError, publicReferenceHeaders 
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const websiteHeaders = { ...publicReferenceHeaders, 'Access-Control-Allow-Origin': 'https://www.marwaazpn.com', Vary: 'Origin' };
 
 // Server-only admin client — this route is intentionally unauthenticated
 // (scanned from a printed QR code), so it hand-picks only the fields safe
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ reference: {
         ref_number: match.ref_number, subject: match.subject, issue_date: match.issue_date,
         archive_drive_file_id: null, archive_file_name: null, surveys: survey, source: 'sheet',
-      } }, { headers: publicReferenceHeaders });
+      } }, { headers: websiteHeaders });
     }
     const selectFields = `
       ref_number,
@@ -85,7 +86,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { data: reference, error } = await supabaseAdmin
       .from('references').select(selectFields).eq('verification_token', id.toLowerCase()).maybeSingle();
     if (error) return publicReferenceError('Service temporarily unavailable', 503);
-    if (reference) return NextResponse.json({ reference }, { headers: publicReferenceHeaders });
+    if (reference) return NextResponse.json({ reference }, { headers: websiteHeaders });
 
     return publicReferenceError('Reference not found', 404);
   } catch (err) {
