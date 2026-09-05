@@ -2,7 +2,6 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { isPublicReferenceCode } from './publicReferenceCode';
 
 export const publicReferenceHeaders = {
   'Cache-Control': 'private, no-store, max-age=0',
@@ -13,7 +12,6 @@ export function publicReferenceError(error: string, status: number) {
   return NextResponse.json({ error }, { status, headers: publicReferenceHeaders });
 }
 export async function authorizePublicReference(client: SupabaseClient, id: string) {
-  if (!isPublicReferenceCode(id)) return publicReferenceError('Reference not found', 404);
   // Database counters are shared across instances; raw bearer codes are never stored here.
   // Missing migration or database outage fails closed, before any document lookup.
   const key = createHash('sha256').update(id.toLowerCase()).digest('hex');

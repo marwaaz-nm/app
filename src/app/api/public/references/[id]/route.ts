@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { isPublicReferenceCode } from '@/lib/publicReferenceCode';
+import { isPublicReferenceCode, normalizeSheetReference } from '@/lib/publicReferenceCode';
 import { authorizePublicReference, publicReferenceError, publicReferenceHeaders } from '@/lib/publicReferenceAccess';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -20,12 +20,24 @@ const getAdminClient = () => {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!isPublicReferenceCode(id)) return publicReferenceError('Reference not found', 404);
+  const sheetReference = normalizeSheetReference(id);
+  if (!isPublicReferenceCode(id) && !sheetReference) return publicReferenceError('Reference not found', 404);
 
   try {
     const supabaseAdmin = getAdminClient();
-    const denied = await authorizePublicReference(supabaseAdmin, id);
+    const lookupKey = sheetReference || id.toLowerCase();
+    const denied = await authorizePublicReference(supabaseAdmin, lookupKey);
     if (denied) return denied;
+    if (sheetReference) {
+      const { getGoogleSheetReferences } = await import('@/lib/googleSheetReferences');
+      const references = await getGoogleSheetReferences();
+      const match = references.find((reference) => normalizeSheetReference(reference.ref_number) === sheetReference);
+      if (!match) return publicReferenceError('Reference not found', 404);
+      return NextResponse.json({ reference: {
+        ref_number: match.ref_number, subject: match.subject, issue_date: match.issue_date,
+        archive_drive_file_id: null, archive_file_name: null, surveys: null, source: 'sheet',
+      } }, { headers: publicReferenceHeaders });
+    }
     const selectFields = `
       ref_number,
       subject,

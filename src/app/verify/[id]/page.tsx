@@ -50,6 +50,7 @@ type PublicReference = {
   archive_drive_file_id?: string | null;
   archive_file_name?: string | null;
   surveys: PublicSurvey | null;
+  source?: 'sheet';
 };
 
 export default function PublicReferencePage({ params }: { params: Promise<{ id: string }> }) {
@@ -122,6 +123,10 @@ export default function PublicReferencePage({ params }: { params: Promise<{ id: 
 
         {!loading && !notFound && reference && (
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-center gap-2 bg-emerald-50 px-6 py-4 text-center text-sm font-extrabold text-emerald-800" role="status">
+              <ShieldCheck className="h-5 w-5" />
+              Warqaddan waa sax waana ka diiwaangashan tahay Nootaayo Marwaaz
+            </div>
             <div className="flex items-center gap-4 border-b border-slate-100 bg-gradient-to-r from-teal-50 to-white px-6 py-5">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-teal-600 text-white shadow-md">
                 <FileText className="h-5 w-5" />
