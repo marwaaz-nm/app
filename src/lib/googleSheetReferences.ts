@@ -212,6 +212,8 @@ async function doFetchAndParse(): Promise<Reference[]> {
             branch: matchedSurvey.branch,
             land_type: matchedSurvey.land_type,
             sketch_area: matchedSurvey.sketch_area,
+            gps_location: matchedSurvey.gps_location,
+            polygon_boundary: matchedSurvey.polygon_boundary,
             boundary_w_val: matchedSurvey.boundary_w_val,
             boundary_w_neighbor: matchedSurvey.boundary_w_neighbor,
             boundary_b_val: matchedSurvey.boundary_b_val,

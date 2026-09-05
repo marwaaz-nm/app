@@ -107,6 +107,8 @@ export interface Reference {
     branch?: string;
     land_type?: string;
     sketch_area?: string;
+    gps_location?: string;
+    polygon_boundary?: string;
     boundary_w_val?: string;
     boundary_w_neighbor?: string;
     boundary_b_val?: string;

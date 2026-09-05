@@ -33,9 +33,27 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const references = await getGoogleSheetReferences();
       const match = references.find((reference) => normalizeSheetReference(reference.ref_number) === sheetReference);
       if (!match) return publicReferenceError('Reference not found', 404);
+      const survey = match.surveys ? {
+        serial_no: match.surveys.serial_no,
+        survey_no: match.surveys.survey_no,
+        owner_name: match.surveys.owner_name,
+        neighborhood: match.surveys.neighborhood,
+        land_type: match.surveys.land_type,
+        sketch_area: match.surveys.sketch_area,
+        gps_location: match.surveys.gps_location,
+        polygon_boundary: match.surveys.polygon_boundary,
+        boundary_w_val: match.surveys.boundary_w_val,
+        boundary_w_neighbor: match.surveys.boundary_w_neighbor,
+        boundary_b_val: match.surveys.boundary_b_val,
+        boundary_b_neighbor: match.surveys.boundary_b_neighbor,
+        boundary_k_val: match.surveys.boundary_k_val,
+        boundary_k_neighbor: match.surveys.boundary_k_neighbor,
+        boundary_g_val: match.surveys.boundary_g_val,
+        boundary_g_neighbor: match.surveys.boundary_g_neighbor,
+      } : null;
       return NextResponse.json({ reference: {
         ref_number: match.ref_number, subject: match.subject, issue_date: match.issue_date,
-        archive_drive_file_id: null, archive_file_name: null, surveys: null, source: 'sheet',
+        archive_drive_file_id: null, archive_file_name: null, surveys: survey, source: 'sheet',
       } }, { headers: publicReferenceHeaders });
     }
     const selectFields = `

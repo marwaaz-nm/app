@@ -212,7 +212,7 @@ export default function PublicReferencePage({ params }: { params: Promise<{ id: 
                     </div>
                   )}
 
-                  {reference.surveys.polygon_boundary && (
+                  {(reference.surveys.polygon_boundary || reference.surveys.gps_location) && (
                     <div className="border-t border-teal-100 pt-4">
                       <button
                         onClick={() => setShowMap(true)}
@@ -230,9 +230,9 @@ export default function PublicReferencePage({ params }: { params: Promise<{ id: 
         )}
       </div>
 
-      {showMap && reference?.surveys?.polygon_boundary && (
+      {showMap && reference?.surveys && (reference.surveys.polygon_boundary || reference.surveys.gps_location) && (
         <div className="fixed inset-0 z-[999] bg-slate-200">
-          <PublicLandMap polygonBoundary={reference.surveys.polygon_boundary} />
+          <PublicLandMap polygonBoundary={reference.surveys.polygon_boundary} gpsLocation={reference.surveys.gps_location} />
 
           <button
             type="button"
