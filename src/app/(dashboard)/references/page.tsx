@@ -11,7 +11,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import { formatReferenceNumber } from '@/lib/numbering';
-import { generateVerificationToken } from '@/lib/verificationToken';
+import { isPublicReferenceCode } from '@/lib/publicReferenceCode';
 import DetailsModal from '@/components/DetailsModal';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
 import { useDataAutoRefresh, notifyDataChanged } from '@/lib/useDataAutoRefresh';
@@ -233,7 +233,8 @@ export default function ReferencesPage() {
   };
 
   const publicVerifyUrl = (ref: Reference) => {
-    const token = ref.verification_token || generateVerificationToken(ref.id);
+    const token = ref.verification_token;
+    if (!isPublicReferenceCode(token)) return '';
     return typeof window !== 'undefined' ? `${window.location.origin}/verify/${token}` : '';
   };
 
@@ -246,7 +247,10 @@ export default function ReferencesPage() {
     setLinkCopied(false);
     setQrCopied(false);
     setBoundaryCopied(false);
-    QRCode.toDataURL(publicVerifyUrl(selectedRef), { margin: 1, width: 220 })
+    const url = publicVerifyUrl(selectedRef);
+    setQrDataUrl(null);
+    if (!url) return;
+    QRCode.toDataURL(url, { margin: 1, width: 220 })
       .then(setQrDataUrl)
       .catch((err) => { console.error('Error generating QR code:', err); setQrDataUrl(null); });
   }, [selectedRef]);
@@ -692,7 +696,7 @@ export default function ReferencesPage() {
         });
       }
 
-      const token = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ref-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const token = crypto.randomUUID();
 
       const payload = {
         verification_token: token,
@@ -705,19 +709,11 @@ export default function ReferencesPage() {
         status: 'In Progress'
       };
 
-      let { data: insertedData, error } = await supabase
+      const { data: insertedData, error } = await supabase
         .from('references')
         .insert([payload])
         .select(selectJoined)
         .maybeSingle();
-
-      // If schema error occurs because verification_token column is missing on DB, retry without it
-      if (error && (error.code === 'PGRST204' || error.message.includes('verification_token'))) {
-        const { verification_token, ...fallbackPayload } = payload;
-        const res = await supabase.from('references').insert([fallbackPayload]).select(selectJoined).maybeSingle();
-        insertedData = res.data;
-        error = res.error;
-      }
 
       if (error) throw error;
 
@@ -1433,10 +1429,12 @@ export default function ReferencesPage() {
                       </p>
                     </div>
 
+                    {!publicVerifyUrl(selectedRef) && <p role="alert" className="text-sm font-semibold text-rose-700">Koodh sugan lama hayo. Maamulaha ha hagaajiyo diiwaanka ka hor inta aan QR la bixin.</p>}
                     <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
                       <button
                         type="button"
                         onClick={handleCopyLink}
+                        disabled={!publicVerifyUrl(selectedRef)}
                         className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer active:scale-95 shadow-xs"
                       >
                         {linkCopied ? <Check className="h-3.5 w-3.5 text-teal-600" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}

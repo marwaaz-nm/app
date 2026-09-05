@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { parseAndVerifyToken } from '@/lib/verificationToken';
+import { isPublicReferenceCode } from '@/lib/publicReferenceCode';
+import { authorizePublicReference, publicReferenceError, publicReferenceHeaders } from '@/lib/publicReferenceAccess';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -19,12 +20,12 @@ const getAdminClient = () => {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!id) {
-    return NextResponse.json({ error: 'Missing reference identifier' }, { status: 400 });
-  }
+  if (!isPublicReferenceCode(id)) return publicReferenceError('Reference not found', 404);
 
   try {
     const supabaseAdmin = getAdminClient();
+    const denied = await authorizePublicReference(supabaseAdmin, id);
+    if (denied) return denied;
     const selectFields = `
       ref_number,
       subject,
@@ -51,79 +52,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       )
     `;
 
-    // 1. Try Cryptographically Signed Verification Token (e.g. "125-9a8b7c6d5e4f3a2b")
-    const signedRefId = parseAndVerifyToken(id);
-    if (signedRefId) {
-      const { data: reference, error } = await supabaseAdmin
-        .from('references')
-        .select(selectFields)
-        .eq('id', signedRefId)
-        .maybeSingle();
+    const { data: reference, error } = await supabaseAdmin
+      .from('references').select(selectFields).eq('verification_token', id.toLowerCase()).maybeSingle();
+    if (error) return publicReferenceError('Service temporarily unavailable', 503);
+    if (reference) return NextResponse.json({ reference }, { headers: publicReferenceHeaders });
 
-      if (!error && reference) {
-        return NextResponse.json({ reference });
-      }
-    }
-
-    // 2. Try UUID verification_token column (if column exists on DB)
-    try {
-      const { data: reference, error } = await supabaseAdmin
-        .from('references')
-        .select(selectFields)
-        .eq('verification_token', id)
-        .maybeSingle();
-
-      if (!error && reference) {
-        return NextResponse.json({ reference });
-      }
-    } catch {
-      // Column verification_token may not exist on remote DB yet
-    }
-
-    // 3. Fallback: Numeric ID or Ref Number (legacy QR codes)
-    if (/^\d+$/.test(id)) {
-      const refId = parseInt(id, 10);
-      const { data: reference, error } = await supabaseAdmin
-        .from('references')
-        .select(selectFields)
-        .eq('id', refId)
-        .maybeSingle();
-
-      if (!error && reference) {
-        return NextResponse.json({ reference });
-      }
-    }
-
-    // 4. Fallback: Check Google Sheet references
-    try {
-      const { getGoogleSheetReferences } = await import('@/lib/googleSheetReferences');
-      const sheetRefs = await getGoogleSheetReferences();
-      const targetNum = id.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-      const targetId = signedRefId || (parseInt(id, 10) || 0);
-
-      const match = sheetRefs.find((r) =>
-        r.id === targetId ||
-        r.ref_number.toLowerCase().replace(/[^a-zA-Z0-9]/g, '') === targetNum ||
-        (r.ref_number.match(/\d+/)?.[0] && id === r.ref_number.match(/\d+/)?.[0])
-      );
-
-      if (match) {
-        return NextResponse.json({
-          reference: {
-            ref_number: match.ref_number,
-            subject: match.subject,
-            issue_date: match.issue_date,
-            surveys: match.surveys || null,
-          }
-        });
-      }
-    } catch {
-      // Ignore sheet error
-    }
-
-    return NextResponse.json({ error: 'Reference not found' }, { status: 404 });
+    return publicReferenceError('Reference not found', 404);
   } catch (err) {
-    console.error('Error fetching public reference:', err);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    console.error('Public reference lookup failed');
+    return publicReferenceError('Service temporarily unavailable', 503);
   }
 }

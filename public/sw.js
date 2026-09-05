@@ -1,5 +1,5 @@
 /* Marwaazpn offline worker: app shell cache, per-session data cache, and survey sync queue. */
-const VERSION = 'marwaazpn-offline-v6';
+const VERSION = 'marwaazpn-offline-v7';
 const SHELL_CACHE = `${VERSION}-shell`;
 const DATA_CACHE_PREFIX = `${VERSION}-data-`;
 const DB_NAME = 'marwaazpn-offline';
@@ -33,6 +33,11 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
+  const privateUrl = new URL(request.url);
+  if (privateUrl.origin === self.location.origin && (privateUrl.pathname.startsWith('/verify/') || privateUrl.pathname.startsWith('/api/public/references/'))) {
+    event.respondWith(fetch(request, { cache: 'no-store' }));
+    return;
+  }
   if (request.method === 'GET') {
     if (request.mode === 'navigate') {
       event.respondWith(navigationResponse(request));
