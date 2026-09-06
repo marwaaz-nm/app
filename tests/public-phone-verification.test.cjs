@@ -18,9 +18,11 @@ test('matches only complete normalized phone candidates in document text', () =>
 });
 
 test('creates a bounded public summary and redacts phone-like values', () => {
-  const summary = exportsObject.publicDocumentSummary('Caddeyn heshiis\nMagaca: Axmed\nTel: +252 61 234 5678\nFaahfaahin guud');
+  const summary = exportsObject.publicDocumentSummary('Madaxa hayadda UJEEDDO: Caddeyn heshiis ==== Magaca: Axmed Tel: +252 61 234 5678. Faahfaahin guud');
+  assert.doesNotMatch(summary, /Madaxa hayadda/);
   assert.match(summary, /Caddeyn heshiis/);
-  assert.match(summary, /\[telefoon la qariyey\]/);
+  assert.match(summary, /••••••/);
+  assert.doesNotMatch(summary, /====/);
   assert.doesNotMatch(summary, /234 5678/);
   assert.equal(exportsObject.publicDocumentSummary('   '), null);
 });
