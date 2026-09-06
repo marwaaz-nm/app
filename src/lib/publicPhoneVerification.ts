@@ -19,18 +19,3 @@ export function documentContainsPhone(text: unknown, requestedPhone: string): bo
   }
   return candidates.has(requestedPhone);
 }
-
-export function publicDocumentSummary(text: unknown): string | null {
-  if (typeof text !== 'string') return null;
-  let content = text;
-  const purposeIndex = content.search(/UJEEDDO\s*:/i);
-  if (purposeIndex >= 0) content = content.slice(purposeIndex);
-  const cleaned = content
-    .replace(/={3,}|_{3,}|-{4,}/g, ' ')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/([.!?])\s+(?=[A-ZÀ-ÖØ-Þ])/g, '$1\n\n')
-    .trim();
-  if (!cleaned) return null;
-  return cleaned;
-}

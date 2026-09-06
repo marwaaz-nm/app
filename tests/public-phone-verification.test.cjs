@@ -16,13 +16,3 @@ test('matches only complete normalized phone candidates in document text', () =>
   assert.equal(exportsObject.documentContainsPhone('Tel: +252 61 234 5678', '612345678'), true);
   assert.equal(exportsObject.documentContainsPhone('Tel: 0612345679', '612345678'), false);
 });
-
-test('removes only the document header and keeps the full body', () => {
-  const summary = exportsObject.publicDocumentSummary('Madaxa hayadda UJEEDDO: Caddeyn heshiis ==== Magaca: Axmed Tel: +252 61 234 5678. Faahfaahin guud');
-  assert.doesNotMatch(summary, /Madaxa hayadda/);
-  assert.match(summary, /Caddeyn heshiis/);
-  assert.doesNotMatch(summary, /====/);
-  assert.match(summary, /\+252 61 234 5678/);
-  assert.match(summary, /Faahfaahin guud/);
-  assert.equal(exportsObject.publicDocumentSummary('   '), null);
-});
