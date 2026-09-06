@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { normalizeSheetReference } from '@/lib/publicReferenceCode';
 import { authorizePublicReference, publicReferenceHeaders } from '@/lib/publicReferenceAccess';
-import { documentContainsPhone, normalizePhone } from '@/lib/publicPhoneVerification';
+import { documentContainsPhone, normalizePhone, publicDocumentSummary } from '@/lib/publicPhoneVerification';
 
 const allowedOrigin = 'https://www.marwaazpn.com';
 const corsHeaders = { ...publicReferenceHeaders, 'Access-Control-Allow-Origin': allowedOrigin, 'Access-Control-Allow-Headers': 'content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS', Vary: 'Origin' };
@@ -28,11 +28,12 @@ export async function POST(request: NextRequest) {
     if (denied) return reply({ error: denied.status === 429 ? 'rate_limited' : 'verification_failed' }, denied.status);
     const rawNumber = reference.split('/')[1];
     const { data: documents, error } = await client.from('drive_document_index').select('extracted_text').ilike('file_name', `${rawNumber}%`).limit(20);
-    if (error || !documents?.some((document) => documentContainsPhone(document.extracted_text, phone!))) return reply({ error: 'verification_failed' }, 404);
+    const verifiedDocument = documents?.find((document) => documentContainsPhone(document.extracted_text, phone!));
+    if (error || !verifiedDocument) return reply({ error: 'verification_failed' }, 404);
     const { getGoogleSheetReferences } = await import('@/lib/googleSheetReferences');
     const records = await getGoogleSheetReferences();
     const match = records.find((item) => normalizeSheetReference(item.ref_number) === reference);
     if (!match) return reply({ error: 'verification_failed' }, 404);
-    return reply({ reference: { ref_number: match.ref_number, subject: match.subject, issue_date: match.issue_date, surveys: match.surveys || null } });
+    return reply({ reference: { ref_number: match.ref_number, subject: match.subject, issue_date: match.issue_date, document_summary: publicDocumentSummary(verifiedDocument.extracted_text), surveys: match.surveys || null } });
   } catch { console.error('Phone verification failed'); return reply({ error: 'verification_failed' }, 503); }
 }

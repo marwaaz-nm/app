@@ -16,3 +16,11 @@ test('matches only complete normalized phone candidates in document text', () =>
   assert.equal(exportsObject.documentContainsPhone('Tel: +252 61 234 5678', '612345678'), true);
   assert.equal(exportsObject.documentContainsPhone('Tel: 0612345679', '612345678'), false);
 });
+
+test('creates a bounded public summary and redacts phone-like values', () => {
+  const summary = exportsObject.publicDocumentSummary('Caddeyn heshiis\nMagaca: Axmed\nTel: +252 61 234 5678\nFaahfaahin guud');
+  assert.match(summary, /Caddeyn heshiis/);
+  assert.match(summary, /\[telefoon la qariyey\]/);
+  assert.doesNotMatch(summary, /234 5678/);
+  assert.equal(exportsObject.publicDocumentSummary('   '), null);
+});
