@@ -29,5 +29,5 @@ test('normalizes and verifies historical sheet references without exposing a PDF
  const r=route('src/app/api/public/references/[id]/route.ts');
  const response=await r.GET({}, {params:Promise.resolve({id:'NM/1995/2025'})});
  assert.equal(response.status,200);const body=await response.json();
- assert.equal(body.reference.ref_number,'NM/1995/25');assert.equal(body.reference.source,'sheet');assert.equal(body.reference.archive_drive_file_id,null);assert.equal(body.reference.surveys.gps_location,'3.12,43.65');assert.match(body.reference.surveys.polygon_boundary,/;/);assert.equal(r.calls.length,0);
+ assert.equal(body.reference.ref_number,'NM/1995/25');assert.equal(body.reference.source,'sheet');assert.equal(body.reference.limited,true);assert.equal(body.reference.subject,null);assert.equal(body.reference.issue_date,null);assert.equal(body.reference.surveys,null);assert.equal(body.reference.archive_drive_file_id,null);assert.equal(r.calls.length,0);
 });
