@@ -195,7 +195,7 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="relative hidden h-screen w-[252px] shrink-0 flex-col overflow-hidden border-r border-violet-900/70 bg-[#1d1233] text-white shadow-[4px_0_28px_rgba(30,18,51,0.28)] md:flex">
+      <aside className="relative hidden h-screen w-[252px] shrink-0 flex-col overflow-hidden border-r border-violet-900/70 bg-[#1F085D] text-white shadow-[4px_0_28px_rgba(30,18,51,0.28)] md:flex">
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div className="flex items-center gap-2.5 px-5 pb-5 pt-5">
             <div
