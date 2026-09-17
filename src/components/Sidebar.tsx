@@ -8,7 +8,6 @@ import {
   ArrowLeftRight,
   BarChart3,
   ChartNoAxesCombined,
-  ChevronRight,
   Compass,
   Files,
   FolderSearch,
@@ -195,14 +194,14 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="relative hidden h-screen w-[252px] shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white text-slate-900 shadow-[4px_0_24px_rgba(15,23,42,0.03)] md:flex">
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center gap-2.5 px-5 pb-5 pt-5">
+      <aside className="relative hidden h-screen w-[252px] shrink-0 flex-col overflow-hidden border-r border-white/10 bg-[#1F085D] text-white shadow-[4px_0_28px_rgba(31,8,93,0.3)] md:flex">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="mx-2 mt-8 flex items-center gap-3 rounded-xl border border-white/15 bg-white/[0.07] px-3 py-3.5 shadow-[0_10px_26px_rgba(10,2,34,0.18)]">
             <div
-              className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[14px] ${
+              className={`relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white/80 ${
                 settings.logo_url
-                  ? "bg-transparent"
-                  : "bg-teal-600 text-white shadow-[0_8px_22px_rgba(37,99,235,0.22)]"
+                  ? "bg-white p-0.5"
+                  : "bg-violet-500 text-white"
               }`}
             >
               {settings.logo_url ? (
@@ -210,109 +209,72 @@ export default function Sidebar() {
                 <img
                   src={settings.logo_url}
                   alt={settings.org_name_en}
-                  className="h-full w-full object-contain"
+                  className="h-full w-full rounded-full object-contain"
                 />
               ) : (
-                <>
-                  <MapPinned className="h-5 w-5" strokeWidth={2.2} />
-                  <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-[3px] border-white bg-amber-400" />
-                </>
+                <MapPinned className="h-6 w-6" strokeWidth={2.2} />
               )}
             </div>
             <div className="min-w-0">
-              <span className="block truncate text-[15px] font-extrabold leading-tight tracking-[-0.02em] text-slate-900">
+              <span className="block truncate text-[13px] font-black uppercase leading-tight tracking-[-0.01em] text-white">
                 {settings.org_name_so}
               </span>
-              <p className="mt-0.5 truncate text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+              <p className="mt-1 truncate text-[10px] font-semibold text-violet-200/80">
                 {settings.org_name_en}
               </p>
             </div>
           </div>
 
-          <div className="mx-4 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
-
           <nav
-            className="min-h-0 flex-1 overflow-y-auto px-3 py-4"
+            className="min-h-0 flex-1 overflow-y-auto px-1.5 py-5"
             aria-label="Main navigation"
           >
-            <div className="space-y-5">
-              {permittedGroups.map((group) => (
-                <div key={group.label}>
-                  <p className="mb-2 px-3 text-[9px] font-extrabold uppercase tracking-[0.2em] text-slate-400">
-                    {group.label}
-                  </p>
-                  <div className="space-y-1">
-                    {group.items.map((item) => {
-                      const Icon = item.icon;
-                      const active = isActive(item.href);
-                      const unreadCount = unreadCountFor(item.href);
+            <div className="space-y-1.5">
+              {permittedNavigation.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.href);
+                const unreadCount = unreadCountFor(item.href);
 
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={() => void markMenuRead(item.href)}
-                          aria-current={active ? "page" : undefined}
-                          className={`group relative flex min-h-11 items-center gap-2.5 rounded-xl px-2.5 py-2 transition-all duration-200 ${
-                            active
-                              ? "bg-teal-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.2)]"
-                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
-                          }`}
-                        >
-                          <span
-                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] transition-colors ${
-                              active
-                                ? "bg-white/15 text-white"
-                                : "bg-slate-100 text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700"
-                            }`}
-                          >
-                            <Icon
-                              className="h-[17px] w-[17px]"
-                              strokeWidth={2.2}
-                            />
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-[13px] font-bold tracking-[-0.01em]">
-                            {item.label}
-                          </span>
-                          {unreadCount > 0 && (
-                            <span
-                              className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[9px] font-black ${
-                                active
-                                  ? "bg-white text-teal-700"
-                                  : "bg-rose-500 text-white"
-                              }`}
-                            >
-                              {unreadCount > 99 ? "99+" : unreadCount}
-                            </span>
-                          )}
-                          <ChevronRight
-                            className={`h-4 w-4 transition-all ${
-                              active
-                                ? "translate-x-0 text-white/70 opacity-100"
-                                : "-translate-x-1 text-slate-300 opacity-0 group-hover:translate-x-0 group-hover:opacity-100"
-                            }`}
-                          />
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => void markMenuRead(item.href)}
+                    aria-current={active ? "page" : undefined}
+                    className={`group relative flex min-h-11 items-center gap-2 rounded-md border-l-[3px] px-3 py-2 transition-all duration-200 ${
+                      active
+                        ? "border-sky-400 bg-violet-500/70 text-white shadow-[0_8px_20px_rgba(18,4,57,0.2)]"
+                        : "border-transparent text-violet-50/90 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center ${active ? "text-white" : "text-violet-100/90 group-hover:text-white"}`}>
+                      <Icon className="h-[18px] w-[18px]" strokeWidth={2.1} />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-bold tracking-[-0.01em]">
+                      {item.label}
+                    </span>
+                    {unreadCount > 0 && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
             </div>
           </nav>
         </div>
 
-        <div className="relative border-t border-slate-200 bg-slate-50/80 p-3">
-          <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-teal-700 text-[12px] font-black text-white shadow-lg shadow-black/20">
+        <div className="border-t border-white/10 px-2 py-3">
+          <div className="flex items-center gap-2.5 px-1">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-black text-[#1F085D]">
               {initials}
-              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-[3px] border-white bg-emerald-500" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[11px] font-extrabold text-slate-800">
+              <p className="truncate text-[11px] font-extrabold text-white">
                 {profile?.fullname || "Loading..."}
               </p>
-              <p className="mt-0.5 truncate text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">
+              <p className="mt-0.5 truncate text-[9px] font-medium text-violet-200/70">
                 {profile?.role || "User"} account
               </p>
             </div>
@@ -321,14 +283,13 @@ export default function Sidebar() {
               onClick={logout}
               aria-label="Log out"
               title="Log out"
-              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
+              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-white/10 text-violet-100 transition-colors hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
             >
               <LogOut className="h-[17px] w-[17px]" strokeWidth={2.2} />
             </button>
           </div>
         </div>
       </aside>
-
       <nav
         className="fixed bottom-[calc(0.75rem_+_env(safe-area-inset-bottom))] left-3 right-3 z-50 grid h-[68px] rounded-[22px] border border-slate-200 bg-white/95 px-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.15)] backdrop-blur-xl md:hidden"
         style={{
