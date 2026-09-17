@@ -14,6 +14,7 @@ import {
   Sliders,
   ChevronDown,
   ChevronUp,
+  X,
 } from 'lucide-react';
 import L from 'leaflet';
 
@@ -113,6 +114,15 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
     }
   };
 
+  const clearPinnedLocation = () => {
+    setGpsInput('');
+    setDetectedInfo(null);
+    if (pinnedMarkerRef.current && mapRef.current) {
+      mapRef.current.removeLayer(pinnedMarkerRef.current);
+    }
+    pinnedMarkerRef.current = null;
+  };
+
   // Fetch surveys on mount (both DB and live sheet)
   useEffect(() => {
     const fetchSurveys = async () => {
@@ -158,12 +168,13 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
       zoomControl: false,
       scrollWheelZoom: true,
       dragging: true,
+      doubleClickZoom: false,
     });
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // Add click listener to pin location anywhere on map
-    map.on('click', (e: L.LeafletMouseEvent) => {
+    // A deliberate double click selects a location without also zooming the map.
+    map.on('dblclick', (e: L.LeafletMouseEvent) => {
       handlePinLocation(e.latlng.lat, e.latlng.lng, false);
     });
 
@@ -547,14 +558,14 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
   return (
     <div className="relative w-full h-full flex flex-col text-slate-800">
       {/* Top Left: GPS Search bar & Neighborhood/Branch Info Card (Matching Image 4) */}
-      <div className="pointer-events-none absolute left-3 top-3 md:left-6 md:top-6 z-[1000] flex flex-wrap items-center gap-2.5 max-w-[calc(100vw-75px)] md:max-w-2xl">
+      <div className="pointer-events-none absolute left-3 right-[4.5rem] top-3 z-[1000] flex flex-col items-stretch gap-2 md:left-6 md:right-auto md:top-6 md:max-w-2xl md:flex-row md:flex-wrap md:items-center md:gap-2.5">
         {/* Search GPS Pill */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
             handleGpsSubmit();
           }}
-          className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-slate-200/90 bg-white/95 p-1.5 pl-3.5 shadow-xl shadow-slate-900/10 backdrop-blur-md transition-all hover:border-slate-300"
+          className="pointer-events-auto flex w-full min-w-0 items-center gap-2 rounded-2xl border border-slate-200/90 bg-white/95 p-1.5 pl-3 shadow-xl shadow-slate-900/10 backdrop-blur-md transition-all hover:border-slate-300 md:w-auto md:pl-3.5"
         >
           <Search className="h-4 w-4 text-slate-400 shrink-0" />
           <input
@@ -562,11 +573,11 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
             value={gpsInput}
             onChange={(e) => setGpsInput(e.target.value)}
             placeholder="3.121501, 43.65987"
-            className="w-36 sm:w-52 bg-transparent text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none placeholder:text-slate-400 font-mono"
+            className="min-w-0 flex-1 bg-transparent font-mono text-[11px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none sm:w-52 sm:text-sm"
           />
           <button
             type="submit"
-            className="flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs px-3.5 py-1.5 shadow-md shadow-blue-600/20 transition-all active:scale-95 cursor-pointer"
+            className="flex shrink-0 items-center justify-center rounded-xl bg-blue-600 px-3.5 py-2 text-[11px] font-black text-white shadow-md shadow-blue-600/20 transition-all hover:bg-blue-500 active:scale-95 cursor-pointer sm:text-xs"
           >
             GO
           </button>
@@ -574,12 +585,12 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
 
         {/* Neighborhood & Branch Display Card (Matching Image 4) */}
         {detectedInfo && (
-          <div className="pointer-events-auto animate-in fade-in slide-in-from-left-2 duration-200 flex items-center gap-4 rounded-2xl border border-blue-200/90 bg-blue-50/40 md:bg-white/95 px-4 py-2 shadow-xl shadow-slate-900/10 backdrop-blur-md">
+          <div className="pointer-events-auto grid w-full animate-in grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-blue-200/90 bg-white/95 px-3.5 py-2 shadow-xl shadow-slate-900/10 backdrop-blur-md fade-in slide-in-from-left-2 duration-200 md:w-auto md:gap-4 md:px-4">
             <div>
               <span className="block text-[8.5px] font-black uppercase tracking-[0.14em] text-slate-400">
                 NEIGHBORHOOD
               </span>
-              <span className="block text-xs sm:text-sm font-black text-blue-600 tracking-tight">
+              <span className="block truncate text-[11px] font-black tracking-tight text-blue-600 sm:text-sm">
                 {detectedInfo.neighborhood}
               </span>
             </div>
@@ -588,10 +599,19 @@ export default function MapExplorer({ onViewDetails }: MapExplorerProps) {
               <span className="block text-[8.5px] font-black uppercase tracking-[0.14em] text-slate-400">
                 BRANCH
               </span>
-              <span className="block text-xs sm:text-sm font-black text-blue-600 tracking-tight">
+              <span className="block truncate text-[11px] font-black tracking-tight text-blue-600 sm:text-sm">
                 {detectedInfo.branch}
               </span>
             </div>
+            <button
+              type="button"
+              onClick={clearPinnedLocation}
+              aria-label="Clear selected location"
+              title="Clear location"
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         )}
       </div>
