@@ -134,6 +134,7 @@ export default function FinancialsPage() {
 
   // Add/Edit Expense Modal State
   const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [expDescription, setExpDescription] = useState('');
   const [expQty, setExpQty] = useState('1');
@@ -717,6 +718,7 @@ export default function FinancialsPage() {
       dataRevision.current += 1;
       setExpenses(current => current.filter(item => item.id !== deleted.id));
       setTotalExpenses(current => current - Number(deleted.total));
+      setSelectedExpense(current => current?.id === deleted.id ? null : current);
       showAlert('Guul', 'Kharashka waa la tirtiray.', 'success');
     } catch (err) {
       console.error('Error deleting expense:', err);
@@ -1755,7 +1757,19 @@ export default function FinancialsPage() {
                           </tr>
                         )}
                         {group.items.map((e) => (
-                          <tr key={e.id} className="hover:bg-slate-50/80 transition-all">
+                          <tr
+                            key={e.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setSelectedExpense(e)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                setSelectedExpense(e);
+                              }
+                            }}
+                            className="cursor-pointer hover:bg-slate-50/80 focus-visible:bg-slate-50 focus-visible:outline-none transition-all"
+                          >
                             <td className="px-6 py-4 font-black text-slate-400">
                               {expenseSerial.get(e.id)}
                             </td>
@@ -1783,14 +1797,14 @@ export default function FinancialsPage() {
                             <td className="px-6 py-4">
                               <div className="flex items-center justify-center gap-1.5">
                                 {canAction(profile, 'expense.edit') ? (<button
-                                  onClick={() => openExpenseEditDialog(e)}
+                                  onClick={(event) => { event.stopPropagation(); openExpenseEditDialog(e); }}
                                   className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 cursor-pointer"
                                   aria-label="Edit"
                                 >
                                   <Pencil className="h-3.5 w-3.5" />
                                 </button>) : null}
                                 {canAction(profile, 'expense.delete') ? (<button
-                                  onClick={() => handleDeleteExpense(e)}
+                                  onClick={(event) => { event.stopPropagation(); void handleDeleteExpense(e); }}
                                   disabled={deletingExpenseId === e.id}
                                   className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 cursor-pointer disabled:opacity-50"
                                   aria-label="Delete"
@@ -1834,8 +1848,16 @@ export default function FinancialsPage() {
                     {group.items.map((e) => (
                       <div
                         key={e.id}
-                        onClick={canAction(profile, 'expense.edit') ? () => openExpenseEditDialog(e) : undefined}
-                        className="grid grid-cols-[36px_1fr_auto] items-center gap-3 px-1 py-3.5 cursor-pointer active:bg-slate-50"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedExpense(e)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setSelectedExpense(e);
+                          }
+                        }}
+                        className="grid grid-cols-[36px_1fr_auto] items-center gap-3 px-1 py-3.5 cursor-pointer active:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none"
                       >
                         <span className="truncate text-xs font-black text-slate-400">{expenseSerial.get(e.id)}</span>
                         <div className="min-w-0">
@@ -1871,6 +1893,77 @@ export default function FinancialsPage() {
         </div>
       )}
 
+      {/* Expense Details Modal */}
+      {selectedExpense && (
+        <div
+          className="fixed inset-0 z-[1300] flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setSelectedExpense(null);
+          }}
+        >
+          <div className="my-8 flex w-full max-w-lg animate-in flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-6 py-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-rose-100 bg-rose-50">
+                  <TrendingDown className="h-5 w-5 text-rose-600" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="truncate font-extrabold text-slate-800">Faahfaahinta Kharashka</h3>
+                  <p className="mt-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                    {selectedExpense.expense_no || `Expense #${selectedExpense.id}`}
+                  </p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setSelectedExpense(null)} className="shrink-0 cursor-pointer rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" aria-label="Close expense details">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 p-6">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Description</span>
+                <p className="mt-1.5 break-words text-base font-extrabold text-slate-800">{selectedExpense.description}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Date</span>
+                  <p className="mt-1.5 flex items-center gap-2 text-sm font-bold text-slate-800"><Calendar className="h-4 w-4 text-slate-400" />{selectedExpense.expense_date ? new Date(selectedExpense.expense_date).toLocaleDateString('so-SO') : '-'}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Quantity</span>
+                  <p className="mt-1.5 text-sm font-extrabold text-slate-800">{selectedExpense.qty}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Unit Amount</span>
+                  <p className="mt-1.5 text-sm font-extrabold text-slate-800">${Number(selectedExpense.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Created By</span>
+                  <p className="mt-1.5 truncate text-sm font-bold text-slate-800" title={resolveCreatorName(selectedExpense.created_by, profileNames) || selectedExpense.created_by || 'Admin'}>{resolveCreatorName(selectedExpense.created_by, profileNames) || selectedExpense.created_by || 'Admin'}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4">
+                <div><span className="block text-[10px] font-extrabold uppercase tracking-wider text-rose-400">Total Expense</span><span className="mt-1 block text-xs font-semibold text-rose-500">{selectedExpense.qty} × unit amount</span></div>
+                <span className="text-2xl font-black text-rose-600">${Number(selectedExpense.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setSelectedExpense(null)} className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-extrabold text-slate-600 transition-colors hover:bg-slate-100">Xir</button>
+              {canAction(profile, 'expense.delete') ? (
+                <button type="button" disabled={deletingExpenseId === selectedExpense.id} onClick={() => void handleDeleteExpense(selectedExpense)} className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs font-extrabold text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50">
+                  {deletingExpenseId === selectedExpense.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Tirtir
+                </button>
+              ) : null}
+              {canAction(profile, 'expense.edit') ? (
+                <button type="button" onClick={() => { const expense = selectedExpense; setSelectedExpense(null); openExpenseEditDialog(expense); }} className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition-colors hover:bg-rose-500">
+                  <Pencil className="h-4 w-4" /> Wax ka beddel
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
       {/* Pay Modal (Create Receipt) */}
       {showPayModal && (
         <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
