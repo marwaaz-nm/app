@@ -9,6 +9,7 @@ import { useSettings } from '@/context/SettingsContext';
 import type { Survey, SurveyDocument, SurveyRevision, SurveyStatus } from '@/types';
 import { Clock3, FileText, History, Loader2, RotateCcw, Save, Trash2, Upload, X } from 'lucide-react';
 import SurveyFormFields from '@/components/SurveyFormFields';
+import { useModal } from '@/context/ModalContext';
 
 type Tab = 'edit' | 'workflow' | 'documents' | 'history';
 export type SurveyChange =
@@ -39,6 +40,7 @@ const subscribeToClient = () => () => {};
 
 export default function SurveyManagementModal({ record, onClose, onChanged }: Props) {
   const { profile } = useAuth();
+  const { showConfirm } = useModal();
   const { settings } = useSettings();
   const schemaReady = Array.isArray(profile?.permitted_actions);
   const mounted = useSyncExternalStore(subscribeToClient, () => true, () => false);
@@ -173,7 +175,8 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
   }
 
   async function removeDocument(documentId: number) {
-    if (!window.confirm('Ma hubtaa inaad dukumentigan tirtirayso?')) return;
+    const confirmed = await showConfirm('Tirtir dukumentiga', 'Ma hubtaa inaad dukumentigan tirtirayso?', 'Haa, tirtir', 'Ka noqo');
+    if (!confirmed) return;
     setBusy(true);
     try {
       await request(`/api/surveys/${record.id}/documents?documentId=${documentId}`, { method: 'DELETE' });
@@ -186,7 +189,13 @@ export default function SurveyManagementModal({ record, onClose, onChanged }: Pr
   }
 
   async function deleteSurvey() {
-    if (!window.confirm(`Ma hubtaa inaad tirtirto Survey ${survey.survey_no || survey.serial_no} (${survey.owner_name})? Tallaabadan lama soo celin karo — dukumentiyada iyo taariikhda oo dhanba way la tirmi doonaan.`)) return;
+    const confirmed = await showConfirm(
+      'Tirtir survey-ga',
+      `Ma hubtaa inaad tirtirto Survey ${survey.survey_no || survey.serial_no} (${survey.owner_name})? Tallaabadan lama soo celin karo — dukumentiyada iyo taariikhda oo dhanba way la tirmi doonaan.`,
+      'Haa, tirtir',
+      'Ka noqo',
+    );
+    if (!confirmed) return;
     setBusy(true);
     setMessage(null);
     try {

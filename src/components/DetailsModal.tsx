@@ -39,7 +39,7 @@ interface DetailsModalProps {
 
 export default function DetailsModal({ record, onClose, onDeleted }: DetailsModalProps) {
   const profileNames = useProfileNames();
-  const { showAlert } = useModal();
+  const { showAlert, showConfirm } = useModal();
   const { settings } = useSettings();
   const [mounted, setMounted] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -52,7 +52,8 @@ export default function DetailsModal({ record, onClose, onDeleted }: DetailsModa
   const handleDeleteSurvey = async () => {
     if (!record?.id) return;
     const confirmText = `Ma hubtaa inaad tirtirto sahanka #${record.serial_no} (${record.owner_name})? Tallaabadan lama soo celin karo.`;
-    if (!window.confirm(confirmText)) return;
+    const confirmed = await showConfirm('Tirtir sahanka', confirmText, 'Haa, tirtir', 'Ka noqo');
+    if (!confirmed) return;
 
     setDeleting(true);
     try {
