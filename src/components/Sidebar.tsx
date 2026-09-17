@@ -195,7 +195,7 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="relative hidden h-screen w-[252px] shrink-0 flex-col overflow-hidden border-r border-violet-900/70 bg-[#1d1233] text-white shadow-[4px_0_28px_rgba(30,18,51,0.28)] md:flex">
+      <aside className="relative hidden h-screen w-[252px] shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white text-slate-900 shadow-[4px_0_24px_rgba(15,23,42,0.03)] md:flex">
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div className="flex items-center gap-2.5 px-5 pb-5 pt-5">
             <div
@@ -220,16 +220,16 @@ export default function Sidebar() {
               )}
             </div>
             <div className="min-w-0">
-              <span className="block truncate text-[15px] font-extrabold leading-tight tracking-[-0.02em] text-white">
+              <span className="block truncate text-[15px] font-extrabold leading-tight tracking-[-0.02em] text-slate-900">
                 {settings.org_name_so}
               </span>
-              <p className="mt-0.5 truncate text-[9px] font-semibold uppercase tracking-[0.08em] text-violet-200/65">
+              <p className="mt-0.5 truncate text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">
                 {settings.org_name_en}
               </p>
             </div>
           </div>
 
-          <div className="mx-4 h-px bg-gradient-to-r from-transparent via-violet-300/25 to-transparent" />
+          <div className="mx-4 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
 
           <nav
             className="min-h-0 flex-1 overflow-y-auto px-3 py-4"
@@ -238,7 +238,7 @@ export default function Sidebar() {
             <div className="space-y-5">
               {permittedGroups.map((group) => (
                 <div key={group.label}>
-                  <p className="mb-2 px-3 text-[9px] font-extrabold uppercase tracking-[0.2em] text-violet-200/55">
+                  <p className="mb-2 px-3 text-[9px] font-extrabold uppercase tracking-[0.2em] text-slate-400">
                     {group.label}
                   </p>
                   <div className="space-y-1">
@@ -255,15 +255,15 @@ export default function Sidebar() {
                           aria-current={active ? "page" : undefined}
                           className={`group relative flex min-h-11 items-center gap-2.5 rounded-xl px-2.5 py-2 transition-all duration-200 ${
                             active
-                              ? "bg-violet-500 text-white shadow-[0_8px_20px_rgba(124,58,237,0.32)]"
-                              : "text-violet-100/75 hover:bg-white/10 hover:text-white"
+                              ? "bg-teal-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.2)]"
+                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
                           }`}
                         >
                           <span
                             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] transition-colors ${
                               active
                                 ? "bg-white/15 text-white"
-                                : "bg-white/8 text-violet-200/70 group-hover:bg-white/12 group-hover:text-white"
+                                : "bg-slate-100 text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700"
                             }`}
                           >
                             <Icon
@@ -278,7 +278,7 @@ export default function Sidebar() {
                             <span
                               className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[9px] font-black ${
                                 active
-                                  ? "bg-white text-violet-700"
+                                  ? "bg-white text-teal-700"
                                   : "bg-rose-500 text-white"
                               }`}
                             >
@@ -289,7 +289,7 @@ export default function Sidebar() {
                             className={`h-4 w-4 transition-all ${
                               active
                                 ? "translate-x-0 text-white/70 opacity-100"
-                                : "-translate-x-1 text-violet-200/35 opacity-0 group-hover:translate-x-0 group-hover:opacity-100"
+                                : "-translate-x-1 text-slate-300 opacity-0 group-hover:translate-x-0 group-hover:opacity-100"
                             }`}
                           />
                         </Link>
@@ -302,17 +302,17 @@ export default function Sidebar() {
           </nav>
         </div>
 
-        <div className="relative border-t border-violet-300/15 bg-[#170d2a] p-3">
-          <div className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/7 p-2.5 shadow-sm">
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-400 to-purple-700 text-[12px] font-black text-white shadow-lg shadow-black/20">
+        <div className="relative border-t border-slate-200 bg-slate-50/80 p-3">
+          <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-teal-700 text-[12px] font-black text-white shadow-lg shadow-black/20">
               {initials}
               <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-[3px] border-white bg-emerald-500" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[11px] font-extrabold text-white">
+              <p className="truncate text-[11px] font-extrabold text-slate-800">
                 {profile?.fullname || "Loading..."}
               </p>
-              <p className="mt-0.5 truncate text-[9px] font-bold uppercase tracking-[0.14em] text-violet-200/60">
+              <p className="mt-0.5 truncate text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">
                 {profile?.role || "User"} account
               </p>
             </div>
@@ -321,7 +321,7 @@ export default function Sidebar() {
               onClick={logout}
               aria-label="Log out"
               title="Log out"
-              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-violet-200/60 transition-colors hover:bg-rose-500/15 hover:text-rose-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
             >
               <LogOut className="h-[17px] w-[17px]" strokeWidth={2.2} />
             </button>
