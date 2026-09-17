@@ -712,9 +712,16 @@ export default function FinancialsPage() {
 
     setDeletingExpenseId(expense.id);
     try {
-      const { data: deleted, error } = await supabase.from('expenses').delete().eq('id', expense.id).select('id, total').maybeSingle();
-      if (error) throw error;
-      if (!deleted) throw new Error('Kharashka lama tirtirin. Hubi oggolaanshahaaga ama dib u cusboonaysii liiska.');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Fadhigaaga wuu dhacay. Fadlan dib u gal.');
+      const response = await fetch('/api/financials/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ type: 'expense', id: expense.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Kharashka lama tirtirin.');
+      const deleted = result.deleted as { id: number; total: number };
       dataRevision.current += 1;
       setExpenses(current => current.filter(item => item.id !== deleted.id));
       setTotalExpenses(current => current - Number(deleted.total));
@@ -806,9 +813,16 @@ export default function FinancialsPage() {
 
     setDeletingReceipt(true);
     try {
-      const { data: deleted, error } = await supabase.from('receipts').delete().eq('id', selectedReceipt.id).select('id, amount, status').maybeSingle();
-      if (error) throw error;
-      if (!deleted) throw new Error('Resiidhka lama tirtirin. Hubi oggolaanshahaaga ama dib u cusboonaysii liiska.');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Fadhigaaga wuu dhacay. Fadlan dib u gal.');
+      const response = await fetch('/api/financials/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ type: 'receipt', id: selectedReceipt.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Resiidhka lama tirtirin.');
+      const deleted = result.deleted as { id: number; amount: number; status: string };
       dataRevision.current += 1;
       setReferencesWithReceipts(current => current.map(reference => ({ ...reference,
         receipts: (reference.receipts || []).filter((receipt: Receipt) => receipt.id !== deleted.id),
@@ -1949,7 +1963,7 @@ export default function FinancialsPage() {
             </div>
 
             <div className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
-              <button type="button" onClick={() => setSelectedExpense(null)} className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-extrabold text-slate-600 transition-colors hover:bg-slate-100">Xir</button>
+
               {canAction(profile, 'expense.delete') ? (
                 <button type="button" disabled={deletingExpenseId === selectedExpense.id} onClick={() => void handleDeleteExpense(selectedExpense)} className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs font-extrabold text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50">
                   {deletingExpenseId === selectedExpense.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Tirtir
