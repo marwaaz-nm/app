@@ -115,6 +115,7 @@ export default function FinancialsPage() {
   const [savingReceiptEdit, setSavingReceiptEdit] = useState(false);
   const [deletingReceipt, setDeletingReceipt] = useState(false);
   const [downloadingReceipt, setDownloadingReceipt] = useState(false);
+  const [downloadingExpenseId, setDownloadingExpenseId] = useState<number | null>(null);
 
   // Pay Debt Modal State (Partial or Full Payment)
   const [showPayDebtModal, setShowPayDebtModal] = useState(false);
@@ -881,8 +882,26 @@ export default function FinancialsPage() {
       const location = safe(selectedReceipt.neighborhood || '-');
       const landType = safe(selectedReceipt.land_type || '-');
       const area = safe(selectedReceipt.sketch_area || '-');
-      // Same-origin transparent PNG avoids cross-origin canvas failures during export.
-      const logo = '/icon.png';
+      const logo = settings.logo_url || '/icon.png';
+      const loadLogoData = async () => {
+        const sources = [logo, '/icon.png'].filter((source, index, list) => list.indexOf(source) === index);
+        for (const source of sources) {
+          try {
+            const response = await fetch(source);
+            if (!response.ok) continue;
+            const blob = await response.blob();
+            return await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(String(reader.result));
+              reader.onerror = () => reject(reader.error);
+              reader.readAsDataURL(blob);
+            });
+          } catch {
+            // Try the bundled fallback logo.
+          }
+        }
+        throw new Error('Logo-ga lama soo dejin karin.');
+      };
       const orgSo = safe(settings.org_name_so || 'Nootaayo Marwaaz');
       const orgEn = safe(settings.org_name_en || 'Marwaaz Public Notary');
       const checked = '<span style="font-family:Arial,sans-serif;font-weight:900;">&#9745;</span>';
@@ -901,14 +920,8 @@ export default function FinancialsPage() {
         const rawArea = raw(selectedReceipt.sketch_area);
         const rawLandType = raw(selectedReceipt.land_type);
 
-        const logoData = await fetch(logo)
-          .then((response) => response.blob())
-          .then((blob) => new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result));
-            reader.onerror = () => reject(reader.error);
-            reader.readAsDataURL(blob);
-          }));
+        const logoData = await loadLogoData();
+
 
         const logoGrayData = await new Promise<string>((resolve) => {
           const image = new Image();
@@ -925,6 +938,13 @@ export default function FinancialsPage() {
           image.onerror = () => resolve(logoData);
           image.src = logoData;
         });
+        const addContainedLogo = (data: string, x: number, y: number, boxWidth: number, boxHeight: number) => {
+          const properties = pdf.getImageProperties(data);
+          const scale = Math.min(boxWidth / properties.width, boxHeight / properties.height);
+          const width = properties.width * scale;
+          const height = properties.height * scale;
+          pdf.addImage(data, 'PNG', x + (boxWidth - width) / 2, y + (boxHeight - height) / 2, width, height);
+        };
 
         const amountInWords = (value: number) => {
           const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -947,16 +967,19 @@ export default function FinancialsPage() {
           const ink: [number, number, number] = copy ? [17, 24, 39] : [23, 74, 156];
           const red: [number, number, number] = copy ? [17, 24, 39] : [220, 38, 38];
           pdf.setTextColor(17, 24, 39);
-          pdf.addImage(copy ? logoGrayData : logoData, 'PNG', 17, startY + 1, 24, 24);
-          pdf.setFillColor(copy ? 248 : 255, copy ? 248 : 255, copy ? 248 : 255);
-          pdf.setDrawColor(232, 232, 232);
-          pdf.rect(51, startY + 4, 91, 18, 'FD');
-          pdf.setFont('times', 'bold');
-          pdf.setFontSize(13);
-          pdf.text(raw(settings.org_name_so, 'Nootaayo Marwaaz'), 96.5, startY + 11, { align: 'center' });
-          pdf.setFont('times', 'normal');
-          pdf.setFontSize(10);
-          pdf.text(raw(settings.org_name_en, 'Marwaaz Public Notary'), 96.5, startY + 17, { align: 'center' });
+          addContainedLogo(copy ? logoGrayData : logoData, 16, startY + 1, 25, 23);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(14);
+          pdf.text(raw(settings.org_name_so, 'Nootaayo Marwaaz'), 105, startY + 8.5, { align: 'center' });
+          pdf.setTextColor(...ink);
+          pdf.setFontSize(8.5);
+          pdf.text(raw(settings.org_name_en, 'Marwaaz Public Notary').toUpperCase(), 105, startY + 14, { align: 'center' });
+          pdf.setTextColor(100, 116, 139);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(7.2);
+          const contactLine = [settings.contact_phone, settings.contact_email].filter(Boolean).join('  |  ');
+          if (contactLine) pdf.text(contactLine, 105, startY + 19, { align: 'center' });
+          pdf.setTextColor(17, 24, 39);
           if (copy) {
             pdf.setDrawColor(17, 24, 39);
             pdf.setLineWidth(0.45);
@@ -1031,14 +1054,8 @@ export default function FinancialsPage() {
         const invoiceLocation = raw(selectedReceipt.neighborhood);
         const invoiceArea = raw(selectedReceipt.sketch_area);
         const invoiceLandType = raw(selectedReceipt.land_type);
-        const logoData = await fetch(logo)
-          .then((response) => response.blob())
-          .then((blob) => new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result));
-            reader.onerror = () => reject(reader.error);
-            reader.readAsDataURL(blob);
-          }));
+        const logoData = await loadLogoData();
+
         const logoGrayData = await new Promise<string>((resolve) => {
           const image = new Image();
           image.onload = () => {
@@ -1054,11 +1071,18 @@ export default function FinancialsPage() {
           image.onerror = () => resolve(logoData);
           image.src = logoData;
         });
+        const addContainedInvoiceLogo = (data: string, x: number, y: number, boxWidth: number, boxHeight: number) => {
+          const properties = pdf.getImageProperties(data);
+          const scale = Math.min(boxWidth / properties.width, boxHeight / properties.height);
+          const width = properties.width * scale;
+          const height = properties.height * scale;
+          pdf.addImage(data, 'PNG', x + (boxWidth - width) / 2, y + (boxHeight - height) / 2, width, height);
+        };
 
         const drawInvoiceCopy = (startY: number, copy: boolean) => {
           const primary: [number, number, number] = copy ? [17, 24, 39] : [23, 74, 156];
           const accent: [number, number, number] = copy ? [17, 24, 39] : [220, 38, 38];
-          pdf.addImage(copy ? logoGrayData : logoData, 'PNG', 16, startY + 1, 21, 21);
+          addContainedInvoiceLogo(copy ? logoGrayData : logoData, 15, startY + 1, 24, 21);
           pdf.setTextColor(17, 24, 39);
           pdf.setFont('helvetica', 'bold');
           pdf.setFontSize(14);
@@ -1231,6 +1255,105 @@ export default function FinancialsPage() {
       showAlert('Cillad', 'Receipt PDF-ga lama soo dejin karin. Fadlan mar kale isku day.', 'error');
     } finally {
       setDownloadingReceipt(false);
+    }
+  };
+
+  const handleDownloadExpensePdf = async (expense: Expense) => {
+    if (downloadingExpenseId) return;
+    setDownloadingExpenseId(expense.id);
+    try {
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      const logoUrl = settings.logo_url || '/icon.png';
+      const loadImageData = async (source: string) => {
+        const response = await fetch(source);
+        if (!response.ok) throw new Error('Image download failed.');
+        const blob = await response.blob();
+        return await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+      };
+      let logoData: string;
+      try { logoData = await loadImageData(logoUrl); } catch { logoData = await loadImageData('/icon.png'); }
+      const properties = pdf.getImageProperties(logoData);
+      const logoScale = Math.min(24 / properties.width, 22 / properties.height);
+      const logoWidth = properties.width * logoScale;
+      const logoHeight = properties.height * logoScale;
+      pdf.addImage(logoData, 'PNG', 16 + (24 - logoWidth) / 2, 13 + (22 - logoHeight) / 2, logoWidth, logoHeight);
+
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(16);
+      pdf.text(settings.org_name_so || 'Nootaayo Marwaaz', 105, 20, { align: 'center' });
+      pdf.setTextColor(225, 29, 72);
+      pdf.setFontSize(8.5);
+      pdf.text((settings.org_name_en || 'Marwaaz Public Notary').toUpperCase(), 105, 26, { align: 'center' });
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      const contact = [settings.contact_phone, settings.contact_email].filter(Boolean).join('  |  ');
+      if (contact) pdf.text(contact, 105, 31, { align: 'center' });
+      pdf.setDrawColor(226, 232, 240);
+      pdf.line(15, 39, 195, 39);
+
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(20);
+      pdf.text('EXPENSE RECORD', 15, 52);
+      pdf.setTextColor(225, 29, 72);
+      pdf.setFontSize(10);
+      pdf.text(expense.expense_no || `EXP-${expense.id}`, 195, 51, { align: 'right' });
+
+      const drawField = (label: string, value: string, x: number, y: number, width: number) => {
+        pdf.setFillColor(248, 250, 252);
+        pdf.setDrawColor(226, 232, 240);
+        pdf.roundedRect(x, y, width, 22, 2, 2, 'FD');
+        pdf.setTextColor(148, 163, 184);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(7.5);
+        pdf.text(label.toUpperCase(), x + 5, y + 7);
+        pdf.setTextColor(15, 23, 42);
+        pdf.setFontSize(10.5);
+        pdf.text(pdf.splitTextToSize(value || '-', width - 10)[0], x + 5, y + 15);
+      };
+      drawField('Description', expense.description, 15, 61, 180);
+      drawField('Expense Date', expense.expense_date ? new Date(expense.expense_date).toLocaleDateString('en-GB') : '-', 15, 88, 56);
+      drawField('Quantity', String(expense.qty), 77, 88, 56);
+      drawField('Unit Amount', `$${Number(expense.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 139, 88, 56);
+      drawField('Created By', resolveCreatorName(expense.created_by, profileNames) || expense.created_by || 'Admin', 15, 115, 180);
+
+      pdf.setFillColor(255, 241, 242);
+      pdf.setDrawColor(254, 205, 211);
+      pdf.roundedRect(15, 145, 180, 30, 3, 3, 'FD');
+      pdf.setTextColor(244, 63, 94);
+      pdf.setFontSize(8);
+      pdf.text('TOTAL EXPENSE', 22, 156);
+      pdf.setTextColor(225, 29, 72);
+      pdf.setFontSize(24);
+      pdf.text(`$${Number(expense.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 188, 164, { align: 'right' });
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.text(`${expense.qty} x $${Number(expense.amount).toFixed(2)}`, 22, 164);
+
+      const qrCode = await QRCode.toDataURL([`Expense: ${expense.expense_no || expense.id}`, `Description: ${expense.description}`, `Total: $${Number(expense.total).toFixed(2)}`, `Date: ${expense.expense_date || '-'}`].join('\n'), { width: 180, margin: 1, errorCorrectionLevel: 'M' });
+      pdf.addImage(qrCode, 'PNG', 165, 190, 25, 25);
+      pdf.setDrawColor(203, 213, 225);
+      pdf.line(15, 215, 76, 215);
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFontSize(8);
+      pdf.text('Authorized Signature', 15, 221);
+      pdf.text('Generated from Marwaaz Notary Financial Management', 15, 278);
+      pdf.text(`Generated: ${new Date().toLocaleString('en-GB')}`, 195, 278, { align: 'right' });
+      pdf.save(`Expense_${String(expense.expense_no || expense.id).replace(/[^a-zA-Z0-9_-]+/g, '_')}.pdf`);
+    } catch (error) {
+      console.error('Expense PDF download failed:', error);
+      showAlert('Cillad', 'Expense PDF-ga lama soo dejin karin. Fadlan mar kale isku day.', 'error');
+    } finally {
+      setDownloadingExpenseId(null);
     }
   };
 
@@ -1963,7 +2086,9 @@ export default function FinancialsPage() {
             </div>
 
             <div className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
-
+              <button type="button" disabled={downloadingExpenseId === selectedExpense.id} onClick={() => void handleDownloadExpensePdf(selectedExpense)} className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-extrabold text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-50">
+                {downloadingExpenseId === selectedExpense.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} PDF
+              </button>
               {canAction(profile, 'expense.delete') ? (
                 <button type="button" disabled={deletingExpenseId === selectedExpense.id} onClick={() => void handleDeleteExpense(selectedExpense)} className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs font-extrabold text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50">
                   {deletingExpenseId === selectedExpense.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Tirtir
