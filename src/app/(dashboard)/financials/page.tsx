@@ -1050,194 +1050,220 @@ export default function FinancialsPage() {
         const raw = (value: unknown, fallback = '-') => String(value || fallback);
         const invoicePayer = raw(storedReceiptDetails.payerName || selectedReceipt.owner_name, 'Macmiilka');
         const invoicePurpose = raw(storedReceiptDetails.details || selectedReceipt.ref_subject, 'Adeegga Nootaayada');
-        const invoiceLocation = raw(selectedReceipt.neighborhood);
-        const invoiceArea = raw(selectedReceipt.sketch_area);
-        const invoiceLandType = raw(selectedReceipt.land_type);
         const logoData = await loadLogoData();
-        const navy: [number, number, number] = [13, 27, 52];
-        const royal: [number, number, number] = [36, 87, 214];
-        const cyan: [number, number, number] = [31, 183, 222];
-        const slate: [number, number, number] = [94, 111, 137];
-        const pale: [number, number, number] = [244, 247, 252];
-        const line: [number, number, number] = [218, 226, 238];
-        const left = 16;
-        const right = 194;
+        const forest: [number, number, number] = [5, 75, 58];
+        const green: [number, number, number] = [17, 107, 78];
+        const mint: [number, number, number] = [226, 241, 235];
+        const ink: [number, number, number] = [15, 23, 42];
+        const slate: [number, number, number] = [71, 85, 105];
+        const line: [number, number, number] = [203, 213, 225];
+        const left = 10;
+        const right = 200;
 
-        // Premium branded masthead.
-        pdf.setFillColor(...navy);
-        pdf.rect(0, 0, 210, 58, 'F');
-        pdf.setFillColor(...royal);
-        pdf.rect(0, 0, 5, 58, 'F');
-        pdf.setFillColor(255, 255, 255);
-        pdf.roundedRect(left, 13, 27, 27, 3, 3, 'F');
+        // Notary identity masthead.
         const logoProperties = pdf.getImageProperties(logoData);
-        const logoScale = Math.min(22 / logoProperties.width, 22 / logoProperties.height);
+        const logoScale = Math.min(31 / logoProperties.width, 31 / logoProperties.height);
         const logoWidth = logoProperties.width * logoScale;
         const logoHeight = logoProperties.height * logoScale;
-        pdf.addImage(logoData, 'PNG', left + (27 - logoWidth) / 2, 15.5 + (22 - logoHeight) / 2, logoWidth, logoHeight);
-
-        pdf.setTextColor(255, 255, 255);
+        pdf.addImage(logoData, 'PNG', 10 + (31 - logoWidth) / 2, 10 + (31 - logoHeight) / 2, logoWidth, logoHeight);
+        pdf.setTextColor(...forest);
         pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(15.5);
-        pdf.text(raw(settings.org_name_so, 'Nootaayo Marwaaz'), 49, 22);
-        pdf.setTextColor(147, 197, 253);
-        pdf.setFontSize(8.2);
-        pdf.text(raw(settings.org_name_en, 'Marwaaz Public Notary').toUpperCase(), 49, 28);
-        pdf.setTextColor(203, 213, 225);
+        pdf.setFontSize(20);
+        pdf.text(raw(settings.org_name_so, 'Nootaayo Marwaaz'), 45, 22);
         pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(7.2);
-        const contactLine = [settings.contact_phone, settings.contact_email].filter(Boolean).join('  |  ');
-        if (contactLine) pdf.text(pdf.splitTextToSize(contactLine, 82)[0], 49, 34);
-
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(24);
-        pdf.text('INVOICE', right, 22, { align: 'right' });
-        pdf.setTextColor(147, 197, 253);
-        pdf.setFontSize(7.4);
-        pdf.text('INVOICE NUMBER', right, 30, { align: 'right' });
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(11);
-        pdf.text(receiptNo, right, 37, { align: 'right' });
-
-        // Elevated client and balance block.
-        pdf.setFillColor(224, 231, 241);
-        pdf.roundedRect(left + 1, 49, 178, 42, 3, 3, 'F');
-        pdf.setFillColor(255, 255, 255);
-        pdf.roundedRect(left, 47.5, 178, 42, 3, 3, 'F');
-        pdf.setTextColor(...royal);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(7.2);
-        pdf.text('LACAGTA LAGA RABO / BILL TO', 23, 59);
-        pdf.setTextColor(...navy);
-        pdf.setFontSize(13.5);
-        pdf.text(pdf.splitTextToSize(invoicePayer, 91)[0], 23, 68);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(...slate);
-        pdf.setFontSize(8.2);
-        if (invoiceLocation !== '-') pdf.text(`Location: ${invoiceLocation}`, 23, 76);
-        pdf.setDrawColor(...line);
-        pdf.line(126, 55, 126, 82);
-        pdf.setTextColor(...slate);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(7.2);
-        pdf.text('BALANCE DUE', 135, 59);
-        pdf.setTextColor(...royal);
-        pdf.setFontSize(22);
-        pdf.text(`$${amountText}`, 187, 73, { align: 'right' });
-        pdf.setTextColor(...slate);
-        pdf.setFontSize(7.2);
-        pdf.text(`Due ${dueDate}`, 187, 80, { align: 'right' });
-
-        // Compact document metadata.
-        const metaY = 101;
-        const meta = [
-          ['REFERENCE', displayRefNumbers],
-          ['ISSUE DATE', paymentDate],
-          ['DUE DATE', dueDate],
-          ['STATUS', 'CREDIT / DEYN'],
-        ];
-        meta.forEach(([label, value], index) => {
-          const x = left + index * 44.5;
-          pdf.setFillColor(...pale);
-          pdf.roundedRect(x, metaY, 41.5, 19, 2, 2, 'F');
-          pdf.setTextColor(...slate);
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(6.6);
-          pdf.text(label, x + 4, metaY + 6);
-          pdf.setTextColor(...navy);
-          pdf.setFontSize(8.4);
-          pdf.text(pdf.splitTextToSize(value || '-', 34)[0], x + 4, metaY + 13.5);
-        });
-
-        // Professional line-item table.
-        const tableY = 133;
-        pdf.setTextColor(...navy);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(9);
-        pdf.text('INVOICE DETAILS', left, tableY - 6);
-        pdf.setFillColor(...navy);
-        pdf.roundedRect(left, tableY, 178, 11, 2, 2, 'F');
-        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(10.5);
+        pdf.text(raw(settings.org_name_en, 'Marwaaz Public Notary').toUpperCase(), 45, 30);
+        pdf.setDrawColor(...green);
+        pdf.setLineWidth(0.8);
+        pdf.line(45, 35, 66, 35);
+        pdf.setTextColor(55, 103, 94);
         pdf.setFontSize(7.3);
-        pdf.text('DESCRIPTION / FAAHFAAHIN', 22, tableY + 7);
-        pdf.text('QTY', 142, tableY + 7, { align: 'center' });
-        pdf.text('RATE', 188, tableY + 7, { align: 'right' });
-        pdf.setDrawColor(...line);
-        pdf.setFillColor(255, 255, 255);
-        pdf.roundedRect(left, tableY + 12, 178, 38, 2, 2, 'FD');
-        pdf.setTextColor(...navy);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(9.4);
-        pdf.text(pdf.splitTextToSize(invoicePurpose, 99).slice(0, 2), 22, tableY + 23);
-        pdf.setTextColor(...slate);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(7.2);
-        const serviceDetails = [invoiceLandType !== '-' ? invoiceLandType : '', invoiceArea !== '-' ? invoiceArea : ''].filter(Boolean).join('  |  ');
-        if (serviceDetails) pdf.text(serviceDetails, 22, tableY + 35);
-        pdf.setTextColor(...navy);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(9.4);
-        pdf.text('1', 142, tableY + 23, { align: 'center' });
-        pdf.text(`$${amountText}`, 188, tableY + 23, { align: 'right' });
-
-        // Notes and accounting totals.
-        const summaryY = 190;
-        pdf.setFillColor(...pale);
-        pdf.roundedRect(left, summaryY, 103, 39, 2.5, 2.5, 'F');
-        pdf.setTextColor(...royal);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(7.2);
-        pdf.text('PAYMENT TERMS / SHURUUDAHA', 22, summaryY + 9);
-        pdf.setTextColor(...slate);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(8);
-        const termLines = pdf.splitTextToSize(`Lacagtan waa deyn wali taagan. Fadlan bixi ugu dambayn ${dueDate}. Invoice-kan ma aha caddeyn lacag-bixin.`, 91);
-        pdf.text(termLines, 22, summaryY + 17);
-
-        pdf.setTextColor(...slate);
-        pdf.setFontSize(8.2);
-        pdf.text('Subtotal', 152, summaryY + 7, { align: 'right' });
-        pdf.setTextColor(...navy);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(`$${amountText}`, right, summaryY + 7, { align: 'right' });
-        pdf.setDrawColor(...line);
-        pdf.line(132, summaryY + 12, right, summaryY + 12);
-        pdf.setTextColor(...navy);
-        pdf.setFontSize(8.5);
-        pdf.text('AMOUNT DUE', 152, summaryY + 22, { align: 'right' });
-        pdf.setTextColor(...royal);
-        pdf.setFontSize(18.5);
-        pdf.text(`$${amountText}`, right, summaryY + 23, { align: 'right' });
-
-        // Verification and authorization footer.
-        const footerY = 244;
-        pdf.setDrawColor(...line);
-        pdf.line(left, footerY - 7, right, footerY - 7);
+        pdf.text('TRUST   |   LEGALITY   |   PUBLIC SERVICE', 45, 42);
         pdf.setDrawColor(148, 163, 184);
-        pdf.line(left, footerY + 10, 75, footerY + 10);
-        pdf.setTextColor(...slate);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(7.5);
-        pdf.text('Authorized Signature', left, footerY + 16);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(...navy);
-        pdf.text('VERIFY THIS INVOICE', 151, footerY + 2);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(...slate);
-        pdf.text('Scan the QR code to confirm details', 151, footerY + 8);
-        pdf.addImage(qrCode, 'PNG', 171, footerY - 1, 22, 22);
+        pdf.setLineWidth(0.25);
+        pdf.line(145, 15, 145, 43);
+        pdf.setTextColor(30, 41, 59);
+        pdf.setFontSize(8.3);
+        pdf.text(['LEGAL', 'DOCUMENTATION', 'FOR A BETTER', 'TOMORROW'], 167, 17, { lineHeightFactor: 1.55 });
+        pdf.setDrawColor(...green);
+        pdf.setLineWidth(0.8);
+        pdf.line(167, 39, 178, 39);
+        pdf.setFillColor(248, 250, 252);
+        pdf.rect(0, 48, 210, 1.5, 'F');
 
-        pdf.setFillColor(...navy);
-        pdf.rect(0, 278, 210, 19, 'F');
-        pdf.setFillColor(...royal);
-        pdf.rect(0, 278, 5, 19, 'F');
-        pdf.setTextColor(203, 213, 225);
-        pdf.setFontSize(7.1);
-        pdf.text('Marwaaz Notary Financial Management', left, 288);
+        // Invoice hero.
+        pdf.setTextColor(...forest);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(33);
+        pdf.text('INVOICE', left, 72);
+        pdf.setTextColor(38, 57, 77);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8.2);
+        pdf.text('OFFICIAL PAYMENT RECORD', left, 80);
+        pdf.setFillColor(...forest);
+        pdf.roundedRect(158, 58, 42, 13, 1.5, 1.5, 'F');
         pdf.setTextColor(255, 255, 255);
         pdf.setFont('helvetica', 'bold');
-        pdf.text(`Invoice ${receiptNo}`, right, 288, { align: 'right' });
+        pdf.setFontSize(11);
+        pdf.text(receiptNo, 179, 66.5, { align: 'center' });
+        pdf.setTextColor(...slate);
+        pdf.setFontSize(7.4);
+        pdf.text('ISSUE DATE', 136, 79);
+        pdf.text('DUE DATE', 173, 79);
+        pdf.setTextColor(...ink);
+        pdf.setFontSize(9.4);
+        pdf.text(paymentDate, 136, 87);
+        pdf.text(dueDate, 173, 87);
+        pdf.setDrawColor(148, 163, 184);
+        pdf.setLineWidth(0.25);
+        pdf.line(164, 76, 164, 89);
+
+        // Client, reference and status panel.
+        pdf.setFillColor(248, 250, 252);
+        pdf.setDrawColor(...line);
+        pdf.roundedRect(left, 95, 190, 43, 2, 2, 'FD');
+        pdf.setFillColor(...mint);
+        pdf.circle(22, 116.5, 7, 'F');
+        pdf.setFillColor(...forest);
+        pdf.circle(22, 114.5, 1.8, 'F');
+        pdf.roundedRect(19.2, 117, 5.6, 4, 1, 1, 'F');
+        pdf.setTextColor(...slate);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.6);
+        pdf.text('BILL TO / LAGU LEEYAHAY', 34, 112);
+        pdf.setTextColor(...ink);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(11.5);
+        pdf.text(pdf.splitTextToSize(invoicePayer, 75)[0], 34, 121);
+        pdf.setDrawColor(...line);
+        pdf.line(112, 100, 112, 133);
+
+        pdf.setFillColor(...mint);
+        pdf.circle(126, 108, 6.5, 'F');
+        pdf.setDrawColor(...forest);
+        pdf.setLineWidth(0.55);
+        pdf.rect(123.4, 104.2, 5.2, 7.2);
+        pdf.line(124.5, 106, 127.4, 106);
+        pdf.line(124.5, 108, 127.4, 108);
+        pdf.setTextColor(...slate);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.2);
+        pdf.text('REFERENCE', 139, 105.5);
+        pdf.setTextColor(...ink);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(10.5);
+        pdf.text(pdf.splitTextToSize(displayRefNumbers, 55)[0], 139, 113);
+
+        pdf.setFillColor(...mint);
+        pdf.circle(126, 125.5, 6.5, 'F');
+        pdf.setDrawColor(...forest);
+        pdf.circle(126, 125.5, 3.2);
+        pdf.line(123.5, 125.5, 128.5, 125.5);
+        pdf.line(126, 122.5, 126, 128.5);
+        pdf.setTextColor(...slate);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.2);
+        pdf.text('STATUS', 139, 123);
+        pdf.setTextColor(...ink);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(10.5);
+        pdf.text('CREDIT / DEYN', 139, 131);
+
+        // Item table matching the supplied reference.
+        const tableY = 144;
+        pdf.setFillColor(...forest);
+        pdf.roundedRect(left, tableY, 190, 13, 2, 2, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(7.6);
+        pdf.text('#', 19, tableY + 8);
+        pdf.text('DESCRIPTION / FAAHFAAHIN', 34, tableY + 8);
+        pdf.text('QTY', 133, tableY + 8, { align: 'center' });
+        pdf.text('AMOUNT', 193, tableY + 8, { align: 'right' });
+        pdf.setDrawColor(...line);
+        pdf.setFillColor(255, 255, 255);
+        pdf.roundedRect(left, tableY + 13, 190, 25, 2, 2, 'FD');
+        pdf.line(28, tableY + 13, 28, tableY + 38);
+        pdf.line(112, tableY + 13, 112, tableY + 38);
+        pdf.line(151, tableY + 13, 151, tableY + 38);
+        pdf.setTextColor(...ink);
+        pdf.setFontSize(9.2);
+        pdf.text('1', 19, tableY + 27, { align: 'center' });
+        pdf.text(pdf.splitTextToSize(invoicePurpose, 75).slice(0, 2), 34, tableY + 25);
+        pdf.text('1', 133, tableY + 27, { align: 'center' });
+        pdf.text(`$${amountText}`, 193, tableY + 27, { align: 'right' });
+
+        // Terms and due amount.
+        pdf.setFillColor(...mint);
+        pdf.circle(18, 199, 6.5, 'F');
+        pdf.setDrawColor(...forest);
+        pdf.setLineWidth(0.5);
+        pdf.rect(15.5, 195.5, 5, 7);
+        pdf.line(16.5, 197.5, 19.5, 197.5);
+        pdf.line(16.5, 199.5, 19.5, 199.5);
+        pdf.setTextColor(...slate);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.8);
+        pdf.text('PAYMENT TERMS / SHURUUDAHA', 30, 196);
+        pdf.setDrawColor(...green);
+        pdf.setLineWidth(0.65);
+        pdf.line(30, 201, 49, 201);
+        pdf.setTextColor(38, 52, 72);
+        pdf.setFontSize(8.1);
+        pdf.text(pdf.splitTextToSize(`Lacagtan waa deyn wali taagan. Fadlan bixi ugu dambayn ${dueDate}. Invoice-kan ma aha caddeyn lacag-bixin.`, 96), 14, 213);
+        pdf.setFillColor(244, 249, 247);
+        pdf.setDrawColor(188, 211, 202);
+        pdf.roundedRect(120, 188, 80, 27, 2, 2, 'FD');
+        pdf.setTextColor(...forest);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8.2);
+        pdf.text('AMOUNT DUE', 126, 202);
+        pdf.setDrawColor(148, 163, 184);
+        pdf.line(155, 193, 155, 210);
+        pdf.setFontSize(20);
+        pdf.text(`$${amountText}`, 194, 204, { align: 'right' });
+
+        // Signature and QR verification.
+        pdf.setTextColor(9, 31, 60);
+        pdf.setFont('times', 'italic');
+        pdf.setFontSize(17);
+        pdf.text('N. Marwaaz', 16, 246);
+        pdf.setDrawColor(51, 65, 85);
+        pdf.setLineWidth(0.3);
+        pdf.line(13, 252, 88, 252);
+        pdf.setTextColor(...slate);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.2);
+        pdf.text('Authorized Signature', 14, 258);
+        pdf.setDrawColor(...line);
+        pdf.roundedRect(157, 226, 37, 37, 1.5, 1.5, 'S');
+        pdf.addImage(qrCode, 'PNG', 160, 229, 31, 31);
+        pdf.setTextColor(...slate);
+        pdf.text('Scan to verify invoice details', 175.5, 268, { align: 'center' });
+
+        // Contact footer and custom notary bio ribbon.
+        pdf.setDrawColor(...green);
+        pdf.setLineWidth(0.35);
+        pdf.line(11, 274, 199, 274);
+        pdf.setTextColor(38, 52, 72);
+        pdf.setFontSize(7.3);
+        const phone = raw(settings.contact_phone, '+252 617414141');
+        const email = raw(settings.contact_email, 'info@marwaazpn.com');
+        pdf.text(`TEL   ${phone}`, 14, 282);
+        pdf.text(`EMAIL   ${email}`, 14, 288);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(...ink);
+        pdf.text(raw(settings.org_name_so, 'Nootaayo Marwaaz'), 126, 282);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(...slate);
+        pdf.text(raw(settings.org_name_en, 'Marwaaz Public Notary'), 126, 288);
+
+        pdf.setFillColor(...forest);
+        pdf.rect(0, 292, 210, 5, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont('times', 'italic');
+        pdf.setFontSize(7.4);
+        pdf.text('“Mé Guurtéda Murung Ay Koo Galne Marwaaz Marag Ku Abtugoy”', 105, 295.5, { align: 'center' });
 
         pdf.save(`Invoice_${receiptNo.replace(/[^a-zA-Z0-9_-]+/g, '_')}.pdf`);
         return;
