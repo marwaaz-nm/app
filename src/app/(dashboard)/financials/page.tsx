@@ -2160,13 +2160,15 @@ export default function FinancialsPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Magaca Bixiyaha (Payer Name)</label>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">
+                  {payStatus === 'Credit' ? 'Lacagta Laga Rabo' : 'Magaca Bixiyaha (Payer Name)'}
+                </label>
                 <input
                   type="text"
                   required
                   value={payPayerName}
                   onChange={(e) => setPayPayerName(e.target.value)}
-                  placeholder="Geli magaca qofka lacagta bixiyey"
+                  placeholder={payStatus === 'Credit' ? 'Geli cidda lacagta laga rabo' : 'Geli magaca qofka lacagta bixiyey'}
                   className="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3.5 text-sm text-slate-900 font-bold focus:outline-none"
                 />
               </div>
@@ -2301,54 +2303,52 @@ export default function FinancialsPage() {
       {/* View Receipt Details Modal */}
       {selectedReceipt && (
         <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md overflow-y-auto">
-          <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-xl bg-white border border-slate-200/80 rounded-3xl overflow-hidden shadow-2xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
             
-            {/* Header Accent Bar & Close Button */}
-            <div className={`relative pt-7 pb-4 px-6 text-center border-b ${
-              selectedReceipt.status === 'Credit' 
-                ? 'bg-gradient-to-b from-amber-500/10 via-amber-500/5 to-transparent border-amber-100/80' 
-                : 'bg-gradient-to-b from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-100/80'
+            {/* Formal invoice / receipt header */}
+            <div className={`relative flex items-center justify-between gap-4 border-b px-6 py-5 ${
+              selectedReceipt.status === 'Credit'
+                ? 'bg-amber-50/70 border-amber-100'
+                : 'bg-emerald-50/70 border-emerald-100'
             }`}>
+              <div className="flex min-w-0 items-center gap-3.5">
+                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border ${
+                  selectedReceipt.status === 'Credit'
+                    ? 'border-amber-200 bg-white text-amber-600'
+                    : 'border-emerald-200 bg-white text-emerald-600'
+                }`}>
+                  {selectedReceipt.status === 'Credit' ? <FileText className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="truncate text-lg font-black tracking-tight text-slate-900">
+                      {selectedReceipt.status === 'Credit' ? 'Faahfaahinta Invoice-ka' : 'Xogta Resiidhka'}
+                    </h3>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-wider ${
+                      selectedReceipt.status === 'Credit'
+                        ? 'border-amber-200 bg-amber-100 text-amber-800'
+                        : 'border-emerald-200 bg-emerald-100 text-emerald-800'
+                    }`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${selectedReceipt.status === 'Credit' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                      {selectedReceipt.status === 'Credit' ? 'Deyn / Credit' : 'Paid'}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
+                    {selectedReceipt.status === 'Credit' ? 'Invoice' : 'Receipt'}: <span className="font-mono font-extrabold text-slate-700">{selectedReceipt.receipt_no}</span>
+                    <span className="mx-1.5 text-slate-300">•</span>
+                    Ref: <span className="font-extrabold text-teal-650">{selectedReceipt.ref_number || 'N/A'}</span>
+                  </p>
+                </div>
+              </div>
               <button
+                type="button"
                 onClick={() => setSelectedReceipt(null)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-2 rounded-full hover:bg-slate-100/80 transition-colors cursor-pointer"
+                aria-label="Close details"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 shadow-2xs transition-colors hover:bg-slate-50 hover:text-slate-700 cursor-pointer"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
-
-              {/* Status Icon with Glowing Effect */}
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl shadow-sm mb-3 transition-transform hover:scale-105">
-                {selectedReceipt.status === 'Credit' ? (
-                  <div className="bg-gradient-to-br from-amber-400 to-amber-600 text-white p-3.5 rounded-2xl shadow-lg shadow-amber-500/30">
-                    <AlertCircle className="h-8 w-8" />
-                  </div>
-                ) : (
-                  <div className="bg-gradient-to-br from-emerald-400 to-emerald-600 text-white p-3.5 rounded-2xl shadow-lg shadow-emerald-500/30">
-                    <CheckCircle2 className="h-8 w-8" />
-                  </div>
-                )}
-              </div>
-
-              <h3 className="text-xl font-black text-slate-900 tracking-tight">Xogta Resiidhka</h3>
-              <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
-                Tixraac: <span className="text-teal-600 font-extrabold">{selectedReceipt.ref_number || 'N/A'}</span>
-              </p>
-              
-              <div className="mt-3 flex justify-center">
-                {selectedReceipt.status === 'Credit' ? (
-                  <span className="inline-flex items-center gap-1.5 bg-amber-100/80 text-amber-800 border border-amber-300/80 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-xs">
-                    <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
-                    Deyn / Credit
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 bg-emerald-100/80 text-emerald-800 border border-emerald-300/80 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-xs">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-                    Waa la Bixiyey / Paid
-                  </span>
-                )}
-              </div>
             </div>
-
             {receiptEditMode ? (
               /* Edit Mode: Receipt Fields */
               <form onSubmit={handleSaveReceiptEdit} className="px-6 py-5 space-y-4">
@@ -2450,7 +2450,7 @@ export default function FinancialsPage() {
                     {/* Amount Row */}
                     <div className="text-center py-3 border-b border-dashed border-slate-300">
                       <span className="block text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">
-                        Wadarta Lacagta (Amount USD)
+                        {selectedReceipt.status === 'Credit' ? 'Lacagta Laga Rabo (Amount Due)' : 'Wadarta Lacagta (Amount USD)'}
                       </span>
                       <div className={`text-4xl font-black tracking-tight ${
                         selectedReceipt.status === 'Credit' ? 'text-amber-600' : 'text-emerald-600'
@@ -2462,7 +2462,7 @@ export default function FinancialsPage() {
                     {/* Receipt Fields Grid */}
                     <div className="space-y-3 pt-4 text-xs">
                       <div className="flex justify-between items-center gap-4">
-                        <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Receipt No</span>
+                        <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">{selectedReceipt.status === 'Credit' ? 'Invoice No' : 'Receipt No'}</span>
                         <span className="font-mono font-black text-slate-800 bg-white border border-slate-200 px-3 py-1 rounded-xl shadow-2xs">
                           {selectedReceipt.receipt_no}
                         </span>
@@ -2474,6 +2474,14 @@ export default function FinancialsPage() {
                           {selectedReceipt.ref_number || 'N/A'}
                         </span>
                       </div>
+                      {selectedReceipt.status === 'Credit' && (
+                        <div className="flex justify-between items-start gap-4 rounded-2xl border border-amber-200 bg-amber-50/70 px-3.5 py-3">
+                          <span className="text-amber-700 font-extrabold uppercase tracking-wider text-[10px]">Lacagta laga rabo</span>
+                          <span className="max-w-[65%] text-right font-black text-slate-800">
+                            {parseReceiptDetails(selectedReceipt.details).payerName || selectedReceipt.owner_name || '-'}
+                          </span>
+                        </div>
+                      )}
 
                       <div className="flex justify-between items-center gap-4">
                         <span className="text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">Payment Date</span>
@@ -2524,7 +2532,7 @@ export default function FinancialsPage() {
                       className="flex items-center justify-center gap-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-extrabold text-xs px-3.5 py-2.5 w-full cursor-pointer shadow-2xs border border-slate-200 transition-all active:scale-95"
                     >
                       <Printer className="h-3.5 w-3.5 text-slate-500" />
-                      <span>PRINT RECEIPT</span>
+                      <span>{selectedReceipt.status === 'Credit' ? 'PRINT INVOICE' : 'PRINT RECEIPT'}</span>
                     </button>
 
                     {selectedReceipt.status === 'Credit' && (
