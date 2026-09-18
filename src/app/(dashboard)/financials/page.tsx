@@ -1053,6 +1053,7 @@ export default function FinancialsPage() {
         const logoData = await loadLogoData();
         const forest: [number, number, number] = [5, 75, 58];
         const green: [number, number, number] = [17, 107, 78];
+        const gold: [number, number, number] = [183, 142, 48];
         const mint: [number, number, number] = [226, 241, 235];
         const ink: [number, number, number] = [15, 23, 42];
         const slate: [number, number, number] = [71, 85, 105];
@@ -1061,6 +1062,12 @@ export default function FinancialsPage() {
         const right = 200;
 
         // Notary identity masthead.
+        pdf.setFillColor(247, 250, 248);
+        pdf.rect(0, 0, 210, 49, 'F');
+        pdf.setFillColor(...forest);
+        pdf.rect(0, 0, 210, 3, 'F');
+        pdf.setFillColor(...gold);
+        pdf.rect(0, 3, 210, 0.8, 'F');
         const logoProperties = pdf.getImageProperties(logoData);
         const logoScale = Math.min(31 / logoProperties.width, 31 / logoProperties.height);
         const logoWidth = logoProperties.width * logoScale;
@@ -1088,10 +1095,14 @@ export default function FinancialsPage() {
         pdf.setDrawColor(...green);
         pdf.setLineWidth(0.8);
         pdf.line(167, 39, 178, 39);
-        pdf.setFillColor(248, 250, 252);
-        pdf.rect(0, 48, 210, 1.5, 'F');
+        pdf.setFillColor(...gold);
+        pdf.rect(0, 48, 210, 1, 'F');
 
         // Invoice hero.
+        pdf.setFillColor(252, 253, 252);
+        pdf.rect(0, 49, 210, 43, 'F');
+        pdf.setFillColor(...green);
+        pdf.rect(left, 60, 1.5, 23, 'F');
         pdf.setTextColor(...forest);
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(33);
@@ -1211,30 +1222,33 @@ export default function FinancialsPage() {
         pdf.setTextColor(38, 52, 72);
         pdf.setFontSize(8.1);
         pdf.text(pdf.splitTextToSize(`Lacagtan waa deyn wali taagan. Fadlan bixi ugu dambayn ${dueDate}. Invoice-kan ma aha caddeyn lacag-bixin.`, 96), 14, 213);
-        pdf.setFillColor(244, 249, 247);
-        pdf.setDrawColor(188, 211, 202);
+        pdf.setFillColor(...forest);
+        pdf.setDrawColor(...forest);
         pdf.roundedRect(120, 188, 80, 27, 2, 2, 'FD');
-        pdf.setTextColor(...forest);
+        pdf.setTextColor(255, 255, 255);
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(8.2);
         pdf.text('AMOUNT DUE', 126, 202);
-        pdf.setDrawColor(148, 163, 184);
+        pdf.setDrawColor(102, 145, 130);
         pdf.line(155, 193, 155, 210);
         pdf.setFontSize(20);
         pdf.text(`$${amountText}`, 194, 204, { align: 'right' });
 
-        // Signature and QR verification.
-        pdf.setTextColor(9, 31, 60);
-        pdf.setFont('times', 'italic');
-        pdf.setFontSize(17);
-        pdf.text('N. Marwaaz', 16, 246);
-        pdf.setDrawColor(51, 65, 85);
-        pdf.setLineWidth(0.3);
-        pdf.line(13, 252, 88, 252);
+        // Signature area intentionally left blank for a handwritten signature.
+        pdf.setTextColor(...forest);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(7.4);
+        pdf.text('AUTHORIZED SIGNATURE / SAXIIXA', 14, 233);
         pdf.setTextColor(...slate);
         pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(6.8);
+        pdf.text('Sign with pen in the space below', 14, 239);
+        pdf.setDrawColor(51, 65, 85);
+        pdf.setLineWidth(0.35);
+        pdf.line(13, 255, 88, 255);
+        pdf.setTextColor(...slate);
         pdf.setFontSize(7.2);
-        pdf.text('Authorized Signature', 14, 258);
+        pdf.text('Authorized Signature', 14, 261);
         pdf.setDrawColor(...line);
         pdf.roundedRect(157, 226, 37, 37, 1.5, 1.5, 'S');
         pdf.addImage(qrCode, 'PNG', 160, 229, 31, 31);
