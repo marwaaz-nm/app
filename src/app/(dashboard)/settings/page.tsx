@@ -465,7 +465,7 @@ export default function SettingsPage() {
     { id: 'options', label: 'Liisaska (Options)', sublabel: 'Numbering & Format', icon: ListChecks, adminOnly: true },
     { id: 'drive', label: 'Drive Connections', sublabel: 'Google Drive sync', icon: Cloud, adminOnly: true, hidden: !canManageDriveConnections },
     { id: 'archive', label: 'Document Archive', sublabel: 'Archive Drive config', icon: Archive, adminOnly: true },
-    { id: 'desktop', label: 'Desktop App', sublabel: 'Windows & Mobile app', icon: Monitor },
+    { id: 'desktop', label: 'Download Apps', sublabel: 'Windows & Android', icon: Download },
   ];
 
   const visibleTabs = tabs.filter((t) => (!t.adminOnly || isAdmin) && !t.hidden);
@@ -779,6 +779,19 @@ export default function SettingsPage() {
 
           {tab === 'desktop' && (
             <div className="space-y-5">
+              <div className="rounded-3xl bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white shadow-lg">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/10 p-3">
+                    <Download className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black">Download Marwaazpn Apps</h3>
+                    <p className="mt-1 text-xs font-semibold leading-5 text-slate-300">
+                      Halkan kala soo deg nooca Windows ama Android. Android APK-ga cusub wuxuu taageeraa fingerprint login.
+                    </p>
+                  </div>
+                </div>
+              </div>
               <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-5 shadow-sm">
                 <div className="flex items-center gap-3">
                   <div className="bg-teal-50 text-teal-600 p-2.5 rounded-xl border border-teal-100 shrink-0">
