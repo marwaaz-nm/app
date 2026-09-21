@@ -149,6 +149,18 @@ function formatSurveyBoundariesHtml(s?: Reference['surveys']): string {
   return `<span style="font-family: Arial, sans-serif;">${parts.join(', ')}</span>`;
 }
 
+const REFERENCES_CACHE_KEY = '__MARWAAZ_REFERENCE_LIST_CACHE__';
+
+const readReferenceCache = (): Reference[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(REFERENCES_CACHE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
 export default function ReferencesPage() {
   const { user, profile } = useAuth();
   const { showAlert, showConfirm } = useModal();
@@ -156,11 +168,11 @@ export default function ReferencesPage() {
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
   const profileNames = useProfileNames();
 
-  const [references, setReferences] = useState<Reference[]>([]);
+  const [references, setReferences] = useState<Reference[]>(readReferenceCache);
   const referencesRevision = useRef(0);
-  const [filteredReferences, setFilteredReferences] = useState<Reference[]>([]);
+  const [filteredReferences, setFilteredReferences] = useState<Reference[]>(readReferenceCache);
   const [surveys, setSurveys] = useState<{ id: number; serial_no: number; survey_no?: string | null; owner_name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => readReferenceCache().length === 0);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editingRef, setEditingRef] = useState<Reference | null>(null);
@@ -181,6 +193,7 @@ export default function ReferencesPage() {
 
   useEffect(() => {
     setSearchAvailable(!showAddForm);
+    return () => setSearchAvailable(false);
   }, [showAddForm, setSearchAvailable]);
   const [refNumber, setRefNumber] = useState('');
   const [issueDate, setIssueDate] = useState('');
@@ -391,6 +404,7 @@ export default function ReferencesPage() {
       if (revision !== referencesRevision.current) return;
       setReferences(allReferences);
       setFilteredReferences(allReferences);
+      try { window.localStorage.setItem(REFERENCES_CACHE_KEY, JSON.stringify(allReferences)); } catch {}
     } catch (err) {
       console.error('Error fetching references:', err);
     } finally {
@@ -1165,7 +1179,7 @@ export default function ReferencesPage() {
                         {group.label}
                       </div>
                     )}
-                    <div className="divide-y divide-slate-200/80">
+                    <div className="divide-y divide-slate-300">
                       {group.items.map(r => {
                         const pInfo = getPaymentInfo(r);
                         return (

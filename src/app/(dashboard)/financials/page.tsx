@@ -48,6 +48,25 @@ const parseReceiptDetails = (value: unknown) => {
 const serializeReceiptDetails = (payerName: string, details: string, refNumbers = '') =>
   `${RECEIPT_DETAILS_PREFIX}${JSON.stringify({ payerName: payerName.trim(), details: details.trim(), refNumbers: refNumbers.trim() })}`;
 
+const FINANCIALS_CACHE_KEY = '__MARWAAZ_FINANCIAL_LIST_CACHE__';
+
+type FinancialsCache = {
+  references: any[];
+  expenses: Expense[];
+  totalRevenue: number;
+  totalCredit: number;
+  totalExpenses: number;
+};
+
+const readFinancialsCache = (): FinancialsCache | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(FINANCIALS_CACHE_KEY) || 'null');
+    return parsed && Array.isArray(parsed.references) && Array.isArray(parsed.expenses) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
 export default function FinancialsPage() {
   const profileNames = useProfileNames();
   const { profile, user } = useAuth();
@@ -57,21 +76,23 @@ export default function FinancialsPage() {
 
   useEffect(() => {
     setSearchAvailable(true);
+    return () => setSearchAvailable(false);
   }, [setSearchAvailable]);
 
-  const [loading, setLoading] = useState(true);
+  const [initialFinancialCache] = useState<FinancialsCache | null>(readFinancialsCache);
+  const [loading, setLoading] = useState(() => !initialFinancialCache);
   const [savingReceipt, setSavingReceipt] = useState(false);
   const [savingExpense, setSavingExpense] = useState(false);
 
   // Data states
-  const [referencesWithReceipts, setReferencesWithReceipts] = useState<any[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [referencesWithReceipts, setReferencesWithReceipts] = useState<any[]>(() => initialFinancialCache?.references || []);
+  const [expenses, setExpenses] = useState<Expense[]>(() => initialFinancialCache?.expenses || []);
   const dataRevision = useRef(0);
 
   // Totals
-  const [totalRevenue, setTotalRevenue] = useState(0);
-  const [totalCredit, setTotalCredit] = useState(0);
-  const [totalExpenses, setTotalExpenses] = useState(0);
+  const [totalRevenue, setTotalRevenue] = useState(() => initialFinancialCache?.totalRevenue || 0);
+  const [totalCredit, setTotalCredit] = useState(() => initialFinancialCache?.totalCredit || 0);
+  const [totalExpenses, setTotalExpenses] = useState(() => initialFinancialCache?.totalExpenses || 0);
 
   // Tabs
   const [activeTab, setActiveTab] = useState<'payments' | 'expenses'>('payments');
@@ -206,6 +227,15 @@ export default function FinancialsPage() {
 
       const expSum = expData?.reduce((sum, e) => sum + parseFloat(e.total.toString()), 0) || 0;
       setTotalExpenses(expSum);
+      try {
+        window.localStorage.setItem(FINANCIALS_CACHE_KEY, JSON.stringify({
+          references: refsData || [],
+          expenses: expData || [],
+          totalRevenue: revSum,
+          totalCredit: creditSum,
+          totalExpenses: expSum,
+        }));
+      } catch {}
 
     } catch (err) {
       console.error('Error fetching financial data:', err);
@@ -1904,7 +1934,7 @@ export default function FinancialsPage() {
                     {group.label}
                   </div>
                 )}
-                <div className="divide-y divide-slate-200/80">
+                <div className="divide-y divide-slate-300">
               {group.items.map((ref) => {
                 const receipts = ref.receipts || [];
                 const paidAmount = receipts
@@ -2123,7 +2153,7 @@ export default function FinancialsPage() {
                       {group.label}
                     </div>
                   )}
-                  <div className="divide-y divide-slate-200/80">
+                  <div className="divide-y divide-slate-300">
                     {group.items.map((e) => (
                       <div
                         key={e.id}

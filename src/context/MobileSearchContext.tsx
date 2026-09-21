@@ -17,10 +17,10 @@ export function MobileSearchProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [available, setAvailable] = useState(false);
 
-  // A page's search bar only makes sense on the route that registered it; reset on navigation.
+  // Close the panel on navigation. Availability is owned by each page and is
+  // cleaned up when that page unmounts, avoiding a parent/child effect race.
   useEffect(() => {
     setIsOpen(false);
-    setAvailable(false);
   }, [pathname]);
 
   const toggle = useCallback(() => setIsOpen((value) => !value), []);

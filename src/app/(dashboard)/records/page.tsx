@@ -26,21 +26,25 @@ import {
 } from 'lucide-react';
 import { ALL_NEIGHBORHOODS, ALL_BRANCHES } from '@/lib/boundaryDetection';
 
+const RECORDS_CACHE_KEY = '__MARWAAZ_SURVEY_LIST_CACHE__';
+
 export default function RecordsPage() {
   const { profile } = useAuth();
   const { newEntityIdsFor, dismissNewEntity } = useNotifications();
   const newSurveyIds = newEntityIdsFor('/records');
   const [records, setRecords] = useState<Survey[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const pendingRaw = window.sessionStorage.getItem(PENDING_SURVEY_KEY);
-        if (pendingRaw) {
-          const p = JSON.parse(pendingRaw) as Survey;
-          if (p && (p.id || p.owner_name)) return [p];
-        }
-      } catch {}
+    if (typeof window === 'undefined') return [];
+    try {
+      const cached = JSON.parse(window.localStorage.getItem(RECORDS_CACHE_KEY) || '[]') as Survey[];
+      const pendingRaw = window.sessionStorage.getItem(PENDING_SURVEY_KEY);
+      const pending = pendingRaw ? JSON.parse(pendingRaw) as Survey : null;
+      if (pending && (pending.id || pending.owner_name) && !cached.some((item) => String(item.id) === String(pending.id))) {
+        return [pending, ...cached];
+      }
+      return Array.isArray(cached) ? cached : [];
+    } catch {
+      return [];
     }
-    return [];
   });
   const fetchRequestId = useRef(0);
   const pendingChangeRef = useRef<(SurveyChange & { expiresAt: number }) | null>(null);
@@ -48,14 +52,13 @@ export default function RecordsPage() {
   const [usedSurveyIds, setUsedSurveyIds] = useState<Set<number>>(new Set());
   const { isOpen: showMobileSearch, setAvailable: setSearchAvailable } = useMobileSearch();
   const [loading, setLoading] = useState(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        if (window.sessionStorage.getItem(PENDING_SURVEY_KEY)) return false;
-      } catch {}
+    if (typeof window === 'undefined') return true;
+    try {
+      return !window.sessionStorage.getItem(PENDING_SURVEY_KEY) && !window.localStorage.getItem(RECORDS_CACHE_KEY);
+    } catch {
+      return true;
     }
-    return true;
   });
-  
   // Search & Filter state
   const [search, setSearch] = useState('');
   const [showAdvanceFilters, setShowAdvanceFilters] = useState(false);
@@ -80,6 +83,7 @@ export default function RecordsPage() {
 
   useEffect(() => {
     setSearchAvailable(true);
+    return () => setSearchAvailable(false);
   }, [setSearchAvailable]);
 
   const statusClass = (status: SurveyDisplayStatus) => ({
@@ -90,7 +94,7 @@ export default function RecordsPage() {
   // Fetch all records from Supabase and live sheet
   const fetchRecords = async () => {
     const requestId = ++fetchRequestId.current;
-    setLoading(true);
+    if (records.length === 0) setLoading(true);
     try {
       const [dbRes, sheetRes] = await Promise.all([
         supabase
@@ -152,6 +156,7 @@ export default function RecordsPage() {
         }
       }
       setRecords(nextRecords);
+      try { window.localStorage.setItem(RECORDS_CACHE_KEY, JSON.stringify(nextRecords)); } catch {}
       if (remoteHasPending) window.sessionStorage.removeItem(PENDING_SURVEY_KEY);
     } catch (err) {
       console.error('Error fetching records:', err);
@@ -590,7 +595,7 @@ export default function RecordsPage() {
                     {group.label}
                   </div>
                 )}
-                <div className="divide-y divide-slate-200/80">
+                <div className="divide-y divide-slate-300">
                   {group.items.map((record) => (
                     <div
                       key={record.id}
