@@ -12,5 +12,13 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_A
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    // Keep the active session in memory only. Reloading the web or desktop app
+    // returns the user to login while the login page remembers only the username.
+    persistSession: false,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
 
