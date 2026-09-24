@@ -844,14 +844,14 @@ export default function SettingsPage() {
                 </div>
 
                 <a
-                  href="https://github.com/marwaaz-nm/app/releases/download/mobile-v1.1.0/Marwaazpn-App.apk"
+                  href="/downloads/Marwaazpn-App.apk"
                   className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-5 py-3 text-xs font-bold text-white shadow-md cursor-pointer transition-all"
                 >
                   <Download className="h-4 w-4" /> Soo Deji (Android APK)
                 </a>
 
                 <p className="text-[11px] text-slate-400 font-medium">
-                  Android 7 ama ka cusub ayuu u shaqeeyaa. Haddii nooc hore ku jiro, hal mar uninstall-garee ka hor rakibidda v1.1.0; kadibna oggolow “Install unknown apps”.
+                  Android 7 ama ka cusub ayuu u shaqeeyaa. Haddii nooc hore ku jiro, hal mar uninstall-garee ka hor rakibidda v1.1.1; kadibna oggolow “Install unknown apps”.
                 </p>
               </div>
             </div>
