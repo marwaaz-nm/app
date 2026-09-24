@@ -51,6 +51,26 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
+      - name: Add Android 7 compatible signature
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          COMPATIBLE_APK="android/app/build/outputs/apk/release/app-release-compatible.apk"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          "$APKSIGNER" sign \
+            --ks android/app/marwaaz-release.jks \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --key-pass env:ANDROID_KEY_PASSWORD \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --out "$COMPATIBLE_APK" \
+            "$APK"
+          mv "$COMPATIBLE_APK" "$APK"
+
       - name: Verify APK package and signature
         run: |
           APK="android/app/build/outputs/apk/release/app-release.apk"
