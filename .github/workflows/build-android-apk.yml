@@ -42,25 +42,22 @@ jobs:
           test -n "$ANDROID_KEYSTORE_BASE64"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/marwaaz-release.jks
 
-      - name: Build signed release APK
+      - name: Build unsigned release APK
         working-directory: android
-        env:
-          ANDROID_KEYSTORE_PATH: marwaaz-release.jks
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
-      - name: Add Android 7 compatible signature
+      - name: Sign Android 7 compatible release APK
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          UNSIGNED_APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          ALIGNED_APK="android/app/build/outputs/apk/release/app-release-aligned.apk"
           APK="android/app/build/outputs/apk/release/app-release.apk"
-          COMPATIBLE_APK="android/app/build/outputs/apk/release/app-release-compatible.apk"
-          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
-          "$APKSIGNER" sign \
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/zipalign" -f -p 4 "$UNSIGNED_APK" "$ALIGNED_APK"
+          "$BUILD_TOOLS/apksigner" sign \
             --ks android/app/marwaaz-release.jks \
             --ks-key-alias "$ANDROID_KEY_ALIAS" \
             --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
@@ -68,9 +65,8 @@ jobs:
             --min-sdk-version 23 \
             --v1-signing-enabled true \
             --v2-signing-enabled true \
-            --out "$COMPATIBLE_APK" \
-            "$APK"
-          mv "$COMPATIBLE_APK" "$APK"
+            --out "$APK" \
+            "$ALIGNED_APK"
 
       - name: Verify APK package and signature
         run: |
