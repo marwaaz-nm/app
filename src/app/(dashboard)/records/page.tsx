@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { canAction } from '@/lib/permissions';
 import { supabase } from '@/lib/supabase';
 import { Survey } from '@/types';
-import DetailsModal from '@/components/DetailsModal';
-import SurveyManagementModal, { type SurveyChange } from '@/components/SurveyManagementModal';
+import type { SurveyChange } from '@/components/SurveyManagementModal';
 import { useMobileSearch } from '@/context/MobileSearchContext';
 import { dateGroupKey, groupItems } from '@/lib/listGrouping';
 import { ListLoadingSkeleton } from '@/components/Skeleton';
@@ -27,6 +27,15 @@ import {
 import { ALL_NEIGHBORHOODS, ALL_BRANCHES } from '@/lib/boundaryDetection';
 
 const RECORDS_CACHE_KEY = '__MARWAAZ_SURVEY_LIST_CACHE__';
+const RECORDS_PAGE_SIZE = 60;
+
+const DetailsModal = dynamic(() => import('@/components/DetailsModal'), {
+  ssr: false,
+});
+const SurveyManagementModal = dynamic(
+  () => import('@/components/SurveyManagementModal'),
+  { ssr: false },
+);
 
 export default function RecordsPage() {
   const { profile } = useAuth();
@@ -80,6 +89,7 @@ export default function RecordsPage() {
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'sn_desc' | 'sn_asc' | 'owner_az'>('newest');
   const [groupBy, setGroupBy] = useState<'none' | 'date' | 'status'>('none');
   const [groupAggregate, setGroupAggregate] = useState<'none' | 'count'>('count');
+  const [visibleCount, setVisibleCount] = useState(RECORDS_PAGE_SIZE);
 
   useEffect(() => {
     setSearchAvailable(true);
@@ -288,16 +298,21 @@ export default function RecordsPage() {
     return sorted;
   }, [filteredRecords, sortBy]);
 
+  const visibleRecords = useMemo(
+    () => sortedRecords.slice(0, visibleCount),
+    [sortedRecords, visibleCount],
+  );
+
   const groupedRecords = useMemo(() => {
     if (groupBy === 'none') return null;
-    return groupItems(sortedRecords, (r) =>
+    return groupItems(visibleRecords, (r) =>
       groupBy === 'date' ? dateGroupKey(r.created_at).key : displayStatus(r),
     ).map((group) => {
       const baseLabel = groupBy === 'date' ? dateGroupKey(group.items[0].created_at).label : displayStatus(group.items[0]);
       const label = groupAggregate === 'count' ? `${baseLabel} · ${group.items.length}` : baseLabel;
       return { ...group, label };
     });
-  }, [sortedRecords, groupBy, groupAggregate]);
+  }, [visibleRecords, groupBy, groupAggregate]);
 
   return (
     <div className="p-4 md:p-8 w-full space-y-3.5 md:space-y-6 text-slate-800">
@@ -503,7 +518,7 @@ export default function RecordsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200/80 bg-white">
-                  {(groupedRecords ?? [{ key: 'all', label: '', items: sortedRecords }]).map((group) => (
+                  {(groupedRecords ?? [{ key: 'all', label: '', items: visibleRecords }]).map((group) => (
                     <React.Fragment key={group.key}>
                       {groupBy !== 'none' && (
                         <tr>
@@ -588,7 +603,7 @@ export default function RecordsPage() {
               <span>Status</span>
               <span className="text-center">Action</span>
             </div>
-            {(groupedRecords ?? [{ key: 'all', label: '', items: sortedRecords }]).map((group) => (
+            {(groupedRecords ?? [{ key: 'all', label: '', items: visibleRecords }]).map((group) => (
               <div key={group.key}>
                 {groupBy !== 'none' && (
                   <div className="px-1 pb-1.5 pt-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
@@ -642,6 +657,18 @@ export default function RecordsPage() {
             ))}
           </div>
         </>
+      )}
+
+      {visibleRecords.length < sortedRecords.length && (
+        <div className="flex justify-center pb-4">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((count) => count + RECORDS_PAGE_SIZE)}
+            className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-extrabold text-slate-700 shadow-sm transition-colors hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
+          >
+            Soo bandhig {Math.min(RECORDS_PAGE_SIZE, sortedRecords.length - visibleRecords.length)} kale
+          </button>
+        </div>
       )}
 
       {/* Details Modal Mounting */}
