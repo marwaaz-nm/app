@@ -65,7 +65,7 @@ jobs:
             --ks-key-alias "$ANDROID_KEY_ALIAS" \
             --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
             --key-pass env:ANDROID_KEY_PASSWORD \
-            --min-sdk-version 23 
+            --min-sdk-version 23 \
             --v1-signing-enabled true \
             --v2-signing-enabled true \
             --out "$COMPATIBLE_APK" \
