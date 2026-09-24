@@ -15,6 +15,15 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      {
+        source: "/downloads/Marwaazpn-App.apk",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400",
+          },
+        ],
+      },
       { source: "/verify/:path*", headers: [
         { key: "Cache-Control", value: "private, no-store, max-age=0" },
         { key: "Referrer-Policy", value: "no-referrer" },
