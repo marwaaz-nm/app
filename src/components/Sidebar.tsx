@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -155,7 +155,6 @@ export default function Sidebar() {
   const { unreadCountFor, markMenuRead } = useNotifications();
   const isAdmin = profile?.role === "Admin" || profile?.role === "SuperAdmin";
   const [moreOpen, setMoreOpen] = useState(false);
-  const [pendingMobileHref, setPendingMobileHref] = useState<string | null>(null);
 
   const isPermitted = (item: NavItem) =>
     item.href === "/users"
@@ -188,40 +187,17 @@ export default function Sidebar() {
     0
   );
 
-  const mobileHrefKey = permittedNavigation.map((item) => item.href).join("|");
-
-  useEffect(() => {
-    mobileHrefKey
-      .split("|")
-      .filter(Boolean)
-      .forEach((href) => router.prefetch(href));
-  }, [mobileHrefKey, router]);
-
-  useEffect(() => {
-    if (
-      !pendingMobileHref ||
-      (pathname !== pendingMobileHref &&
-        !pathname.startsWith(`${pendingMobileHref}/`))
-    ) {
-      return;
-    }
-
-    const frame = window.requestAnimationFrame(() => setPendingMobileHref(null));
-    return () => window.cancelAnimationFrame(frame);
-  }, [pathname, pendingMobileHref]);
-
-  const handleMobileNavigation = useCallback(
-    (href: string) => {
-      setPendingMobileHref(href);
-      setMoreOpen(false);
-      window.setTimeout(() => void markMenuRead(href), 0);
-    },
-    [markMenuRead]
-  );
-
-  const isMobileActive = (href: string) =>
-    pendingMobileHref ? pendingMobileHref === href : isActive(href);
-
+  const handleMobileNavigation = (
+    event: MouseEvent<HTMLAnchorElement>,
+    href: string
+  ) => {
+    event.preventDefault();
+    setMoreOpen(false);
+    router.push(href);
+    window.requestIdleCallback(() => void markMenuRead(href), {
+      timeout: 1500,
+    });
+  };
   const initials = (profile?.fullname || "Marwaazpn App User")
     .split(/\s+/)
     .slice(0, 2)
@@ -376,7 +352,7 @@ export default function Sidebar() {
       >
         {primaryMobileNav.map((item) => {
           const Icon = item.icon;
-          const active = isMobileActive(item.href);
+          const active = isActive(item.href);
           const unreadCount = unreadCountFor(item.href);
 
           return (
@@ -385,7 +361,7 @@ export default function Sidebar() {
               href={item.href}
               prefetch
               onPointerDown={() => router.prefetch(item.href)}
-              onClick={() => handleMobileNavigation(item.href)}
+              onClick={(event) => handleMobileNavigation(event, item.href)}
               aria-current={active ? "page" : undefined}
               className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl transition-colors ${
                 active ? "text-teal-700" : "text-slate-400 hover:text-slate-600"
@@ -481,7 +457,7 @@ export default function Sidebar() {
             <div className="grid grid-cols-3 gap-2 p-1">
               {moreMobileNav.map((item) => {
                 const Icon = item.icon;
-                const active = isMobileActive(item.href);
+                const active = isActive(item.href);
                 const unreadCount = unreadCountFor(item.href);
 
                 return (
@@ -490,7 +466,7 @@ export default function Sidebar() {
                     href={item.href}
                     prefetch
                     onPointerDown={() => router.prefetch(item.href)}
-                    onClick={() => handleMobileNavigation(item.href)}
+                    onClick={(event) => handleMobileNavigation(event, item.href)}
                     aria-current={active ? "page" : undefined}
                     className={`relative flex flex-col items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 transition-colors ${
                       active
