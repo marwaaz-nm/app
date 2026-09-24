@@ -42,31 +42,14 @@ jobs:
           test -n "$ANDROID_KEYSTORE_BASE64"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/marwaaz-release.jks
 
-      - name: Build unsigned release APK
+      - name: Build signed release APK
         working-directory: android
-        run: ./gradlew assembleRelease
-
-      - name: Sign Android 7 compatible release APK
         env:
+          ANDROID_KEYSTORE_PATH: marwaaz-release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          UNSIGNED_APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
-          ALIGNED_APK="android/app/build/outputs/apk/release/app-release-aligned.apk"
-          APK="android/app/build/outputs/apk/release/app-release.apk"
-          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
-          "$BUILD_TOOLS/zipalign" -f -p 4 "$UNSIGNED_APK" "$ALIGNED_APK"
-          "$BUILD_TOOLS/apksigner" sign \
-            --ks android/app/marwaaz-release.jks \
-            --ks-key-alias "$ANDROID_KEY_ALIAS" \
-            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
-            --key-pass env:ANDROID_KEY_PASSWORD \
-            --min-sdk-version 23 \
-            --v1-signing-enabled true \
-            --v2-signing-enabled true \
-            --out "$APK" \
-            "$ALIGNED_APK"
+        run: ./gradlew assembleRelease
 
       - name: Verify APK package and signature
         run: |
@@ -76,7 +59,6 @@ jobs:
           test -f "$APK"
           "$APKSIGNER" verify --verbose --print-certs "$APK" | tee apk-signature.txt
           "$AAPT" dump badging "$APK" | tee apk-badging.txt
-          grep -q "Verified using v1 scheme (JAR signing): true" apk-signature.txt
           grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" apk-signature.txt
           grep -q "package: name='com.marwaazpn.app' versionCode='3' versionName='1.1.1'" apk-badging.txt
           grep -q "sdkVersion:'24'" apk-badging.txt
