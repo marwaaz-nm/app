@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Survey, Reference } from '@/types';
+import { Survey, Reference, SurveyDocument } from '@/types';
 import {
   X,
   Layers,
@@ -22,7 +22,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  Trash2
+  Trash2,
+  FileText,
+  ExternalLink
 } from 'lucide-react';
 import L from 'leaflet';
 import { useModal } from '@/context/ModalContext';
@@ -46,8 +48,49 @@ export default function DetailsModal({ record, onClose, onDeleted }: DetailsModa
   const [isSatFullscreen, setIsSatFullscreen] = useState(false);
   const [isSketchFullscreen, setIsSketchFullscreen] = useState(false);
   const [showRefPanel, setShowRefPanel] = useState(false);
+  const [showDocumentsPanel, setShowDocumentsPanel] = useState(false);
   const [linkedRefs, setLinkedRefs] = useState<Reference[]>([]);
   const [linkedRefsLoading, setLinkedRefsLoading] = useState(false);
+  const [documents, setDocuments] = useState<SurveyDocument[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [documentsError, setDocumentsError] = useState('');
+
+  const loadDocuments = async () => {
+    if (!record?.id || documentsLoading) return;
+    setDocumentsLoading(true);
+    setDocumentsError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Fadlan dib u gal.');
+      const response = await fetch(`/api/surveys/${record.id}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Documents-ka lama soo qaadi karin.');
+      setDocuments(Array.isArray(result.documents) ? result.documents : []);
+    } catch (error) {
+      setDocumentsError(error instanceof Error ? error.message : 'Documents-ka lama soo qaadi karin.');
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  const toggleDocumentsPanel = () => {
+    const nextOpen = !showDocumentsPanel;
+    setShowDocumentsPanel(nextOpen);
+    if (nextOpen) {
+      setShowRefPanel(false);
+      void loadDocuments();
+    }
+  };
+
+  const toggleRefPanel = () => {
+    setShowRefPanel((previous) => {
+      const nextOpen = !previous;
+      if (nextOpen) setShowDocumentsPanel(false);
+      return nextOpen;
+    });
+  };
 
   const handleDeleteSurvey = async () => {
     if (!record?.id) return;
@@ -79,8 +122,13 @@ export default function DetailsModal({ record, onClose, onDeleted }: DetailsModa
   useEffect(() => {
     if (!record?.id) {
       setLinkedRefs([]);
+      setDocuments([]);
       return;
     }
+    setDocuments([]);
+    setDocumentsError('');
+    setShowDocumentsPanel(false);
+    setShowRefPanel(false);
     let cancelled = false;
     setLinkedRefsLoading(true);
     supabase
@@ -1724,7 +1772,7 @@ export default function DetailsModal({ record, onClose, onDeleted }: DetailsModa
           </div>
           <div className="flex items-center gap-2 md:gap-3">
             <button
-              onClick={() => setShowRefPanel((prev) => !prev)}
+              onClick={toggleRefPanel}
               className={`relative flex items-center gap-1.5 text-xs font-bold py-2 md:py-2.5 px-3 md:px-4 rounded-xl shadow-md cursor-pointer transition-all active:scale-95 shrink-0 ${
                 showRefPanel ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
               }`}
@@ -1735,6 +1783,21 @@ export default function DetailsModal({ record, onClose, onDeleted }: DetailsModa
               {linkedRefs.length > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-black text-white">
                   {linkedRefs.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={toggleDocumentsPanel}
+              aria-pressed={showDocumentsPanel}
+              aria-controls="survey-documents-panel"
+              className={`relative flex items-center gap-1.5 text-xs font-bold py-2 md:py-2.5 px-3 md:px-4 rounded-xl shadow-md cursor-pointer transition-all active:scale-95 shrink-0 ${showDocumentsPanel ? 'bg-teal-700 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+            >
+              <FileText className="h-3.5 w-3.5 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">DOCUMENTS</span>
+              <span className="sm:hidden">DOCS</span>
+              {documents.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-teal-600 px-1 text-[9px] font-black text-white">
+                  {documents.length}
                 </span>
               )}
             </button>
@@ -2024,11 +2087,14 @@ export default function DetailsModal({ record, onClose, onDeleted }: DetailsModa
 
         {/* Mobile: the ref panel covers the full card width there, so tapping anywhere
             outside it (not just its own close button) should dismiss it. */}
-        {showRefPanel && (
+        {(showRefPanel || showDocumentsPanel) && (
           <button
             type="button"
-            onClick={() => setShowRefPanel(false)}
-            aria-label="Xir Ref Numbers"
+            onClick={() => {
+              setShowRefPanel(false);
+              setShowDocumentsPanel(false);
+            }}
+            aria-label="Xir qaybta dhinaca"
             className="absolute inset-0 z-10 bg-slate-900/30 backdrop-blur-[1px] md:hidden"
           />
         )}
@@ -2095,11 +2161,80 @@ export default function DetailsModal({ record, onClose, onDeleted }: DetailsModa
           </div>
         </div>
 
+        {/* Survey documents use the same right-side drawer pattern as Ref Numbers. */}
+        <div
+          id="survey-documents-panel"
+          className={`absolute inset-y-0 right-0 z-20 flex w-full max-w-xs flex-col border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ${showDocumentsPanel ? 'translate-x-0' : 'translate-x-full'}`}
+        >
+          <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-teal-700 text-white">
+                <FileText className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-black text-slate-800">Documents</p>
+                <p className="truncate text-[10px] font-semibold text-slate-500">Dukumentiyada survey-ga</p>
+              </div>
+            </div>
+            <button onClick={() => setShowDocumentsPanel(false)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800" aria-label="Xir Documents">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            {documentsLoading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-xs font-semibold text-slate-400">
+                <Loader2 className="h-4 w-4 animate-spin" /> Sug fadlan...
+              </div>
+            ) : documentsError ? (
+              <div className="flex flex-col items-center gap-3 py-10 text-center">
+                <FileText className="h-7 w-7 text-rose-300" />
+                <p className="text-xs font-semibold text-rose-600">{documentsError}</p>
+                <button type="button" onClick={() => void loadDocuments()} className="rounded-xl bg-slate-800 px-3 py-2 text-[10px] font-black text-white hover:bg-slate-700">
+                  MAR KALE ISKU DAY
+                </button>
+              </div>
+            ) : documents.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-10 text-center">
+                <FileText className="h-7 w-7 text-slate-300" />
+                <p className="text-xs font-semibold text-slate-400">Weli dukumenti laguma darin survey-gan.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {documents.map((document) => {
+                  const size = document.size_bytes >= 1024 * 1024
+                    ? `${(document.size_bytes / (1024 * 1024)).toFixed(2)} MB`
+                    : `${Math.max(1, Math.round(document.size_bytes / 1024))} KB`;
+                  const content = (
+                    <>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+                        <FileText className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-black text-slate-800" title={document.name}>{document.name}</span>
+                        <span className="mt-1 block text-[10px] font-semibold text-slate-400">
+                          {document.category || 'Document'} · {size} · {new Date(document.created_at).toLocaleDateString('so-SO')}
+                        </span>
+                      </span>
+                      {document.signed_url && <ExternalLink className="h-4 w-4 shrink-0 text-slate-400" />}
+                    </>
+                  );
+                  return document.signed_url ? (
+                    <a key={document.id} href={document.signed_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-colors hover:border-teal-200 hover:bg-teal-50/40">
+                      {content}
+                    </a>
+                  ) : (
+                    <div key={document.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 opacity-70">{content}</div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
         {/* Tab handle to reopen the panel once closed, so it's discoverable without
             re-reading the header button. */}
-        {!showRefPanel && (
+        {!showRefPanel && !showDocumentsPanel && (
           <button
-            onClick={() => setShowRefPanel(true)}
+            onClick={() => { setShowDocumentsPanel(false); setShowRefPanel(true); }}
             className="absolute right-0 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 rounded-l-xl border border-r-0 border-slate-200 bg-white px-1.5 py-3 text-slate-500 shadow-md hover:bg-slate-50 hover:text-slate-800"
             aria-label="Fur Ref Numbers"
             title="Ref Numbers"
