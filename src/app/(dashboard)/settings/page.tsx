@@ -38,7 +38,7 @@ const NOTIFICATION_MENU_OPTIONS = [
 ];
 
 const DESKTOP_INSTALLER_PARTS = 5;
-const DESKTOP_INSTALLER_SIZE = 100583387;
+const DESKTOP_INSTALLER_SIZE = 100232982;
 const DESKTOP_INSTALLER_PART_URL = '/downloads/desktop-parts';
 const DESKTOP_DOWNLOAD_CONCURRENCY = 2;
 const DESKTOP_DOWNLOAD_ATTEMPTS = 3;
@@ -851,7 +851,7 @@ export default function SettingsPage() {
                 </a>
 
                 <p className="text-[11px] text-slate-400 font-medium">
-                  Android 7 ama ka cusub ayuu u shaqeeyaa. Haddii nooc hore ku jiro, hal mar uninstall-garee ka hor rakibidda v1.1.1; kadibna oggolow “Install unknown apps”.
+                  Android 7 ama ka cusub ayuu u shaqeeyaa. Haddii nooc hore ku jiro, hal mar uninstall-garee ka hor rakibidda v1.1.2; kadibna oggolow “Install unknown apps”.
                 </p>
               </div>
             </div>

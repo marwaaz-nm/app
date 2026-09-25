@@ -150,6 +150,7 @@ function formatSurveyBoundariesHtml(s?: Reference['surveys']): string {
 }
 
 const REFERENCES_CACHE_KEY = '__MARWAAZ_REFERENCE_LIST_CACHE__';
+const REFERENCES_PAGE_SIZE = 60;
 
 const readReferenceCache = (): Reference[] => {
   if (typeof window === 'undefined') return [];
@@ -187,6 +188,7 @@ export default function ReferencesPage() {
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'ref_az'>('newest');
   const [groupBy, setGroupBy] = useState<'none' | 'date' | 'status'>('none');
   const [groupAggregate, setGroupAggregate] = useState<'none' | 'count'>('count');
+  const [visibleReferenceCount, setVisibleReferenceCount] = useState(REFERENCES_PAGE_SIZE);
 
   // Form states
   const [showAddForm, setShowAddForm] = useState(false);
@@ -201,7 +203,7 @@ export default function ReferencesPage() {
   const [details, setDetails] = useState('');
   const [selectedSurveyId, setSelectedSurveyId] = useState<string>('');
   const [surveySearchQuery, setSurveySearchQuery] = useState('');
-  
+
   // Selected Ref Details Modal
   const [selectedRef, setSelectedRef] = useState<Reference | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -483,7 +485,7 @@ export default function ReferencesPage() {
     if (searchQuery.trim() !== '') {
       const query = searchQuery.toLowerCase();
       result = result.filter(
-        r => r.ref_number.toLowerCase().includes(query) || 
+        r => r.ref_number.toLowerCase().includes(query) ||
              r.subject.toLowerCase().includes(query) ||
              r.details?.toLowerCase().includes(query)
       );
@@ -529,9 +531,14 @@ export default function ReferencesPage() {
     return sorted;
   }, [filteredReferences, sortBy]);
 
+  const visibleReferences = useMemo(
+    () => sortedReferences.slice(0, visibleReferenceCount),
+    [sortedReferences, visibleReferenceCount],
+  );
+
   const groupedReferences = useMemo(() => {
     if (groupBy === 'none') return null;
-    return groupItems(sortedReferences, (r) => {
+    return groupItems(visibleReferences, (r) => {
       if (groupBy === 'date') return dateGroupKey(r.issue_date).key;
       return getPaymentInfo(r).status;
     }).map((group) => {
@@ -542,7 +549,7 @@ export default function ReferencesPage() {
       const label = groupAggregate === 'count' ? `${baseLabel} · ${group.items.length}` : baseLabel;
       return { ...group, label };
     });
-  }, [sortedReferences, groupBy, groupAggregate]);
+  }, [visibleReferences, groupBy, groupAggregate]);
 
   // Set default issue date when opening form
   const handleOpenAddForm = () => {
@@ -815,7 +822,7 @@ export default function ReferencesPage() {
       if (selectedRef && selectedRef.id === refId) {
         setSelectedRef(prev => prev ? { ...prev, status: newStatus } : null);
       }
-      
+
       showAlert('Guul', 'Heerka shaqada waa la cusboonaysiiyey!', 'success');
     } catch (err: any) {
       console.error('Error updating reference status:', err);
@@ -836,7 +843,7 @@ export default function ReferencesPage() {
 
   return (
     <div className={`p-4 md:p-8 mx-auto space-y-3.5 md:space-y-6 text-slate-800 transition-all duration-300 ${showAddForm ? 'form-card' : 'w-full'}`}>
-      
+
       {!showAddForm && (
         <div className="hidden md:flex justify-end">
           {canAction(profile, 'reference.create') ? (<button
@@ -1108,7 +1115,7 @@ export default function ReferencesPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200/80 bg-white">
-                    {(groupedReferences ?? [{ key: 'all', label: '', items: sortedReferences }]).map((group) => (
+                    {(groupedReferences ?? [{ key: 'all', label: '', items: visibleReferences }]).map((group) => (
                       <React.Fragment key={group.key}>
                         {groupBy !== 'none' && (
                           <tr>
@@ -1172,7 +1179,7 @@ export default function ReferencesPage() {
                   <span>Status</span>
                   <span />
                 </div>
-                {(groupedReferences ?? [{ key: 'all', label: '', items: sortedReferences }]).map((group) => (
+                {(groupedReferences ?? [{ key: 'all', label: '', items: visibleReferences }]).map((group) => (
                   <div key={group.key}>
                     {groupBy !== 'none' && (
                       <div className="px-1 pb-1.5 pt-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
@@ -1226,6 +1233,13 @@ export default function ReferencesPage() {
                   </div>
                 ))}
               </div>
+              {visibleReferences.length < sortedReferences.length && (
+                <div className="flex justify-center pb-4 pt-2">
+                  <button type="button" onClick={() => setVisibleReferenceCount((count) => count + REFERENCES_PAGE_SIZE)} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-extrabold text-slate-600 shadow-sm transition-colors hover:bg-slate-50">
+                    Soo bandhig {Math.min(REFERENCES_PAGE_SIZE, sortedReferences.length - visibleReferences.length)} kale
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1498,13 +1512,13 @@ export default function ReferencesPage() {
                     }`} />
 
                     {/* Step: In Progress */}
-                    <div 
+                    <div
                       onClick={canAction(profile, 'reference.edit') ? () => handleUpdateStatus(selectedRef.id, 'In Progress') : undefined}
                       className="relative flex gap-4 group cursor-pointer"
                     >
                       <div className={`absolute -left-6 flex h-5 w-5 items-center justify-center rounded-full border transition-all ${
-                        selectedRef.status === 'In Progress' 
-                          ? 'bg-amber-500 border-transparent text-white scale-110 shadow-md' 
+                        selectedRef.status === 'In Progress'
+                          ? 'bg-amber-500 border-transparent text-white scale-110 shadow-md'
                           : selectedRef.status === 'Completed' || selectedRef.status === 'Picked Up'
                             ? 'bg-teal-600 border-transparent text-white shadow-md'
                             : 'bg-white border-slate-200 text-slate-400 group-hover:border-slate-400'
@@ -1526,13 +1540,13 @@ export default function ReferencesPage() {
                     </div>
 
                     {/* Step: Completed */}
-                    <div 
+                    <div
                       onClick={canAction(profile, 'reference.edit') ? () => handleUpdateStatus(selectedRef.id, 'Completed') : undefined}
                       className="relative flex gap-4 group cursor-pointer"
                     >
                       <div className={`absolute -left-6 flex h-5 w-5 items-center justify-center rounded-full border transition-all ${
-                        selectedRef.status === 'Completed' 
-                          ? 'bg-teal-600 border-transparent text-white scale-110 shadow-md' 
+                        selectedRef.status === 'Completed'
+                          ? 'bg-teal-600 border-transparent text-white scale-110 shadow-md'
                           : selectedRef.status === 'Picked Up'
                             ? 'bg-emerald-600 border-transparent text-white shadow-md'
                             : 'bg-white border-slate-200 text-slate-400 group-hover:border-slate-400'
@@ -1550,13 +1564,13 @@ export default function ReferencesPage() {
                     </div>
 
                     {/* Step: Picked Up */}
-                    <div 
+                    <div
                       onClick={canAction(profile, 'reference.edit') ? () => handleUpdateStatus(selectedRef.id, 'Picked Up') : undefined}
                       className="relative flex gap-4 group cursor-pointer"
                     >
                       <div className={`absolute -left-6 flex h-5 w-5 items-center justify-center rounded-full border transition-all ${
-                        selectedRef.status === 'Picked Up' 
-                          ? 'bg-emerald-600 border-transparent text-white scale-110 shadow-md' 
+                        selectedRef.status === 'Picked Up'
+                          ? 'bg-emerald-600 border-transparent text-white scale-110 shadow-md'
                           : 'bg-white border-slate-200 text-slate-400 group-hover:border-slate-400'
                       }`}>
                         <CheckCircle2 className="h-3 w-3" />

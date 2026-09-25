@@ -90,7 +90,9 @@ const androidDensities = [
 const androidTasks = androidDensities.flatMap(([density, size]) => {
   const directory = path.resolve(`android/app/src/main/res/mipmap-${density}`);
   if (!fs.existsSync(directory)) return [];
-  const padding = Math.max(2, Math.round(Number(size) * 0.05));
+  // Android launchers apply device-specific circle/squircle masks. Keep the
+  // complete seal inside the safe zone so its outer ring is never cut.
+  const padding = Math.max(4, Math.round(Number(size) * 0.17));
   return [
     squarePng(Number(size), padding).toFile(path.join(directory, 'ic_launcher.png')),
     squarePng(Number(size), padding).toFile(path.join(directory, 'ic_launcher_round.png')),
@@ -98,11 +100,11 @@ const androidTasks = androidDensities.flatMap(([density, size]) => {
 });
 
 await Promise.all([
-  squarePng(1024, 20).toFile(path.resolve('assets/icon-only.png')),
+  squarePng(1024, 174).toFile(path.resolve('assets/icon-only.png')),
   squarePng(2732, 420).toFile(path.resolve('assets/splash.png')),
-  squarePng(512, 10).toFile(path.resolve('build/icon.png')),
-  squarePng(512, 10).toFile(path.resolve('public/icon.png')),
-  squarePng(512, 10).toFile(path.resolve('src/app/icon.png')),
+  squarePng(512, 87).toFile(path.resolve('build/icon.png')),
+  squarePng(512, 87).toFile(path.resolve('public/icon.png')),
+  squarePng(512, 87).toFile(path.resolve('src/app/icon.png')),
   ...androidTasks,
 ]);
 

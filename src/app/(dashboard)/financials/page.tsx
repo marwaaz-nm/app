@@ -49,6 +49,7 @@ const serializeReceiptDetails = (payerName: string, details: string, refNumbers 
   `${RECEIPT_DETAILS_PREFIX}${JSON.stringify({ payerName: payerName.trim(), details: details.trim(), refNumbers: refNumbers.trim() })}`;
 
 const FINANCIALS_CACHE_KEY = '__MARWAAZ_FINANCIAL_LIST_CACHE__';
+const FINANCIAL_PAGE_SIZE = 60;
 
 type FinancialsCache = {
   references: any[];
@@ -104,12 +105,14 @@ export default function FinancialsPage() {
   const [receiptSortBy, setReceiptSortBy] = useState<'newest' | 'oldest'>('newest');
   const [receiptGroupBy, setReceiptGroupBy] = useState<'none' | 'date'>('none');
   const [receiptGroupAggregate, setReceiptGroupAggregate] = useState<'none' | 'count' | 'sum'>('count');
+  const [visiblePaymentCount, setVisiblePaymentCount] = useState(FINANCIAL_PAGE_SIZE);
 
   const [expenseSearchQuery, setExpenseSearchQuery] = useState('');
   const [expenseCreatorFilter, setExpenseCreatorFilter] = useState('');
   const [expenseSortBy, setExpenseSortBy] = useState<'newest' | 'oldest' | 'amount_high'>('newest');
   const [expenseGroupBy, setExpenseGroupBy] = useState<'none' | 'date'>('none');
   const [expenseGroupAggregate, setExpenseGroupAggregate] = useState<'none' | 'count' | 'sum'>('count');
+  const [visibleExpenseCount, setVisibleExpenseCount] = useState(FINANCIAL_PAGE_SIZE);
 
   // Pay Modal State
   const [showPayModal, setShowPayModal] = useState(false);
@@ -218,7 +221,7 @@ export default function FinancialsPage() {
       const { data: receiptsData } = await supabase
         .from('receipts')
         .select('amount, status');
-      
+
       const revSum = receiptsData?.filter(r => r.status === 'Paid').reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0;
       if (revision !== dataRevision.current) return;
       const creditSum = receiptsData?.filter(r => r.status === 'Credit').reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0;
@@ -288,9 +291,14 @@ export default function FinancialsPage() {
     return sorted;
   }, [filteredReferencesWithReceipts, receiptSortBy]);
 
+  const visibleReferencesWithReceipts = useMemo(
+    () => sortedReferencesWithReceipts.slice(0, visiblePaymentCount),
+    [sortedReferencesWithReceipts, visiblePaymentCount],
+  );
+
   const groupedReferencesWithReceipts = useMemo(() => {
     if (receiptGroupBy === 'none') return null;
-    return groupItems(sortedReferencesWithReceipts, (r) => dateGroupKey(r.issue_date).key).map((group) => {
+    return groupItems(visibleReferencesWithReceipts, (r) => dateGroupKey(r.issue_date).key).map((group) => {
       const baseLabel = dateGroupKey(group.items[0].issue_date).label;
       let label = baseLabel;
       if (receiptGroupAggregate === 'count') {
@@ -304,7 +312,7 @@ export default function FinancialsPage() {
       }
       return { ...group, label };
     });
-  }, [sortedReferencesWithReceipts, receiptGroupBy, receiptGroupAggregate]);
+  }, [visibleReferencesWithReceipts, receiptGroupBy, receiptGroupAggregate]);
 
   const filteredExpenses = useMemo(() => {
     let result = [...expenses];
@@ -328,9 +336,14 @@ export default function FinancialsPage() {
     return sorted;
   }, [filteredExpenses, expenseSortBy]);
 
+  const visibleExpenses = useMemo(
+    () => sortedExpenses.slice(0, visibleExpenseCount),
+    [sortedExpenses, visibleExpenseCount],
+  );
+
   const groupedExpenses = useMemo(() => {
     if (expenseGroupBy === 'none') return null;
-    return groupItems(sortedExpenses, (e) => dateGroupKey(e.expense_date).key).map((group) => {
+    return groupItems(visibleExpenses, (e) => dateGroupKey(e.expense_date).key).map((group) => {
       const baseLabel = dateGroupKey(group.items[0].expense_date).label;
       const sum = group.items.reduce((total, e) => total + parseFloat(e.total.toString()), 0);
       const label =
@@ -339,7 +352,7 @@ export default function FinancialsPage() {
         baseLabel;
       return { ...group, label };
     });
-  }, [sortedExpenses, expenseGroupBy, expenseGroupAggregate]);
+  }, [visibleExpenses, expenseGroupBy, expenseGroupAggregate]);
 
   // Stable row numbers independent of the current sort/group order (newest fetched = highest number).
   const expenseSerial = useMemo(
@@ -364,20 +377,20 @@ export default function FinancialsPage() {
 
     // Set date to today
     setPayDate(new Date().toISOString().split('T')[0]);
-    
+
     const initialAmounts: Record<number, string> = { [refId]: '' };
     setBulkAmounts(initialAmounts);
     setPayStatus('Paid');
     setPayMode('EVC Plus');
-    
+
     setShowPayModal(true);
   };
 
   const openBulkPayDialog = () => {
     if (selectedRefIds.length === 0) return;
-    
+
     const selectedRefs = referencesWithReceipts.filter(r => selectedRefIds.includes(r.id));
-    
+
     if (selectedRefs.length === 1) {
       openPayDialog(selectedRefs[0].id, selectedRefs[0].ref_number, selectedRefs[0].subject);
       return;
@@ -385,7 +398,7 @@ export default function FinancialsPage() {
 
     const refNumsString = selectedRefs.map(r => r.ref_number).join(', ');
     const subjectsString = `Wadajir u bixiyey: ${selectedRefs.map(r => r.ref_number).join(', ')}`;
-    
+
     setPayRefNumber(refNumsString);
     const payerNames = selectedRefs
       .map((item) => Array.isArray(item.surveys) ? item.surveys[0]?.owner_name : item.surveys?.owner_name)
@@ -397,7 +410,7 @@ export default function FinancialsPage() {
 
     // Set date to today
     setPayDate(new Date().toISOString().split('T')[0]);
-    
+
     const initialAmounts: Record<number, string> = {};
     selectedRefIds.forEach(id => {
       initialAmounts[id] = '';
@@ -405,7 +418,7 @@ export default function FinancialsPage() {
     setBulkAmounts(initialAmounts);
     setPayStatus('Paid');
     setPayMode('EVC Plus');
-    
+
     setShowPayModal(true);
   };
 
@@ -1531,7 +1544,7 @@ export default function FinancialsPage() {
 
   return (
     <div className="p-4 md:p-8 w-full space-y-3.5 md:space-y-6 text-slate-800">
-      
+
       {/* Stats Summary Cards */}
       {/* Desktop Version */}
       <div className="hidden md:grid grid-cols-4 gap-6">
@@ -1596,7 +1609,7 @@ export default function FinancialsPage() {
             ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </div>
         </div>
-        
+
         <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm text-center">
           <span className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Credit (Deyn)</span>
           <div className="text-sm font-black text-amber-600 mt-0.5 truncate">
@@ -1812,7 +1825,7 @@ export default function FinancialsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200/80 bg-white">
-                  {(groupedReferencesWithReceipts ?? [{ key: 'all', label: '', items: sortedReferencesWithReceipts }]).map((group) => (
+                  {(groupedReferencesWithReceipts ?? [{ key: 'all', label: '', items: visibleReferencesWithReceipts }]).map((group) => (
                     <React.Fragment key={group.key}>
                       {receiptGroupBy !== 'none' && (
                         <tr>
@@ -1927,7 +1940,7 @@ export default function FinancialsPage() {
               </div>
             ) : (
               <>
-              {(groupedReferencesWithReceipts ?? [{ key: 'all', label: '', items: sortedReferencesWithReceipts }]).map((group) => (
+              {(groupedReferencesWithReceipts ?? [{ key: 'all', label: '', items: visibleReferencesWithReceipts }]).map((group) => (
               <div key={group.key}>
                 {receiptGroupBy !== 'none' && (
                   <div className="px-4 pb-1.5 pt-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
@@ -1943,7 +1956,7 @@ export default function FinancialsPage() {
                 const creditAmount = receipts
                   .filter((r: any) => r.status === 'Credit')
                   .reduce((sum: number, r: any) => sum + parseFloat(r.amount.toString()), 0);
-                
+
                 const hasCredit = creditAmount > 0;
                 const isPaid = !hasCredit && paidAmount > 0;
                 const activeReceipt = receipts.find((r: any) => r.status === 'Credit') || receipts[0];
@@ -2018,6 +2031,13 @@ export default function FinancialsPage() {
               </>
             )}
           </div>
+          {visibleReferencesWithReceipts.length < sortedReferencesWithReceipts.length && (
+            <div className="flex justify-center pb-2 pt-3">
+              <button type="button" onClick={() => setVisiblePaymentCount((count) => count + FINANCIAL_PAGE_SIZE)} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-extrabold text-slate-600 shadow-sm transition-colors hover:bg-slate-50">
+                Soo bandhig {Math.min(FINANCIAL_PAGE_SIZE, sortedReferencesWithReceipts.length - visibleReferencesWithReceipts.length)} kale
+              </button>
+            </div>
+          )}
         </>
       ) : (
         /* Office Expenses list */
@@ -2056,7 +2076,7 @@ export default function FinancialsPage() {
                       </td>
                     </tr>
                   ) : (
-                    (groupedExpenses ?? [{ key: 'all', label: '', items: sortedExpenses }]).map((group) => (
+                    (groupedExpenses ?? [{ key: 'all', label: '', items: visibleExpenses }]).map((group) => (
                       <React.Fragment key={group.key}>
                         {expenseGroupBy !== 'none' && (
                           <tr>
@@ -2146,7 +2166,7 @@ export default function FinancialsPage() {
                 Kharashyo lama hayo.
               </div>
             ) : (
-              (groupedExpenses ?? [{ key: 'all', label: '', items: sortedExpenses }]).map((group) => (
+              (groupedExpenses ?? [{ key: 'all', label: '', items: visibleExpenses }]).map((group) => (
                 <div key={group.key}>
                   {expenseGroupBy !== 'none' && (
                     <div className="px-1 pb-1.5 pt-3 text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
@@ -2199,6 +2219,13 @@ export default function FinancialsPage() {
               ))
             )}
           </div>
+          {visibleExpenses.length < sortedExpenses.length && (
+            <div className="flex justify-center pb-2 pt-3">
+              <button type="button" onClick={() => setVisibleExpenseCount((count) => count + FINANCIAL_PAGE_SIZE)} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-extrabold text-slate-600 shadow-sm transition-colors hover:bg-slate-50">
+                Soo bandhig {Math.min(FINANCIAL_PAGE_SIZE, sortedExpenses.length - visibleExpenses.length)} kale
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -2460,7 +2487,7 @@ export default function FinancialsPage() {
       {selectedReceipt && (
         <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md overflow-y-auto">
           <div className="w-full max-w-xl bg-white border border-slate-200/80 rounded-3xl overflow-hidden shadow-2xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
-            
+
             {/* Formal invoice / receipt header */}
             <div className={`relative flex items-center justify-between gap-4 border-b px-6 py-5 ${
               selectedReceipt.status === 'Credit'
@@ -2746,7 +2773,7 @@ export default function FinancialsPage() {
       {showPayDebtModal && payDebtRef && (
         <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-lg bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl flex flex-col my-8 animate-in fade-in zoom-in-95 duration-200">
-            
+
             {/* Header */}
             <div className="flex items-center justify-between gap-3 px-6 py-4 bg-amber-50 border-b border-amber-200/60">
               <div className="flex min-w-0 items-center gap-2.5">
@@ -2804,7 +2831,7 @@ export default function FinancialsPage() {
                   className="w-full rounded-2xl bg-white border-2 border-amber-300 focus:border-amber-500 px-4 py-3.5 text-lg font-black text-slate-900 shadow-xs focus:outline-none"
                   placeholder="0.00"
                 />
-                
+
                 {/* Dynamic Payment Status Alert */}
                 {(() => {
                   const val = parseFloat(payDebtAmount) || 0;
