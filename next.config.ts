@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/downloads/desktop-parts/:part",
-        destination: `${desktopReleaseStorageUrl}/Marwaazpn-App-Setup-v4.exe.part:part`,
+        destination: `${desktopReleaseStorageUrl}/Marwaazpn-App-Setup-v5.exe.part:part`,
       },
     ];
   },

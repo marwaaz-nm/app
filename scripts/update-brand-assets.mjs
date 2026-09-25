@@ -14,8 +14,9 @@ async function prepareCleanCircularSealBuffer(filePath) {
   const cx = width / 2;
   const cy = height / 2;
 
-  // Outer green ring radius in original marwaazpn logo.png (645x644)
-  const outerSealRadius = (Math.min(width, height) / 2) * 0.826;
+  // Preserve the complete outer green ring from the original seal. The artwork
+  // reaches roughly 95% of the source radius; the previous 82.6% mask clipped it.
+  const outerSealRadius = (Math.min(width, height) / 2) * 0.96;
   const newBuffer = Buffer.alloc(data.length);
 
   for (let y = 0; y < height; y++) {
